@@ -66,6 +66,9 @@ func AutoMigrate(db *gorm.DB) error {
 
 		// 工作台
 		&model.UserDashboard{},
+
+		// 系统配置
+		&model.SystemConfig{},
 	)
 }
 

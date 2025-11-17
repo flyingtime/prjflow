@@ -54,6 +54,16 @@ func main() {
 		})
 	})
 
+	// 系统初始化路由（不需要认证）
+	initHandler := api.NewInitHandler(db)
+	initGroup := r.Group("/init")
+	{
+		initGroup.GET("/status", initHandler.CheckInitStatus)
+		initGroup.POST("/wechat-config", initHandler.SaveWeChatConfig) // 第一步：保存微信配置
+		initGroup.GET("/qrcode", initHandler.GetInitQRCode)            // 获取初始化二维码
+		initGroup.POST("", initHandler.InitSystem)                     // 第二步：通过微信登录完成初始化
+	}
+
 	// 认证相关路由
 	authHandler := api.NewAuthHandler(db)
 	authGroup := r.Group("/auth")
