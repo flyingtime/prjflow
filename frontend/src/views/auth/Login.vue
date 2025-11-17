@@ -22,14 +22,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getWeChatQRCode, login } from '@/api/auth'
-import { useAuthStore } from '@/stores/auth'
-
-const router = useRouter()
-const route = useRoute()
-const authStore = useAuthStore()
+import { getWeChatQRCode } from '@/api/auth'
 
 const loading = ref(false)
 const qrCodeUrl = ref('')
@@ -65,18 +59,6 @@ const startPolling = () => {
   }, 2000)
 }
 
-const handleLogin = async (code: string) => {
-  try {
-    const response = await login({ code })
-    authStore.setToken(response.token)
-    authStore.setUser(response.user)
-    
-    const redirect = route.query.redirect as string || '/dashboard'
-    router.push(redirect)
-  } catch (error) {
-    message.error('登录失败')
-  }
-}
 
 onMounted(() => {
   getQRCode()

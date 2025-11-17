@@ -1,5 +1,5 @@
 import request from '../utils/request'
-import { User } from '../stores/auth'
+import type { User } from '../types/user'
 
 export interface LoginRequest {
   code: string
@@ -11,7 +11,13 @@ export interface LoginResponse {
   user: User
 }
 
-export const getWeChatQRCode = async () => {
+export interface QRCodeResponse {
+  ticket: string
+  qrCodeUrl: string
+  expireSeconds: number
+}
+
+export const getWeChatQRCode = async (): Promise<QRCodeResponse> => {
   return request.get('/auth/wechat/qrcode')
 }
 

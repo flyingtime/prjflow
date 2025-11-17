@@ -219,7 +219,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getDashboard, DashboardData } from '@/api/dashboard'
+import { getDashboard, type DashboardData } from '@/api/dashboard'
 
 const route = useRoute()
 const router = useRouter()
