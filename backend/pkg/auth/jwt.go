@@ -4,8 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"project-management/internal/config"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type Claims struct {
@@ -15,12 +16,22 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-var jwtSecret = []byte(config.AppConfig.JWT.Secret)
+// getJWTSecret 获取JWT密钥
+func getJWTSecret() []byte {
+	if config.AppConfig == nil {
+		return []byte("default-secret-key-change-in-production")
+	}
+	return []byte(config.AppConfig.JWT.Secret)
+}
 
 // GenerateToken 生成JWT Token
 func GenerateToken(userID uint, username string, roles []string) (string, error) {
+	if config.AppConfig == nil {
+		return "", errors.New("config not initialized")
+	}
+
 	expirationTime := time.Now().Add(time.Duration(config.AppConfig.JWT.Expiration) * time.Hour)
-	
+
 	claims := &Claims{
 		UserID:   userID,
 		Username: username,
@@ -33,7 +44,7 @@ func GenerateToken(userID uint, username string, roles []string) (string, error)
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	return token.SignedString(getJWTSecret())
 }
 
 // ParseToken 解析JWT Token
@@ -42,7 +53,7 @@ func ParseToken(tokenString string) (*Claims, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("invalid token signing method")
 		}
-		return jwtSecret, nil
+		return getJWTSecret(), nil
 	})
 
 	if err != nil {
@@ -55,4 +66,3 @@ func ParseToken(tokenString string) (*Claims, error) {
 
 	return nil, errors.New("invalid token")
 }
-

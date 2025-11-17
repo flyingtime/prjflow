@@ -100,6 +100,13 @@ func main() {
 		deptGroup.DELETE("/:id", deptHandler.DeleteDepartment)
 	}
 
+	// 个人工作台路由
+	dashboardHandler := api.NewDashboardHandler(db)
+	dashboardGroup := r.Group("/dashboard", middleware.Auth())
+	{
+		dashboardGroup.GET("", dashboardHandler.GetDashboard)
+	}
+
 	// 创建HTTP服务器
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", config.AppConfig.Server.Port),
