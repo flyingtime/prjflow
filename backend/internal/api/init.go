@@ -1,23 +1,25 @@
 package api
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"project-management/internal/config"
 	"project-management/internal/model"
 	"project-management/internal/utils"
 	"project-management/pkg/auth"
 	"project-management/pkg/wechat"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type InitHandler struct {
-	db          *gorm.DB
+	db           *gorm.DB
 	wechatClient *wechat.WeChatClient
 }
 
 func NewInitHandler(db *gorm.DB) *InitHandler {
 	return &InitHandler{
-		db:          db,
+		db:           db,
 		wechatClient: wechat.NewWeChatClient(),
 	}
 }
@@ -26,14 +28,14 @@ func NewInitHandler(db *gorm.DB) *InitHandler {
 func (h *InitHandler) CheckInitStatus(c *gin.Context) {
 	var config model.SystemConfig
 	result := h.db.Where("key = ?", "initialized").First(&config)
-	
+
 	if result.Error == gorm.ErrRecordNotFound {
 		utils.Success(c, gin.H{
 			"initialized": false,
 		})
 		return
 	}
-	
+
 	utils.Success(c, gin.H{
 		"initialized": config.Value == "true",
 	})
@@ -107,7 +109,7 @@ func (h *InitHandler) InitSystem(c *gin.Context) {
 	}
 
 	var req struct {
-		Code  string `json:"code" binding:"required"`  // 微信登录返回的code
+		Code  string `json:"code" binding:"required"` // 微信登录返回的code
 		State string `json:"state"`
 	}
 
@@ -119,7 +121,7 @@ func (h *InitHandler) InitSystem(c *gin.Context) {
 	// 获取微信配置
 	var wechatAppSecretConfig model.SystemConfig
 	h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig)
-	
+
 	// 临时设置WeChatClient配置
 	h.wechatClient.AppID = wechatAppIDConfig.Value
 	h.wechatClient.AppSecret = wechatAppSecretConfig.Value
@@ -236,25 +238,37 @@ func (h *InitHandler) GetInitQRCode(c *gin.Context) {
 	// 获取微信配置
 	var wechatAppSecretConfig model.SystemConfig
 	h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig)
-	
+
 	// 临时设置WeChatClient配置
 	h.wechatClient.AppID = wechatAppIDConfig.Value
 	h.wechatClient.AppSecret = wechatAppSecretConfig.Value
 
 	// 获取回调地址（初始化回调地址）
+	// 优先级：1. 查询参数 2. 配置文件中的 callback_domain 3. Referer 头 4. 默认值
 	redirectURI := c.Query("redirect_uri")
 	if redirectURI == "" {
-		referer := c.GetHeader("Referer")
-		if referer != "" {
-			redirectURI = referer + "/init/callback"
+		// 优先使用配置文件中的回调域名
+		if config.AppConfig.WeChat.CallbackDomain != "" {
+			// 确保域名以 / 结尾，然后拼接回调路径
+			domain := config.AppConfig.WeChat.CallbackDomain
+			if len(domain) > 0 && domain[len(domain)-1] != '/' {
+				domain += "/"
+			}
+			redirectURI = domain + "init/callback"
 		} else {
-			redirectURI = "http://localhost:3000/init/callback"
+			// 从 Referer 头获取
+			referer := c.GetHeader("Referer")
+			if referer != "" {
+				redirectURI = referer + "/init/callback"
+			} else {
+				redirectURI = "http://localhost:3000/init/callback"
+			}
 		}
 	}
 
 	// 生成唯一的ticket（使用UUID）
 	ticket := uuid.New().String()
-	
+
 	// 将ticket作为state参数的一部分，这样回调时可以获取到ticket
 	// 注意：微信的state参数会原样返回，格式：ticket:uuid
 	stateWithTicket := "ticket:" + ticket
@@ -267,10 +281,9 @@ func (h *InitHandler) GetInitQRCode(c *gin.Context) {
 
 	// 返回授权URL和ticket，前端需要将其转换为二维码图片
 	utils.Success(c, gin.H{
-		"ticket":         ticket, // 使用我们生成的UUID作为ticket
+		"ticket":         ticket,     // 使用我们生成的UUID作为ticket
 		"qr_code_url":    qrCode.URL, // 这是授权URL，需要转换为二维码
-		"auth_url":       qrCode.URL,  // 授权URL
+		"auth_url":       qrCode.URL, // 授权URL
 		"expire_seconds": qrCode.ExpireSeconds,
 	})
 }
-

@@ -46,6 +46,10 @@ type WeChatConfig struct {
 	// 仅当 AccountType 为 "official_account" 时有效
 	// 默认: "snsapi_userinfo"
 	Scope string `mapstructure:"scope"`
+	// CallbackDomain: 回调域名（如：https://yourdomain.com），用于生成 redirect_uri
+	// 如果设置了此值，将优先使用此域名，确保与微信后台配置的授权回调域名一致
+	// 如果不设置，则从 Referer 头或查询参数获取
+	CallbackDomain string `mapstructure:"callback_domain"`
 }
 
 var AppConfig *Config
@@ -92,5 +96,6 @@ func setDefaults() {
 	viper.SetDefault("wechat.app_secret", "")
 	viper.SetDefault("wechat.account_type", "open_platform") // open_platform 或 official_account
 	viper.SetDefault("wechat.scope", "snsapi_userinfo")       // snsapi_base 或 snsapi_userinfo
+	viper.SetDefault("wechat.callback_domain", "")            // 回调域名，如：https://yourdomain.com
 }
 

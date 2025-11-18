@@ -1,0 +1,102 @@
+# Nginx 反向代理配置示例
+# 用于将公网域名 project.smartxy.com.cn 代理到内网服务器
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name project.smartxy.com.cn;
+
+    # 如果需要 HTTPS，取消下面的注释并配置 SSL
+    # listen 443 ssl http2;
+    # listen [::]:443 ssl http2;
+    # ssl_certificate /path/to/your/cert.pem;
+    # ssl_certificate_key /path/to/your/key.pem;
+
+    # 日志配置
+    access_log /var/log/nginx/project.smartxy.com.cn.access.log;
+    error_log /var/log/nginx/project.smartxy.com.cn.error.log;
+
+    # 客户端最大请求体大小
+    client_max_body_size 10M;
+
+    # 微信验证文件路由（必须放在根路径）
+    # 支持格式：/MP_verify_xxxxx.txt
+    location ~ ^/MP_verify_([^/]+)\.txt$ {
+        # 代理到内网服务器的后端（端口 8080）
+        proxy_pass http://内网服务器IP:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 设置超时
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # WebSocket 支持（用于实时通知）
+    location /ws {
+        proxy_pass http://内网服务器IP:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket 超时设置
+        proxy_connect_timeout 7d;
+        proxy_send_timeout 7d;
+        proxy_read_timeout 7d;
+    }
+
+    # API 路由（后端）
+    location /api {
+        proxy_pass http://内网服务器IP:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # CORS 头（如果需要）
+        add_header Access-Control-Allow-Origin * always;
+        add_header Access-Control-Allow-Methods 'GET, POST, PUT, DELETE, OPTIONS' always;
+        add_header Access-Control-Allow-Headers 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+        
+        if ($request_method = 'OPTIONS') {
+            return 204;
+        }
+    }
+
+    # 前端静态文件和路由（前端开发服务器或生产构建）
+    location / {
+        # 方案1：代理到前端开发服务器（开发环境）
+        proxy_pass http://内网服务器IP:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 方案2：直接提供静态文件（生产环境）
+        # root /path/to/frontend/dist;
+        # try_files $uri $uri/ /index.html;
+        
+        # WebSocket 支持（用于 Vite HMR，开发环境）
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # 健康检查
+    location /health {
+        proxy_pass http://内网服务器IP:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+

@@ -48,24 +48,30 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
   
-  // 初始化页面不需要检查初始化状态
-  if (to.name === 'Init') {
-    next()
-    return
-  }
-  
   // 检查系统是否已初始化
   try {
     const { checkInitStatus } = await import('@/api/init')
     const status = await checkInitStatus()
-    if (!status.initialized) {
-      // 如果未初始化，跳转到初始化页面
+    
+    // 如果访问初始化页面但系统已初始化，跳转到登录页
+    if (to.name === 'Init' && status.initialized) {
+      next({ name: 'Login' })
+      return
+    }
+    
+    // 如果访问其他页面但系统未初始化，跳转到初始化页面
+    if (to.name !== 'Init' && to.name !== 'InitCallback' && !status.initialized) {
       next({ name: 'Init' })
       return
     }
   } catch (error) {
     // 如果检查失败，允许继续（可能是网络问题）
     console.error('检查初始化状态失败:', error)
+    // 如果访问Init页面且检查失败，允许继续（可能是网络问题）
+    if (to.name === 'Init' || to.name === 'InitCallback') {
+      next()
+      return
+    }
   }
   
   // 如果访问登录页且已登录，重定向到工作台

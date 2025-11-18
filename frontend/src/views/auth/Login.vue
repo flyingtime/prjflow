@@ -13,6 +13,15 @@
             <img :src="qrCodeUrl" alt="微信登录二维码" />
             <p>请使用微信扫码</p>
             <p class="hint-small">扫码后会在微信内打开授权页面</p>
+            <div v-if="authUrl" class="auth-url-container">
+              <p class="auth-url-label">连接地址：</p>
+              <a-typography-paragraph 
+                :copyable="{ text: authUrl }" 
+                class="auth-url-text"
+              >
+                {{ authUrl }}
+              </a-typography-paragraph>
+            </div>
             <a-button @click="getQRCode">刷新二维码</a-button>
           </div>
         </a-spin>
@@ -29,6 +38,7 @@ import { getWeChatQRCode } from '@/api/auth'
 
 const loading = ref(false)
 const qrCodeUrl = ref('')
+const authUrl = ref('')
 const ticket = ref('')
 let pollTimer: number | null = null
 
@@ -40,10 +50,11 @@ const getQRCode = async () => {
     
     // 将授权URL转换为二维码图片
     if (data.authUrl || data.qrCodeUrl) {
-      const authUrl = data.authUrl || data.qrCodeUrl
+      const url = data.authUrl || data.qrCodeUrl
+      authUrl.value = url
       try {
         // 使用 qrcode 库生成二维码图片
-        const qrCodeDataURL = await QRCode.toDataURL(authUrl, {
+        const qrCodeDataURL = await QRCode.toDataURL(url, {
           width: 200,
           margin: 2
         })
@@ -52,7 +63,7 @@ const getQRCode = async () => {
         console.error('生成二维码失败:', qrError)
         message.error('生成二维码图片失败')
         // 如果生成失败，显示授权URL
-        qrCodeUrl.value = authUrl
+        qrCodeUrl.value = url
       }
     } else {
       message.error('未获取到授权URL')
@@ -130,6 +141,29 @@ onUnmounted(() => {
 .hint-small {
   color: #999;
   font-size: 12px;
+  margin: 0;
+}
+
+.auth-url-container {
+  width: 100%;
+  max-width: 400px;
+  margin: 10px 0;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  text-align: left;
+}
+
+.auth-url-label {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.auth-url-text {
+  word-break: break-all;
+  font-size: 11px;
+  color: #333;
   margin: 0;
 }
 </style>

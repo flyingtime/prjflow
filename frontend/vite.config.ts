@@ -12,6 +12,13 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    host: '0.0.0.0', // 允许外部访问
+    allowedHosts: [
+      'project.smartxy.com.cn',
+      'ungeneralising-harlow-orthogonally.ngrok-free.dev',
+      'localhost',
+      '127.0.0.1'
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

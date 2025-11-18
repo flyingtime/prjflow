@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"project-management/internal/config"
 	"project-management/internal/model"
 	"project-management/internal/utils"
 	"project-management/pkg/auth"
@@ -24,14 +25,25 @@ func NewAuthHandler(db *gorm.DB) *AuthHandler {
 // GetQRCode 获取微信登录二维码
 func (h *AuthHandler) GetQRCode(c *gin.Context) {
 	// 获取回调地址（前端地址）
+	// 优先级：1. 查询参数 2. 配置文件中的 callback_domain 3. Referer 头 4. 默认值
 	redirectURI := c.Query("redirect_uri")
 	if redirectURI == "" {
-		// 默认使用请求来源
-		referer := c.GetHeader("Referer")
-		if referer != "" {
-			redirectURI = referer + "/auth/wechat/callback"
+		// 优先使用配置文件中的回调域名
+		if config.AppConfig.WeChat.CallbackDomain != "" {
+			// 确保域名以 / 结尾，然后拼接回调路径
+			domain := config.AppConfig.WeChat.CallbackDomain
+			if len(domain) > 0 && domain[len(domain)-1] != '/' {
+				domain += "/"
+			}
+			redirectURI = domain + "auth/wechat/callback"
 		} else {
-			redirectURI = "http://localhost:3000/auth/wechat/callback"
+			// 从 Referer 头获取
+			referer := c.GetHeader("Referer")
+			if referer != "" {
+				redirectURI = referer + "/auth/wechat/callback"
+			} else {
+				redirectURI = "http://localhost:3000/auth/wechat/callback"
+			}
 		}
 	}
 
