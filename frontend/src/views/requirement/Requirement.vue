@@ -322,6 +322,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -341,6 +342,7 @@ import { getProducts, type Product } from '@/api/product'
 import { getProjects, type Project } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
 
+const router = useRouter()
 const loading = ref(false)
 const requirements = ref<Requirement[]>([])
 const products = ref<Product[]>([])
@@ -531,8 +533,7 @@ const handleEdit = (record: Requirement) => {
 
 // 查看详情
 const handleView = (record: Requirement) => {
-  // TODO: 实现详情页面
-  message.info('详情功能待实现')
+  router.push(`/requirement/${record.id}`)
 }
 
 // 提交
