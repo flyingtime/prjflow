@@ -43,6 +43,12 @@
         <a-menu-item key="version" @click="$router.push('/version')">
           版本管理
         </a-menu-item>
+        <a-menu-item key="test-case" @click="$router.push('/test-case')">
+          测试单管理
+        </a-menu-item>
+        <a-menu-item key="test-report" @click="$router.push('/test-report')">
+          测试报告
+        </a-menu-item>
       </a-menu>
     </div>
     <div class="header-right">

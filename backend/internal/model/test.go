@@ -1,10 +1,41 @@
 package model
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+// StringArray 字符串数组类型，用于JSON序列化
+type StringArray []string
+
+// Value 实现 driver.Valuer 接口
+func (a StringArray) Value() (driver.Value, error) {
+	if len(a) == 0 {
+		return "[]", nil
+	}
+	return json.Marshal(a)
+}
+
+// Scan 实现 sql.Scanner 接口
+func (a *StringArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = []string{}
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return nil
+	}
+	return json.Unmarshal(bytes, a)
+}
 
 // TestCase 测试单表
 type TestCase struct {
@@ -13,11 +44,11 @@ type TestCase struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Name        string `gorm:"size:200;not null" json:"name"`        // 测试单名称
-	Description string `gorm:"type:text" json:"description"`         // 测试描述
-	TestSteps   string `gorm:"type:text" json:"test_steps"`          // 测试步骤（Markdown）
-	Type        string `gorm:"size:20" json:"type"`                  // 测试类型：functional, performance, security, etc.
-	Status      string `gorm:"size:20;default:'pending'" json:"status"` // 状态：pending, running, passed, failed
+	Name        string      `gorm:"size:200;not null" json:"name"`        // 测试单名称
+	Description string      `gorm:"type:text" json:"description"`         // 测试描述
+	TestSteps   string      `gorm:"type:text" json:"test_steps"`          // 测试步骤（Markdown）
+	Types       StringArray  `gorm:"type:text" json:"types"`                // 测试类型（多选）：functional, performance, security, etc. (JSON数组)
+	Status      string       `gorm:"size:20;default:'pending'" json:"status"` // 状态：pending, running, passed, failed
 
 	ProjectID uint    `gorm:"index;not null" json:"project_id"`
 	Project   Project `gorm:"foreignKey:ProjectID" json:"project,omitempty"`

@@ -300,6 +300,31 @@ func main() {
 		versionGroup.POST("/:id/release", versionHandler.ReleaseVersion)
 	}
 
+	// 测试单管理路由
+	testCaseHandler := api.NewTestCaseHandler(db)
+	testCaseGroup := r.Group("/api/test-cases", middleware.Auth())
+	{
+		testCaseGroup.GET("/statistics", testCaseHandler.GetTestCaseStatistics)
+		testCaseGroup.GET("", testCaseHandler.GetTestCases)
+		testCaseGroup.GET("/:id", testCaseHandler.GetTestCase)
+		testCaseGroup.POST("", testCaseHandler.CreateTestCase)
+		testCaseGroup.PUT("/:id", testCaseHandler.UpdateTestCase)
+		testCaseGroup.DELETE("/:id", testCaseHandler.DeleteTestCase)
+		testCaseGroup.PATCH("/:id/status", testCaseHandler.UpdateTestCaseStatus)
+	}
+
+	// 测试报告管理路由
+	testReportHandler := api.NewTestReportHandler(db)
+	testReportGroup := r.Group("/api/test-reports", middleware.Auth())
+	{
+		testReportGroup.GET("/statistics", testReportHandler.GetTestReportStatistics)
+		testReportGroup.GET("", testReportHandler.GetTestReports)
+		testReportGroup.GET("/:id", testReportHandler.GetTestReport)
+		testReportGroup.POST("", testReportHandler.CreateTestReport)
+		testReportGroup.PUT("/:id", testReportHandler.UpdateTestReport)
+		testReportGroup.DELETE("/:id", testReportHandler.DeleteTestReport)
+	}
+
 	// 创建HTTP服务器
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", config.AppConfig.Server.Port),
