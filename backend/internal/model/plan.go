@@ -53,5 +53,9 @@ type PlanExecution struct {
 
 	AssigneeID *uint `gorm:"index" json:"assignee_id"`
 	Assignee   *User `gorm:"foreignKey:AssigneeID" json:"assignee,omitempty"`
+
+	// 关联的任务（可选）
+	TaskID *uint `gorm:"index" json:"task_id"`
+	Task   *Task `gorm:"foreignKey:TaskID" json:"task,omitempty"`
 }
 

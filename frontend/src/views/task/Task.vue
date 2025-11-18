@@ -308,7 +308,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
@@ -508,7 +508,9 @@ const handleCreate = () => {
   formData.description = ''
   formData.status = 'todo'
   formData.priority = 'medium'
-  formData.project_id = 0
+  // 如果有路由查询参数中的 project_id，使用它；否则重置为 0
+  const projectIdFromQuery = route.query.project_id
+  formData.project_id = projectIdFromQuery ? Number(projectIdFromQuery) : 0
   formData.assignee_id = undefined
   formData.start_date = undefined
   formData.end_date = undefined
@@ -516,6 +518,10 @@ const handleCreate = () => {
   formData.progress = 0
   formData.dependency_ids = []
   modalVisible.value = true
+  // 如果预填充了项目ID，加载该项目的任务列表（用于依赖任务选择）
+  if (formData.project_id) {
+    loadTasksForProject()
+  }
 }
 
 // 编辑
@@ -528,9 +534,25 @@ const handleEdit = (record: Task) => {
   formData.priority = record.priority
   formData.project_id = record.project_id
   formData.assignee_id = record.assignee_id
-  formData.start_date = record.start_date ? dayjs(record.start_date) : undefined
-  formData.end_date = record.end_date ? dayjs(record.end_date) : undefined
-  formData.due_date = record.due_date ? dayjs(record.due_date) : undefined
+  // 解析日期，确保日期有效
+  if (record.start_date) {
+    const startDate = dayjs(record.start_date)
+    formData.start_date = startDate.isValid() ? startDate : undefined
+  } else {
+    formData.start_date = undefined
+  }
+  if (record.end_date) {
+    const endDate = dayjs(record.end_date)
+    formData.end_date = endDate.isValid() ? endDate : undefined
+  } else {
+    formData.end_date = undefined
+  }
+  if (record.due_date) {
+    const dueDate = dayjs(record.due_date)
+    formData.due_date = dueDate.isValid() ? dueDate : undefined
+  } else {
+    formData.due_date = undefined
+  }
   formData.progress = record.progress
   formData.dependency_ids = record.dependencies?.map(d => d.id) || []
   modalVisible.value = true
@@ -548,6 +570,11 @@ const handleView = (record: Task) => {
 const handleSubmit = async () => {
   try {
     await formRef.value.validate()
+    // 验证项目ID
+    if (!formData.project_id || formData.project_id === 0) {
+      message.error('请选择项目')
+      return
+    }
     const data: CreateTaskRequest = {
       title: formData.title,
       description: formData.description,
@@ -555,9 +582,9 @@ const handleSubmit = async () => {
       priority: formData.priority,
       project_id: formData.project_id,
       assignee_id: formData.assignee_id,
-      start_date: formData.start_date ? formData.start_date.format('YYYY-MM-DD') : undefined,
-      end_date: formData.end_date ? formData.end_date.format('YYYY-MM-DD') : undefined,
-      due_date: formData.due_date ? formData.due_date.format('YYYY-MM-DD') : undefined,
+      start_date: formData.start_date && formData.start_date.isValid() ? formData.start_date.format('YYYY-MM-DD') : undefined,
+      end_date: formData.end_date && formData.end_date.isValid() ? formData.end_date.format('YYYY-MM-DD') : undefined,
+      due_date: formData.due_date && formData.due_date.isValid() ? formData.due_date.format('YYYY-MM-DD') : undefined,
       progress: formData.progress,
       dependency_ids: formData.dependency_ids
     }
@@ -729,6 +756,12 @@ onMounted(() => {
     formData.project_id = Number(projectId)
     searchForm.project_id = Number(projectId)
     handleSearch()
+    // 如果是从看板跳转过来，自动打开创建任务模态框
+    if (!route.query.edit) {
+      nextTick(() => {
+        handleCreate()
+      })
+    }
   }
   
   // 检查是否有编辑ID参数

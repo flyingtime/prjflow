@@ -34,6 +34,9 @@
         <a-menu-item key="task" @click="$router.push('/task')">
           任务管理
         </a-menu-item>
+        <a-menu-item key="plan" @click="$router.push('/plan')">
+          计划管理
+        </a-menu-item>
       </a-menu>
     </div>
     <div class="header-right">

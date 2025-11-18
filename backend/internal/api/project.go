@@ -238,28 +238,62 @@ func (h *ProjectHandler) getProjectStatistics(projectID uint) gin.H {
 
 // CreateProject 创建项目
 func (h *ProjectHandler) CreateProject(c *gin.Context) {
-	var project model.Project
-	if err := c.ShouldBindJSON(&project); err != nil {
+	var req struct {
+		Name            string  `json:"name" binding:"required"`
+		Code            string  `json:"code"`
+		Description     string  `json:"description"`
+		Status          int     `json:"status"`
+		ProjectGroupID  uint    `json:"project_group_id"`
+		ProductID       *uint   `json:"product_id"`
+		StartDate       *string `json:"start_date"` // 接收字符串格式的日期
+		EndDate         *string `json:"end_date"`   // 接收字符串格式的日期
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, 400, "参数错误")
 		return
 	}
 
+	// 解析日期
+	var startDate, endDate *time.Time
+	if req.StartDate != nil && *req.StartDate != "" {
+		if t, err := time.Parse("2006-01-02", *req.StartDate); err == nil {
+			startDate = &t
+		}
+	}
+	if req.EndDate != nil && *req.EndDate != "" {
+		if t, err := time.Parse("2006-01-02", *req.EndDate); err == nil {
+			endDate = &t
+		}
+	}
+
 	// 验证项目集是否存在
-	if project.ProjectGroupID > 0 {
+	if req.ProjectGroupID > 0 {
 		var projectGroup model.ProjectGroup
-		if err := h.db.First(&projectGroup, project.ProjectGroupID).Error; err != nil {
+		if err := h.db.First(&projectGroup, req.ProjectGroupID).Error; err != nil {
 			utils.Error(c, 404, "项目集不存在")
 			return
 		}
 	}
 
 	// 验证产品是否存在（如果提供了产品ID）
-	if project.ProductID != nil && *project.ProductID > 0 {
+	if req.ProductID != nil && *req.ProductID > 0 {
 		var product model.Product
-		if err := h.db.First(&product, *project.ProductID).Error; err != nil {
+		if err := h.db.First(&product, *req.ProductID).Error; err != nil {
 			utils.Error(c, 404, "产品不存在")
 			return
 		}
+	}
+
+	project := model.Project{
+		Name:           req.Name,
+		Code:           req.Code,
+		Description:    req.Description,
+		Status:         req.Status,
+		ProjectGroupID: req.ProjectGroupID,
+		ProductID:      req.ProductID,
+		StartDate:      startDate,
+		EndDate:        endDate,
 	}
 
 	if err := h.db.Create(&project).Error; err != nil {
@@ -282,9 +316,60 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&project); err != nil {
+	var req struct {
+		Name           *string `json:"name"`
+		Code           *string `json:"code"`
+		Description    *string `json:"description"`
+		Status         *int    `json:"status"`
+		ProjectGroupID *uint   `json:"project_group_id"`
+		ProductID      *uint   `json:"product_id"`
+		StartDate      *string `json:"start_date"` // 接收字符串格式的日期
+		EndDate        *string `json:"end_date"`   // 接收字符串格式的日期
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, 400, "参数错误")
 		return
+	}
+
+	// 更新字段
+	if req.Name != nil {
+		project.Name = *req.Name
+	}
+	if req.Code != nil {
+		project.Code = *req.Code
+	}
+	if req.Description != nil {
+		project.Description = *req.Description
+	}
+	if req.Status != nil {
+		project.Status = *req.Status
+	}
+	if req.ProjectGroupID != nil {
+		project.ProjectGroupID = *req.ProjectGroupID
+	}
+	if req.ProductID != nil {
+		project.ProductID = req.ProductID
+	}
+
+	// 解析日期
+	if req.StartDate != nil {
+		if *req.StartDate != "" {
+			if t, err := time.Parse("2006-01-02", *req.StartDate); err == nil {
+				project.StartDate = &t
+			}
+		} else {
+			project.StartDate = nil
+		}
+	}
+	if req.EndDate != nil {
+		if *req.EndDate != "" {
+			if t, err := time.Parse("2006-01-02", *req.EndDate); err == nil {
+				project.EndDate = &t
+			}
+		} else {
+			project.EndDate = nil
+		}
 	}
 
 	// 验证项目集是否存在
