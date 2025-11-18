@@ -275,6 +275,31 @@ func main() {
 		planExecutionGroup.PATCH("/:id/executions/:execution_id/progress", planExecutionHandler.UpdatePlanExecutionProgress)
 	}
 
+	// 构建管理路由
+	buildHandler := api.NewBuildHandler(db)
+	buildGroup := r.Group("/api/builds", middleware.Auth())
+	{
+		buildGroup.GET("", buildHandler.GetBuilds)
+		buildGroup.GET("/:id", buildHandler.GetBuild)
+		buildGroup.POST("", buildHandler.CreateBuild)
+		buildGroup.PUT("/:id", buildHandler.UpdateBuild)
+		buildGroup.DELETE("/:id", buildHandler.DeleteBuild)
+		buildGroup.PATCH("/:id/status", buildHandler.UpdateBuildStatus)
+	}
+
+	// 版本管理路由
+	versionHandler := api.NewVersionHandler(db)
+	versionGroup := r.Group("/api/versions", middleware.Auth())
+	{
+		versionGroup.GET("", versionHandler.GetVersions)
+		versionGroup.GET("/:id", versionHandler.GetVersion)
+		versionGroup.POST("", versionHandler.CreateVersion)
+		versionGroup.PUT("/:id", versionHandler.UpdateVersion)
+		versionGroup.DELETE("/:id", versionHandler.DeleteVersion)
+		versionGroup.PATCH("/:id/status", versionHandler.UpdateVersionStatus)
+		versionGroup.POST("/:id/release", versionHandler.ReleaseVersion)
+	}
+
 	// 创建HTTP服务器
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", config.AppConfig.Server.Port),

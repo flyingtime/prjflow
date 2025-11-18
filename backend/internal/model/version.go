@@ -24,6 +24,8 @@ type Build struct {
 
 	CreatorID uint `gorm:"index" json:"creator_id"`
 	Creator   User `gorm:"foreignKey:CreatorID" json:"creator,omitempty"`
+
+	Version *Version `gorm:"foreignKey:BuildID" json:"version,omitempty"` // 一个构建对应一个版本
 }
 
 // Version 版本表
@@ -41,5 +43,9 @@ type Version struct {
 	Build   Build  `gorm:"foreignKey:BuildID" json:"build,omitempty"`
 
 	ReleaseDate *time.Time `json:"release_date"` // 发布日期
+
+	// 关联需求和Bug
+	Requirements []Requirement `gorm:"many2many:version_requirements;" json:"requirements,omitempty"`
+	Bugs         []Bug         `gorm:"many2many:version_bugs;" json:"bugs,omitempty"`
 }
 

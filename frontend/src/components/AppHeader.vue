@@ -37,6 +37,12 @@
         <a-menu-item key="plan" @click="$router.push('/plan')">
           计划管理
         </a-menu-item>
+        <a-menu-item key="build" @click="$router.push('/build')">
+          构建管理
+        </a-menu-item>
+        <a-menu-item key="version" @click="$router.push('/version')">
+          版本管理
+        </a-menu-item>
       </a-menu>
     </div>
     <div class="header-right">

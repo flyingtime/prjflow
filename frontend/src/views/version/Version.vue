@@ -1,0 +1,563 @@
+<template>
+  <div class="version-management">
+    <a-layout>
+      <AppHeader />
+      <a-layout-content class="content">
+        <div class="content-inner">
+          <a-page-header title="版本管理">
+            <template #extra>
+              <a-button type="primary" @click="handleCreate">
+                <template #icon><PlusOutlined /></template>
+                新增版本
+              </a-button>
+            </template>
+          </a-page-header>
+
+          <a-card :bordered="false" style="margin-bottom: 16px">
+            <a-form layout="inline" :model="searchForm">
+              <a-form-item label="关键词">
+                <a-input
+                  v-model:value="searchForm.keyword"
+                  placeholder="版本号/发布说明"
+                  allow-clear
+                  style="width: 200px"
+                />
+              </a-form-item>
+              <a-form-item label="项目">
+                <a-select
+                  v-model:value="searchForm.project_id"
+                  placeholder="选择项目"
+                  allow-clear
+                  style="width: 150px"
+                >
+                  <a-select-option
+                    v-for="project in projects"
+                    :key="project.id"
+                    :value="project.id"
+                  >
+                    {{ project.name }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="状态">
+                <a-select
+                  v-model:value="searchForm.status"
+                  placeholder="选择状态"
+                  allow-clear
+                  style="width: 120px"
+                >
+                  <a-select-option value="draft">草稿</a-select-option>
+                  <a-select-option value="released">已发布</a-select-option>
+                  <a-select-option value="archived">已归档</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item>
+                <a-button type="primary" @click="handleSearch">查询</a-button>
+                <a-button style="margin-left: 8px" @click="handleReset">重置</a-button>
+              </a-form-item>
+            </a-form>
+          </a-card>
+
+          <a-card :bordered="false">
+            <a-table
+              :columns="columns"
+              :data-source="versions"
+              :loading="loading"
+              :pagination="pagination"
+              row-key="id"
+              @change="handleTableChange"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'status'">
+                  <a-tag :color="getStatusColor(record.status)">
+                    {{ getStatusText(record.status) }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'build'">
+                  <a-button v-if="record.build" type="link" @click="router.push(`/build`)">
+                    {{ record.build.build_number }}
+                  </a-button>
+                  <span v-else>-</span>
+                </template>
+                <template v-else-if="column.key === 'project'">
+                  {{ record.build?.project?.name || '-' }}
+                </template>
+                <template v-else-if="column.key === 'requirements'">
+                  <a-tag v-for="req in record.requirements?.slice(0, 2)" :key="req.id" style="margin-right: 4px">
+                    {{ req.title }}
+                  </a-tag>
+                  <a-tag v-if="record.requirements && record.requirements.length > 2" color="blue">
+                    +{{ record.requirements.length - 2 }}
+                  </a-tag>
+                  <span v-if="!record.requirements || record.requirements.length === 0">-</span>
+                </template>
+                <template v-else-if="column.key === 'bugs'">
+                  <a-tag v-for="bug in record.bugs?.slice(0, 2)" :key="bug.id" style="margin-right: 4px" color="red">
+                    {{ bug.title }}
+                  </a-tag>
+                  <a-tag v-if="record.bugs && record.bugs.length > 2" color="blue">
+                    +{{ record.bugs.length - 2 }}
+                  </a-tag>
+                  <span v-if="!record.bugs || record.bugs.length === 0">-</span>
+                </template>
+                <template v-else-if="column.key === 'action'">
+                  <a-space>
+                    <a-button type="link" size="small" @click="handleEdit(record)">
+                      编辑
+                    </a-button>
+                    <a-button v-if="record.status === 'draft' && record.build?.status === 'success'" type="link" size="small" @click="handleRelease(record.id)">
+                      发布
+                    </a-button>
+                    <a-dropdown>
+                      <a-button type="link" size="small">
+                        状态 <DownOutlined />
+                      </a-button>
+                      <template #overlay>
+                        <a-menu @click="(e: any) => handleStatusChange(record.id, e.key as string)">
+                          <a-menu-item key="draft">草稿</a-menu-item>
+                          <a-menu-item key="released">已发布</a-menu-item>
+                          <a-menu-item key="archived">已归档</a-menu-item>
+                        </a-menu>
+                      </template>
+                    </a-dropdown>
+                    <a-popconfirm
+                      title="确定要删除这个版本吗？"
+                      @confirm="handleDelete(record.id)"
+                    >
+                      <a-button type="link" size="small" danger>删除</a-button>
+                    </a-popconfirm>
+                  </a-space>
+                </template>
+              </template>
+            </a-table>
+          </a-card>
+        </div>
+      </a-layout-content>
+    </a-layout>
+
+    <!-- 版本编辑/创建模态框 -->
+    <a-modal
+      v-model:open="modalVisible"
+      :title="modalTitle"
+      :width="800"
+      @ok="handleSubmit"
+      @cancel="handleCancel"
+    >
+      <a-form
+        ref="formRef"
+        :model="formData"
+        :rules="formRules"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="版本号" name="version_number">
+          <a-input v-model:value="formData.version_number" placeholder="请输入版本号" />
+        </a-form-item>
+        <a-form-item label="构建" name="build_id">
+          <a-select
+            v-model:value="formData.build_id"
+            placeholder="选择构建"
+            show-search
+            :filter-option="filterBuildOption"
+            :disabled="!!formData.id"
+          >
+            <a-select-option
+              v-for="build in availableBuilds"
+              :key="build.id"
+              :value="build.id"
+            >
+              {{ build.build_number }} ({{ build.project?.name || '' }}) - {{ getBuildStatusText(build.status) }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="状态" name="status">
+          <a-select v-model:value="formData.status">
+            <a-select-option value="draft">草稿</a-select-option>
+            <a-select-option value="released">已发布</a-select-option>
+            <a-select-option value="archived">已归档</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="发布日期" name="release_date">
+          <a-date-picker
+            v-model:value="formData.release_date"
+            placeholder="选择发布日期"
+            style="width: 100%"
+            format="YYYY-MM-DD"
+          />
+        </a-form-item>
+        <a-form-item label="发布说明" name="release_notes">
+          <MarkdownEditor
+            v-model="formData.release_notes"
+            placeholder="请输入发布说明（支持Markdown）"
+            :rows="8"
+          />
+        </a-form-item>
+        <a-form-item label="关联需求" name="requirement_ids">
+          <a-select
+            v-model:value="formData.requirement_ids"
+            mode="multiple"
+            placeholder="选择需求（可选）"
+            show-search
+            :filter-option="filterRequirementOption"
+            style="width: 100%"
+          >
+            <a-select-option
+              v-for="requirement in availableRequirements"
+              :key="requirement.id"
+              :value="requirement.id"
+            >
+              {{ requirement.title }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="关联Bug" name="bug_ids">
+          <a-select
+            v-model:value="formData.bug_ids"
+            mode="multiple"
+            placeholder="选择Bug（可选）"
+            show-search
+            :filter-option="filterBugOption"
+            style="width: 100%"
+          >
+            <a-select-option
+              v-for="bug in availableBugs"
+              :key="bug.id"
+              :value="bug.id"
+            >
+              {{ bug.title }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
+import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
+import dayjs, { type Dayjs } from 'dayjs'
+import AppHeader from '@/components/AppHeader.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import {
+  getVersions,
+  createVersion,
+  updateVersion,
+  deleteVersion,
+  updateVersionStatus,
+  releaseVersion,
+  type Version,
+  type CreateVersionRequest
+} from '@/api/version'
+import { getBuilds, type Build } from '@/api/build'
+import { getProjects, type Project } from '@/api/project'
+import { getRequirements, type Requirement } from '@/api/requirement'
+import { getBugs, type Bug } from '@/api/bug'
+
+const router = useRouter()
+const loading = ref(false)
+const versions = ref<Version[]>([])
+const projects = ref<Project[]>([])
+const availableBuilds = ref<Build[]>([])
+const availableRequirements = ref<Requirement[]>([])
+const availableBugs = ref<Bug[]>([])
+
+const searchForm = reactive({
+  keyword: '',
+  project_id: undefined as number | undefined,
+  status: undefined as string | undefined
+})
+
+const pagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showTotal: (total: number) => `共 ${total} 条`,
+  showSizeChanger: true,
+  showQuickJumper: true
+})
+
+const columns = [
+  { title: '版本号', dataIndex: 'version_number', key: 'version_number' },
+  { title: '构建', key: 'build', width: 150 },
+  { title: '项目', key: 'project', width: 150 },
+  { title: '状态', key: 'status', width: 100 },
+  { title: '关联需求', key: 'requirements', width: 200 },
+  { title: '关联Bug', key: 'bugs', width: 200 },
+  { title: '发布日期', dataIndex: 'release_date', key: 'release_date', width: 120 },
+  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
+  { title: '操作', key: 'action', width: 300, fixed: 'right' as const }
+]
+
+const modalVisible = ref(false)
+const modalTitle = ref('新增版本')
+const formRef = ref()
+const formData = reactive<CreateVersionRequest & { id?: number; release_date?: Dayjs }>({
+  version_number: '',
+  release_notes: '',
+  status: 'draft',
+  build_id: 0,
+  release_date: undefined,
+  requirement_ids: [],
+  bug_ids: []
+})
+
+const formRules = {
+  version_number: [{ required: true, message: '请输入版本号', trigger: 'blur' }],
+  build_id: [{ required: true, message: '请选择构建', trigger: 'change' }]
+}
+
+// 加载版本列表
+const loadVersions = async () => {
+  loading.value = true
+  try {
+    const params: any = {
+      page: pagination.current,
+      page_size: pagination.pageSize
+    }
+    if (searchForm.keyword) params.keyword = searchForm.keyword
+    if (searchForm.project_id) params.project_id = searchForm.project_id
+    if (searchForm.status) params.status = searchForm.status
+
+    const res = await getVersions(params)
+    versions.value = res.list
+    pagination.total = res.total
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 加载项目列表
+const loadProjects = async () => {
+  try {
+    const res = await getProjects({ page: 1, page_size: 1000 })
+    projects.value = res.list
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '加载项目失败')
+  }
+}
+
+// 加载可用构建列表（未关联版本的构建）
+const loadAvailableBuilds = async () => {
+  try {
+    const res = await getBuilds({ page: 1, page_size: 1000 })
+    // 过滤掉已有版本的构建（创建时）
+    if (!formData.id) {
+      const versionRes = await getVersions({ page: 1, page_size: 1000 })
+      const usedBuildIds = new Set(versionRes.list.map((v: Version) => v.build_id))
+      availableBuilds.value = res.list.filter((b: Build) => !usedBuildIds.has(b.id))
+    } else {
+      availableBuilds.value = res.list
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '加载构建失败')
+  }
+}
+
+// 加载可用需求和Bug
+const loadAvailableRequirementsAndBugs = async () => {
+  try {
+    const [reqRes, bugRes] = await Promise.all([
+      getRequirements({ page: 1, page_size: 1000 }),
+      getBugs({ page: 1, page_size: 1000 })
+    ])
+    availableRequirements.value = reqRes.list
+    availableBugs.value = bugRes.list
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '加载失败')
+  }
+}
+
+// 搜索
+const handleSearch = () => {
+  pagination.current = 1
+  loadVersions()
+}
+
+// 重置
+const handleReset = () => {
+  searchForm.keyword = ''
+  searchForm.project_id = undefined
+  searchForm.status = undefined
+  handleSearch()
+}
+
+// 表格变化
+const handleTableChange = (pag: any) => {
+  pagination.current = pag.current
+  pagination.pageSize = pag.pageSize
+  loadVersions()
+}
+
+// 创建
+const handleCreate = () => {
+  modalTitle.value = '新增版本'
+  formData.id = undefined
+  formData.version_number = ''
+  formData.release_notes = ''
+  formData.status = 'draft'
+  formData.build_id = 0
+  formData.release_date = undefined
+  formData.requirement_ids = []
+  formData.bug_ids = []
+  loadAvailableBuilds()
+  loadAvailableRequirementsAndBugs()
+  modalVisible.value = true
+}
+
+// 编辑
+const handleEdit = async (record: Version) => {
+  modalTitle.value = '编辑版本'
+  formData.id = record.id
+  formData.version_number = record.version_number
+  formData.release_notes = record.release_notes || ''
+  formData.status = record.status
+  formData.build_id = record.build_id
+  if (record.release_date) {
+    formData.release_date = dayjs(record.release_date)
+  } else {
+    formData.release_date = undefined
+  }
+  formData.requirement_ids = record.requirements?.map((r: any) => r.id) || []
+  formData.bug_ids = record.bugs?.map((b: any) => b.id) || []
+  await loadAvailableBuilds()
+  await loadAvailableRequirementsAndBugs()
+  modalVisible.value = true
+}
+
+// 提交
+const handleSubmit = async () => {
+  try {
+    await formRef.value.validate()
+    const data: CreateVersionRequest = {
+      version_number: formData.version_number,
+      release_notes: formData.release_notes,
+      status: formData.status,
+      build_id: formData.build_id,
+      release_date: formData.release_date && formData.release_date.isValid() ? formData.release_date.format('YYYY-MM-DD') : undefined,
+      requirement_ids: formData.requirement_ids,
+      bug_ids: formData.bug_ids
+    }
+
+    if (formData.id) {
+      await updateVersion(formData.id, data)
+      message.success('更新成功')
+    } else {
+      await createVersion(data)
+      message.success('创建成功')
+    }
+    modalVisible.value = false
+    loadVersions()
+  } catch (error: any) {
+    if (error.errorFields) {
+      return
+    }
+    message.error(error.response?.data?.message || '操作失败')
+  }
+}
+
+// 取消
+const handleCancel = () => {
+  modalVisible.value = false
+}
+
+// 删除
+const handleDelete = async (id: number) => {
+  try {
+    await deleteVersion(id)
+    message.success('删除成功')
+    loadVersions()
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '删除失败')
+  }
+}
+
+// 状态变更
+const handleStatusChange = async (id: number, status: string) => {
+  try {
+    await updateVersionStatus(id, status)
+    message.success('状态更新成功')
+    loadVersions()
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '状态更新失败')
+  }
+}
+
+// 发布版本
+const handleRelease = async (id: number) => {
+  try {
+    await releaseVersion(id)
+    message.success('发布成功')
+    loadVersions()
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '发布失败')
+  }
+}
+
+// 状态颜色
+const getStatusColor = (status: string) => {
+  const colors: Record<string, string> = {
+    draft: 'default',
+    released: 'success',
+    archived: 'default'
+  }
+  return colors[status] || 'default'
+}
+
+// 状态文本
+const getStatusText = (status: string) => {
+  const texts: Record<string, string> = {
+    draft: '草稿',
+    released: '已发布',
+    archived: '已归档'
+  }
+  return texts[status] || status
+}
+
+// 构建状态文本
+const getBuildStatusText = (status: string) => {
+  const texts: Record<string, string> = {
+    pending: '待构建',
+    building: '构建中',
+    success: '成功',
+    failed: '失败'
+  }
+  return texts[status] || status
+}
+
+// 筛选函数
+const filterBuildOption = (input: string, option: any) => {
+  return option.children[0].children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+}
+
+const filterRequirementOption = (input: string, option: any) => {
+  return option.children[0].children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+}
+
+const filterBugOption = (input: string, option: any) => {
+  return option.children[0].children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+}
+
+onMounted(() => {
+  loadProjects()
+  loadVersions()
+})
+</script>
+
+<style scoped>
+.version-management {
+  min-height: 100vh;
+}
+.content {
+  padding: 24px;
+}
+.content-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+</style>
+
