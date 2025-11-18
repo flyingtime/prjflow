@@ -1,6 +1,9 @@
 package api
 
 import (
+	"fmt"
+	"time"
+
 	"gorm.io/gorm"
 	"project-management/internal/config"
 	"project-management/internal/model"
@@ -182,6 +185,47 @@ func GetDefaultErrorHTML(title, message string) string {
 	</div>
 </body>
 </html>`
+}
+
+// GenerateUniqueUsername 生成唯一的用户名
+// 如果基础用户名已存在，自动添加数字后缀（如：用户名_1, 用户名_2）
+// 如果基础用户名为空，使用OpenID的一部分生成
+func GenerateUniqueUsername(db *gorm.DB, baseUsername string, openID string) string {
+	username := baseUsername
+	if username == "" {
+		// 如果用户名为空，使用OpenID的一部分
+		if len(openID) > 8 {
+			username = "用户_" + openID[len(openID)-8:]
+		} else {
+			username = "用户_" + openID
+		}
+	}
+
+	// 检查用户名是否已存在，如果存在则添加数字后缀
+	originalUsername := username
+	suffix := 1
+	for {
+		var checkUser model.User
+		if err := db.Where("username = ?", username).First(&checkUser).Error; err == gorm.ErrRecordNotFound {
+			// 用户名可用
+			break
+		} else if err != nil {
+			// 查询出错，使用时间戳作为后缀
+			username = fmt.Sprintf("%s_%d", originalUsername, time.Now().Unix())
+			break
+		}
+		// 用户名已存在，添加数字后缀
+		suffix++
+		username = fmt.Sprintf("%s_%d", originalUsername, suffix)
+		// 防止无限循环（最多尝试100次）
+		if suffix > 100 {
+			// 使用时间戳作为后缀
+			username = fmt.Sprintf("%s_%d", originalUsername, time.Now().Unix())
+			break
+		}
+	}
+
+	return username
 }
 
 // GetDefaultSuccessHTML 获取默认成功页面HTML

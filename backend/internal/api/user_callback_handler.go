@@ -30,10 +30,13 @@ func (h *AddUserCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{
 		return nil, &CallbackError{Message: "查询用户失败", Err: result.Error}
 	}
 
+	// 生成唯一的用户名（如果昵称已存在，自动添加数字后缀）
+	username := GenerateUniqueUsername(ctx.DB, ctx.UserInfo.Nickname, ctx.UserInfo.OpenID)
+
 	// 创建新用户
 	user := model.User{
 		WeChatOpenID: ctx.UserInfo.OpenID,
-		Username:     ctx.UserInfo.Nickname,
+		Username:     username,
 		Avatar:       ctx.UserInfo.HeadImgURL,
 		Status:       1,
 	}

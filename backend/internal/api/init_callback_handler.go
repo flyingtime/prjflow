@@ -57,9 +57,12 @@ func (h *InitCallbackHandlerImpl) Process(ctx *WeChatCallbackContext) (interface
 	}
 
 	// 2. 创建管理员用户
+	// 生成唯一的用户名（如果昵称已存在，自动添加数字后缀）
+	adminUsername := GenerateUniqueUsername(tx, ctx.UserInfo.Nickname, ctx.UserInfo.OpenID)
+	
 	adminUser := model.User{
 		WeChatOpenID: ctx.UserInfo.OpenID,
-		Username:     ctx.UserInfo.Nickname,
+		Username:     adminUsername,
 		Avatar:       ctx.UserInfo.HeadImgURL,
 		Status:       1,
 	}

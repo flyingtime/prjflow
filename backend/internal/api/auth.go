@@ -148,10 +148,13 @@ func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{},
 	var user model.User
 	result := ctx.DB.Where("wechat_open_id = ?", ctx.UserInfo.OpenID).First(&user)
 	if result.Error == gorm.ErrRecordNotFound {
+		// 生成唯一的用户名（如果昵称已存在，自动添加数字后缀）
+		username := GenerateUniqueUsername(ctx.DB, ctx.UserInfo.Nickname, ctx.UserInfo.OpenID)
+		
 		// 创建新用户
 		user = model.User{
 			WeChatOpenID: ctx.UserInfo.OpenID,
-			Username:     ctx.UserInfo.Nickname,
+			Username:     username,
 			Avatar:       ctx.UserInfo.HeadImgURL,
 			Status:       1,
 		}
@@ -161,8 +164,8 @@ func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{},
 	} else if result.Error != nil {
 		return nil, &CallbackError{Message: "查询用户失败", Err: result.Error}
 	} else {
-		// 更新用户信息
-		user.Username = ctx.UserInfo.Nickname
+		// 更新用户信息（如果用户名变化，需要检查是否重复）
+		// 注意：这里不更新用户名，因为用户名可能已被用户修改过
 		user.Avatar = ctx.UserInfo.HeadImgURL
 		ctx.DB.Save(&user)
 	}
@@ -311,10 +314,13 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 	var user model.User
 	result := h.db.Where("wechat_open_id = ?", userInfo.OpenID).First(&user)
 	if result.Error == gorm.ErrRecordNotFound {
+		// 生成唯一的用户名（如果昵称已存在，自动添加数字后缀）
+		username := GenerateUniqueUsername(h.db, userInfo.Nickname, userInfo.OpenID)
+		
 		// 创建新用户
 		user = model.User{
 			WeChatOpenID: userInfo.OpenID,
-			Username:     userInfo.Nickname,
+			Username:     username,
 			Avatar:       userInfo.HeadImgURL,
 			Status:       1,
 		}
@@ -326,8 +332,7 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 		utils.Error(c, utils.CodeError, "查询用户失败")
 		return
 	} else {
-		// 更新用户信息
-		user.Username = userInfo.Nickname
+		// 更新用户信息（不更新用户名，因为用户名可能已被用户修改过）
 		user.Avatar = userInfo.HeadImgURL
 		h.db.Save(&user)
 	}
