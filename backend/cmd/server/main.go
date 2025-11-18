@@ -174,6 +174,8 @@ func main() {
 	projectGroup := r.Group("/api/projects", middleware.Auth())
 	{
 		projectGroup.GET("", projectHandler.GetProjects)
+		// 注意：统计接口需要在详情接口之前，避免路由冲突
+		projectGroup.GET("/:id/statistics", projectHandler.GetProjectStatistics)
 		projectGroup.GET("/:id", projectHandler.GetProject)
 		projectGroup.POST("", projectHandler.CreateProject)
 		projectGroup.PUT("/:id", projectHandler.UpdateProject)

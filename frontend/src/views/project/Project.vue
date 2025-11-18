@@ -131,6 +131,9 @@
                     </template>
                     <template v-else-if="column.key === 'action'">
                       <a-space>
+                        <a-button type="link" size="small" @click="handleViewDetail(record)">
+                          详情
+                        </a-button>
                         <a-button type="link" size="small" @click="handleEditProject(record)">
                           编辑
                         </a-button>
@@ -643,6 +646,11 @@ const handleCreateProject = () => {
   projectFormData.start_date = undefined
   projectFormData.end_date = undefined
   projectModalVisible.value = true
+}
+
+// 查看项目详情
+const handleViewDetail = (record: Project) => {
+  router.push(`/project/${record.id}`)
 }
 
 // 编辑项目

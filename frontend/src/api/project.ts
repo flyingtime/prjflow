@@ -27,6 +27,26 @@ export interface Project {
   members?: ProjectMember[]
 }
 
+export interface ProjectStatistics {
+  total_tasks: number
+  todo_tasks: number
+  in_progress_tasks: number
+  done_tasks: number
+  total_bugs: number
+  open_bugs: number
+  in_progress_bugs: number
+  resolved_bugs: number
+  total_requirements: number
+  in_progress_requirements: number
+  completed_requirements: number
+  total_members: number
+}
+
+export interface ProjectDetailResponse {
+  project: Project
+  statistics: ProjectStatistics
+}
+
 export interface ProjectMember {
   id: number
   project_id: number
@@ -102,8 +122,12 @@ export const getProjects = async (params?: {
   return request.get('/projects', { params })
 }
 
-export const getProject = async (id: number): Promise<Project> => {
+export const getProject = async (id: number): Promise<ProjectDetailResponse> => {
   return request.get(`/projects/${id}`)
+}
+
+export const getProjectStatistics = async (id: number): Promise<ProjectStatistics> => {
+  return request.get(`/projects/${id}/statistics`)
 }
 
 export const createProject = async (data: CreateProjectRequest): Promise<Project> => {

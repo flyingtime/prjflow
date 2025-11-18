@@ -169,7 +169,71 @@ func (h *ProjectHandler) GetProject(c *gin.Context) {
 		return
 	}
 
-	utils.Success(c, project)
+	// 获取项目统计信息
+	statistics := h.getProjectStatistics(project.ID)
+
+	utils.Success(c, gin.H{
+		"project":    project,
+		"statistics": statistics,
+	})
+}
+
+// GetProjectStatistics 获取项目统计信息
+func (h *ProjectHandler) GetProjectStatistics(c *gin.Context) {
+	id := c.Param("id")
+	
+	// 验证项目是否存在
+	var project model.Project
+	if err := h.db.First(&project, id).Error; err != nil {
+		utils.Error(c, 404, "项目不存在")
+		return
+	}
+
+	statistics := h.getProjectStatistics(project.ID)
+	utils.Success(c, statistics)
+}
+
+// getProjectStatistics 获取项目统计信息（内部方法）
+func (h *ProjectHandler) getProjectStatistics(projectID uint) gin.H {
+	var taskCount, bugCount, requirementCount, memberCount int64
+	var todoTaskCount, inProgressTaskCount, doneTaskCount int64
+	var openBugCount, inProgressBugCount, resolvedBugCount int64
+	var inProgressRequirementCount, completedRequirementCount int64
+
+	// 任务统计
+	h.db.Model(&model.Task{}).Where("project_id = ?", projectID).Count(&taskCount)
+	h.db.Model(&model.Task{}).Where("project_id = ? AND status = ?", projectID, "todo").Count(&todoTaskCount)
+	h.db.Model(&model.Task{}).Where("project_id = ? AND status = ?", projectID, "in_progress").Count(&inProgressTaskCount)
+	h.db.Model(&model.Task{}).Where("project_id = ? AND status = ?", projectID, "done").Count(&doneTaskCount)
+
+	// Bug统计
+	h.db.Model(&model.Bug{}).Where("project_id = ?", projectID).Count(&bugCount)
+	h.db.Model(&model.Bug{}).Where("project_id = ? AND status = ?", projectID, "open").Count(&openBugCount)
+	h.db.Model(&model.Bug{}).Where("project_id = ? AND status = ?", projectID, "in_progress").Count(&inProgressBugCount)
+	h.db.Model(&model.Bug{}).Where("project_id = ? AND status = ?", projectID, "resolved").Count(&resolvedBugCount)
+
+	// 需求统计
+	h.db.Model(&model.Requirement{}).Where("project_id = ?", projectID).Count(&requirementCount)
+	h.db.Model(&model.Requirement{}).Where("project_id = ? AND status = ?", projectID, "in_progress").Count(&inProgressRequirementCount)
+	h.db.Model(&model.Requirement{}).Where("project_id = ? AND status = ?", projectID, "completed").Count(&completedRequirementCount)
+
+	// 成员统计
+	h.db.Model(&model.ProjectMember{}).Where("project_id = ?", projectID).Count(&memberCount)
+
+	return gin.H{
+		"total_tasks":       int(taskCount),
+		"todo_tasks":        int(todoTaskCount),
+		"in_progress_tasks": int(inProgressTaskCount),
+		"done_tasks":       int(doneTaskCount),
+		"total_bugs":       int(bugCount),
+		"open_bugs":         int(openBugCount),
+		"in_progress_bugs":  int(inProgressBugCount),
+		"resolved_bugs":     int(resolvedBugCount),
+		"total_requirements": int(requirementCount),
+		"in_progress_requirements": int(inProgressRequirementCount),
+		"completed_requirements":   int(completedRequirementCount),
+		"total_members":     int(memberCount),
+	}
 }
 
 // CreateProject 创建项目
