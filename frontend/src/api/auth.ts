@@ -43,3 +43,23 @@ export const logout = async () => {
   return request.post('/auth/logout')
 }
 
+// 用户名密码登录
+export interface PasswordLoginRequest {
+  username: string
+  password: string
+}
+
+export const passwordLogin = async (data: PasswordLoginRequest): Promise<LoginResponse> => {
+  return request.post('/auth/login', data)
+}
+
+// 修改密码
+export interface ChangePasswordRequest {
+  old_password?: string // 可选，如果用户没有密码则不需要
+  new_password: string
+}
+
+export const changePassword = async (data: ChangePasswordRequest): Promise<{ message: string }> => {
+  return request.post('/auth/change-password', data)
+}
+

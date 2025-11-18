@@ -409,6 +409,135 @@ func (h *AuthHandler) GetUserInfo(c *gin.Context) {
 	})
 }
 
+// Login 用户名密码登录
+func (h *AuthHandler) Login(c *gin.Context) {
+	var req struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, 400, "用户名和密码不能为空")
+		return
+	}
+
+	// 查找用户
+	var user model.User
+	if err := h.db.Where("username = ?", req.Username).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			utils.Error(c, 401, "用户名或密码错误")
+		} else {
+			utils.Error(c, utils.CodeError, "查询用户失败")
+		}
+		return
+	}
+
+	// 检查用户状态
+	if user.Status != 1 {
+		utils.Error(c, 403, "用户已被禁用")
+		return
+	}
+
+	// 验证密码
+	if user.Password == "" || !utils.CheckPassword(req.Password, user.Password) {
+		utils.Error(c, 401, "用户名或密码错误")
+		return
+	}
+
+	// 获取用户角色
+	var roles []model.Role
+	h.db.Model(&user).Association("Roles").Find(&roles)
+
+	roleNames := make([]string, 0, len(roles))
+	for _, role := range roles {
+		roleNames = append(roleNames, role.Code)
+	}
+
+	// 生成JWT Token
+	token, err := auth.GenerateToken(user.ID, user.Username, roleNames)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "生成Token失败")
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"token": token,
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"email":    user.Email,
+			"avatar":   user.Avatar,
+			"roles":    roleNames,
+		},
+	})
+}
+
+// ChangePassword 修改密码
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Error(c, 401, "未授权")
+		return
+	}
+
+	var req struct {
+		OldPassword string `json:"old_password"` // 可选，如果用户没有密码则不需要
+		NewPassword string `json:"new_password" binding:"required,min=6"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, 400, "参数错误")
+		return
+	}
+
+	// 查找用户
+	var user model.User
+	if err := h.db.First(&user, userID).Error; err != nil {
+		utils.Error(c, 404, "用户不存在")
+		return
+	}
+
+	// 检查用户是否已有密码
+	hasPassword := user.Password != ""
+	
+	// 如果用户已有密码，需要验证旧密码
+	// 如果用户没有密码（微信登录用户），则可以直接设置新密码
+	if hasPassword {
+		if req.OldPassword == "" {
+			utils.Error(c, 400, "请输入旧密码")
+			return
+		}
+		if !utils.CheckPassword(req.OldPassword, user.Password) {
+			utils.Error(c, 400, "旧密码错误")
+			return
+		}
+	}
+
+	// 加密新密码
+	hashedPassword, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "加密密码失败")
+		return
+	}
+
+	// 更新密码
+	user.Password = hashedPassword
+	if err := h.db.Save(&user).Error; err != nil {
+		utils.Error(c, utils.CodeError, "更新密码失败")
+		return
+	}
+
+	// 根据是否有旧密码返回不同的消息
+	message := "密码修改成功"
+	if !hasPassword {
+		message = "密码设置成功，现在可以使用用户名密码登录了"
+	}
+
+	utils.Success(c, gin.H{
+		"message": message,
+	})
+}
+
 // Logout 登出
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// JWT是无状态的，客户端删除token即可

@@ -84,12 +84,14 @@ func main() {
 	userHandler := api.NewUserHandler(db)
 	authGroup := r.Group("/api/auth")
 	{
+		authGroup.POST("/login", authHandler.Login)                               // 用户名密码登录
 		authGroup.GET("/wechat/qrcode", authHandler.GetQRCode)
 		authGroup.GET("/wechat/callback", authHandler.WeChatCallback)              // 微信登录回调接口（GET请求，微信直接重定向到这里）
 		authGroup.GET("/wechat/add-user/callback", userHandler.AddUserByWeChatCallback) // 微信添加用户回调接口（GET请求，微信直接重定向到这里）
 		authGroup.POST("/wechat/login", authHandler.WeChatLogin)                    // 微信登录（POST请求，保留用于其他场景）
 		authGroup.GET("/user/info", middleware.Auth(), authHandler.GetUserInfo)
 		authGroup.POST("/logout", middleware.Auth(), authHandler.Logout)
+		authGroup.POST("/change-password", middleware.Auth(), authHandler.ChangePassword) // 修改密码
 	}
 
 	// 权限管理路由

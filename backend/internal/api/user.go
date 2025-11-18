@@ -70,16 +70,55 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 
 // CreateUser 创建用户
 func (h *UserHandler) CreateUser(c *gin.Context) {
-	var user model.User
-	if err := c.ShouldBindJSON(&user); err != nil {
+	var req struct {
+		Username     string `json:"username" binding:"required"`
+		Password     string `json:"password"` // 可选，如果提供则加密存储
+		Email        string `json:"email"`
+		Phone        string `json:"phone"`
+		Avatar       string `json:"avatar"`
+		Status       int    `json:"status"`
+		DepartmentID *uint  `json:"department_id"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, 400, "参数错误")
 		return
+	}
+
+	// 检查用户名是否已存在
+	var existingUser model.User
+	if err := h.db.Where("username = ?", req.Username).First(&existingUser).Error; err == nil {
+		utils.Error(c, 400, "用户名已存在")
+		return
+	}
+
+	// 创建用户
+	user := model.User{
+		Username:     req.Username,
+		Email:        req.Email,
+		Phone:        req.Phone,
+		Avatar:       req.Avatar,
+		Status:       req.Status,
+		DepartmentID: req.DepartmentID,
+	}
+
+	// 如果提供了密码，则加密存储
+	if req.Password != "" {
+		hashedPassword, err := utils.HashPassword(req.Password)
+		if err != nil {
+			utils.Error(c, utils.CodeError, "加密密码失败")
+			return
+		}
+		user.Password = hashedPassword
 	}
 
 	if err := h.db.Create(&user).Error; err != nil {
 		utils.Error(c, utils.CodeError, "创建失败")
 		return
 	}
+
+	// 重新加载用户（包含关联数据）
+	h.db.Preload("Department").Preload("Roles").First(&user, user.ID)
 
 	utils.Success(c, user)
 }
@@ -93,15 +132,64 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&user); err != nil {
+	var req struct {
+		Username     string `json:"username"`
+		Password     string `json:"password"` // 可选，如果提供则更新密码
+		Email        string `json:"email"`
+		Phone        string `json:"phone"`
+		Avatar       string `json:"avatar"`
+		Status       *int   `json:"status"`
+		DepartmentID *uint  `json:"department_id"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, 400, "参数错误")
 		return
+	}
+
+	// 更新字段
+	if req.Username != "" {
+		// 检查新用户名是否已被其他用户使用
+		var existingUser model.User
+		if err := h.db.Where("username = ? AND id != ?", req.Username, id).First(&existingUser).Error; err == nil {
+			utils.Error(c, 400, "用户名已存在")
+			return
+		}
+		user.Username = req.Username
+	}
+	if req.Email != "" {
+		user.Email = req.Email
+	}
+	if req.Phone != "" {
+		user.Phone = req.Phone
+	}
+	if req.Avatar != "" {
+		user.Avatar = req.Avatar
+	}
+	if req.Status != nil {
+		user.Status = *req.Status
+	}
+	if req.DepartmentID != nil {
+		user.DepartmentID = req.DepartmentID
+	}
+
+	// 如果提供了新密码，则加密更新
+	if req.Password != "" {
+		hashedPassword, err := utils.HashPassword(req.Password)
+		if err != nil {
+			utils.Error(c, utils.CodeError, "加密密码失败")
+			return
+		}
+		user.Password = hashedPassword
 	}
 
 	if err := h.db.Save(&user).Error; err != nil {
 		utils.Error(c, utils.CodeError, "更新失败")
 		return
 	}
+
+	// 重新加载用户（包含关联数据）
+	h.db.Preload("Department").Preload("Roles").First(&user, user.ID)
 
 	utils.Success(c, user)
 }

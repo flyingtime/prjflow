@@ -61,6 +61,7 @@ export interface UserListResponse {
 
 export interface CreateUserRequest {
   username: string
+  password?: string
   email?: string
   phone?: string
   avatar?: string

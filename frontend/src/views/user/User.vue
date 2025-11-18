@@ -127,6 +127,16 @@
         <a-form-item label="用户名" name="username">
           <a-input v-model:value="formData.username" placeholder="请输入用户名" />
         </a-form-item>
+        <a-form-item 
+          label="密码" 
+          name="password"
+          :rules="formData.id ? [] : [{ required: false, message: '请输入密码', trigger: 'blur' }]"
+        >
+          <a-input-password 
+            v-model:value="formData.password" 
+            :placeholder="formData.id ? '留空则不修改密码' : '请输入密码（可选）'" 
+          />
+        </a-form-item>
         <a-form-item label="邮箱" name="email">
           <a-input v-model:value="formData.email" placeholder="请输入邮箱" />
         </a-form-item>
@@ -286,8 +296,9 @@ const columns = [
 const modalVisible = ref(false)
 const modalTitle = ref('新增用户')
 const formRef = ref()
-const formData = reactive<CreateUserRequest & { id?: number }>({
+const formData = reactive<CreateUserRequest & { id?: number; password?: string }>({
   username: '',
+  password: '',
   email: '',
   phone: '',
   department_id: undefined,
@@ -373,6 +384,7 @@ const handleCreate = () => {
   modalTitle.value = '新增用户'
   Object.assign(formData, {
     username: '',
+    password: '',
     email: '',
     phone: '',
     department_id: undefined,
@@ -388,6 +400,7 @@ const handleEdit = (record: User) => {
   Object.assign(formData, {
     id: record.id,
     username: record.username,
+    password: '', // 编辑时不显示密码，留空则不修改
     email: record.email || '',
     phone: record.phone || '',
     department_id: record.department_id,
@@ -402,11 +415,17 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     submitting.value = true
     
+    // 准备提交数据，如果密码为空则删除该字段
+    const submitData: any = { ...formData }
+    if (!submitData.password || submitData.password.trim() === '') {
+      delete submitData.password
+    }
+    
     if (formData.id) {
-      await updateUser(formData.id, formData)
+      await updateUser(formData.id, submitData)
       message.success('更新成功')
     } else {
-      await createUser(formData)
+      await createUser(submitData)
       message.success('创建成功')
     }
     

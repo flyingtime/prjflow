@@ -5,27 +5,80 @@
         <h2>项目管理系统</h2>
       </template>
       <div class="login-content">
-        <WeChatQRCode
-          :fetchQRCode="getWeChatQRCode"
-          initial-status-text="请使用微信扫码"
-          hint="扫码后会在微信内打开授权页面"
-          :show-auth-url="false"
-          @success="handleLoginSuccess"
-        />
+        <a-tabs v-model:activeKey="loginType" centered>
+          <a-tab-pane key="password" tab="账号登录">
+            <a-form
+              :model="loginForm"
+              :rules="loginRules"
+              @finish="handlePasswordLogin"
+              layout="vertical"
+            >
+              <a-form-item name="username" label="用户名">
+                <a-input v-model:value="loginForm.username" placeholder="请输入用户名" size="large" />
+              </a-form-item>
+              <a-form-item name="password" label="密码">
+                <a-input-password v-model:value="loginForm.password" placeholder="请输入密码" size="large" />
+              </a-form-item>
+              <a-form-item>
+                <a-button type="primary" html-type="submit" block size="large" :loading="loading">
+                  登录
+                </a-button>
+              </a-form-item>
+            </a-form>
+          </a-tab-pane>
+          <a-tab-pane key="wechat" tab="微信登录">
+            <WeChatQRCode
+              :fetchQRCode="getWeChatQRCode"
+              initial-status-text="请使用微信扫码"
+              hint="扫码后会在微信内打开授权页面"
+              :show-auth-url="false"
+              @success="handleLoginSuccess"
+            />
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </a-card>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getWeChatQRCode } from '@/api/auth'
+import { getWeChatQRCode, passwordLogin } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import WeChatQRCode from '@/components/WeChatQRCode.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+
+const loginType = ref('password')
+const loading = ref(false)
+const loginForm = ref({
+  username: '',
+  password: ''
+})
+
+const loginRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+}
+
+// 用户名密码登录
+const handlePasswordLogin = async () => {
+  try {
+    loading.value = true
+    const response = await passwordLogin({
+      username: loginForm.value.username,
+      password: loginForm.value.password
+    })
+    handleLoginSuccess(response)
+  } catch (error: any) {
+    message.error(error.message || '登录失败')
+  } finally {
+    loading.value = false
+  }
+}
 
 // 处理登录成功
 const handleLoginSuccess = (data: any) => {
