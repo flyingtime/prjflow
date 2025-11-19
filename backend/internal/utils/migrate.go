@@ -173,6 +173,38 @@ func AutoMigrate(db *gorm.DB) error {
 		db.Exec("CREATE INDEX IF NOT EXISTS idx_versions_deleted_at ON versions(deleted_at)")
 		db.Exec("CREATE INDEX IF NOT EXISTS idx_versions_project_id ON versions(project_id)")
 	}
+	
+	// 创建关联表（如果不存在）
+	// Version 表有 many2many 关联，需要创建关联表
+	var versionRequirementsExists int64
+	db.Raw(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='version_requirements'`).Scan(&versionRequirementsExists)
+	if versionRequirementsExists == 0 {
+		// 创建 version_requirements 关联表
+		db.Exec(`
+			CREATE TABLE version_requirements (
+				version_id INTEGER NOT NULL,
+				requirement_id INTEGER NOT NULL,
+				PRIMARY KEY (version_id, requirement_id),
+				FOREIGN KEY (version_id) REFERENCES versions(id) ON DELETE CASCADE,
+				FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE CASCADE
+			)
+		`)
+	}
+	
+	var versionBugsExists int64
+	db.Raw(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='version_bugs'`).Scan(&versionBugsExists)
+	if versionBugsExists == 0 {
+		// 创建 version_bugs 关联表
+		db.Exec(`
+			CREATE TABLE version_bugs (
+				version_id INTEGER NOT NULL,
+				bug_id INTEGER NOT NULL,
+				PRIMARY KEY (version_id, bug_id),
+				FOREIGN KEY (version_id) REFERENCES versions(id) ON DELETE CASCADE,
+				FOREIGN KEY (bug_id) REFERENCES bugs(id) ON DELETE CASCADE
+			)
+		`)
+	}
 
 	return db.AutoMigrate(
 		// 用户与权限
