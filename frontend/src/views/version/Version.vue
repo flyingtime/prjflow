@@ -116,7 +116,7 @@
                         状态 <DownOutlined />
                       </a-button>
                       <template #overlay>
-                        <a-menu @click="(e: any) => handleStatusChange(record.id, e.key as string)">
+                        <a-menu @click="(e: any) => handleStatusChange(record, e.key as string)">
                           <a-menu-item key="draft">草稿</a-menu-item>
                           <a-menu-item key="released">已发布</a-menu-item>
                           <a-menu-item key="archived">已归档</a-menu-item>
@@ -237,7 +237,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
@@ -469,15 +469,13 @@ const handleDelete = async (id: number) => {
   }
 }
 
-// 状态变更
-const handleStatusChange = async (id: number, status: string) => {
-  try {
-    await updateVersionStatus(id, status)
-    message.success('状态更新成功')
-    loadVersions()
-  } catch (error: any) {
-    message.error(error.response?.data?.message || '状态更新失败')
-  }
+// 状态变更（弹出编辑界面）
+const handleStatusChange = async (record: Version, status: string) => {
+  // 打开编辑对话框，并设置新状态
+  await handleEdit(record)
+  // 使用 nextTick 确保表单已加载后再设置状态
+  await nextTick()
+  formData.status = status as any
 }
 
 // 发布版本
