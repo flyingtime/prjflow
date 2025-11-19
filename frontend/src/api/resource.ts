@@ -128,11 +128,19 @@ export interface ResourceCalendar {
 }
 
 export interface ResourceConflict {
-  resource_id: string
+  user_id: string
   date: string
   total_hours: number
   conflicts: string[]
   has_conflict: boolean
+  has_warning: boolean
+  allocations: Array<{
+    project_name: string
+    task_title?: string
+    bug_title?: string
+    hours: number
+    description: string
+  }>
 }
 
 // 获取资源列表
@@ -230,11 +238,11 @@ export const getResourceCalendar = (params?: {
   return request.get<ResourceCalendar>('/resource-allocations/calendar', { params })
 }
 
-// 检查资源冲突
+// 检查资源冲突（基于user_id）
 export const checkResourceConflict = (params: {
-  resource_id: number
+  user_id: number
   date: string
 }) => {
-  return request.get<ResourceConflict>('/resource-allocations/conflict', { params })
+  return request.get<ResourceConflict>('/resources/conflict', { params })
 }
 

@@ -325,17 +325,18 @@ func main() {
 		testReportGroup.DELETE("/:id", testReportHandler.DeleteTestReport)
 	}
 
-	// 资源管理路由
+	// 资源管理路由 (统计、冲突检测、利用率分析)
 	resourceHandler := api.NewResourceHandler(db)
 	resourceGroup := r.Group("/api/resources", middleware.Auth())
 	{
 		resourceGroup.GET("/statistics", resourceHandler.GetResourceStatistics)
 		resourceGroup.GET("/utilization", resourceHandler.GetResourceUtilization)
-		resourceGroup.GET("", resourceHandler.GetResources)
-		resourceGroup.GET("/:id", resourceHandler.GetResource)
-		resourceGroup.POST("", resourceHandler.CreateResource)
-		resourceGroup.PUT("/:id", resourceHandler.UpdateResource)
-		resourceGroup.DELETE("/:id", resourceHandler.DeleteResource)
+		resourceGroup.GET("/conflict", resourceHandler.CheckResourceConflict)
+		// resourceGroup.GET("", resourceHandler.GetResources) // Removed
+		// resourceGroup.GET("/:id", resourceHandler.GetResource) // Removed
+		// resourceGroup.POST("", resourceHandler.CreateResource) // Removed
+		// resourceGroup.PUT("/:id", resourceHandler.UpdateResource) // Removed
+		// resourceGroup.DELETE("/:id", resourceHandler.DeleteResource) // Removed
 	}
 
 	// 资源分配管理路由

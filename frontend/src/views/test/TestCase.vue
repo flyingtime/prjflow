@@ -121,6 +121,83 @@
             </a-col>
           </a-row>
 
+          <!-- 覆盖率分析 -->
+          <a-row :gutter="16" style="margin-bottom: 16px" v-if="statistics && statistics.total > 0">
+            <a-col :span="12">
+              <a-card title="测试通过率" :bordered="false">
+                <a-statistic
+                  :value="statistics.pass_rate || 0"
+                  suffix="%"
+                  :precision="2"
+                  :value-style="{ color: statistics.pass_rate >= 80 ? '#52c41a' : statistics.pass_rate >= 60 ? '#faad14' : '#ff4d4f' }"
+                />
+                <div style="margin-top: 16px">
+                  <a-progress
+                    :percent="statistics.pass_rate || 0"
+                    :stroke-color="statistics.pass_rate >= 80 ? '#52c41a' : statistics.pass_rate >= 60 ? '#faad14' : '#ff4d4f'"
+                    :format="(percent) => `${percent?.toFixed(2)}%`"
+                  />
+                </div>
+              </a-card>
+            </a-col>
+            <a-col :span="12">
+              <a-card title="测试失败率" :bordered="false">
+                <a-statistic
+                  :value="statistics.fail_rate || 0"
+                  suffix="%"
+                  :precision="2"
+                  :value-style="{ color: '#ff4d4f' }"
+                />
+                <div style="margin-top: 16px">
+                  <a-progress
+                    :percent="statistics.fail_rate || 0"
+                    stroke-color="#ff4d4f"
+                    :format="(percent) => `${percent?.toFixed(2)}%`"
+                  />
+                </div>
+              </a-card>
+            </a-col>
+          </a-row>
+
+          <!-- 按项目统计 -->
+          <a-card title="按项目统计" :bordered="false" style="margin-bottom: 16px" v-if="statistics?.project_stats && statistics.project_stats.length > 0">
+            <a-table
+              :columns="projectStatsColumns"
+              :data-source="statistics.project_stats"
+              :pagination="false"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'pass_rate'">
+                  <span :style="{ color: record.pass_rate >= 80 ? '#52c41a' : record.pass_rate >= 60 ? '#faad14' : '#ff4d4f' }">
+                    {{ record.pass_rate.toFixed(2) }}%
+                  </span>
+                </template>
+              </template>
+            </a-table>
+          </a-card>
+
+          <!-- 按类型统计 -->
+          <a-card title="按测试类型统计" :bordered="false" style="margin-bottom: 16px" v-if="statistics?.type_stats && statistics.type_stats.length > 0">
+            <a-table
+              :columns="typeStatsColumns"
+              :data-source="statistics.type_stats"
+              :pagination="false"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'type'">
+                  {{ getTypeText(record.type) }}
+                </template>
+                <template v-else-if="column.key === 'pass_rate'">
+                  <span :style="{ color: record.pass_rate >= 80 ? '#52c41a' : record.pass_rate >= 60 ? '#faad14' : '#ff4d4f' }">
+                    {{ record.pass_rate.toFixed(2) }}%
+                  </span>
+                </template>
+              </template>
+            </a-table>
+          </a-card>
+
           <a-card :bordered="false">
             <a-table
               :columns="columns"
@@ -324,6 +401,22 @@ const pagination = reactive({
   showSizeChanger: true,
   showQuickJumper: true
 })
+
+const projectStatsColumns = [
+  { title: '项目名称', dataIndex: 'project_name', key: 'project_name' },
+  { title: '总测试单数', dataIndex: 'total', key: 'total' },
+  { title: '通过', dataIndex: 'passed', key: 'passed' },
+  { title: '失败', dataIndex: 'failed', key: 'failed' },
+  { title: '通过率', key: 'pass_rate', width: 120 }
+]
+
+const typeStatsColumns = [
+  { title: '测试类型', key: 'type', width: 120 },
+  { title: '总测试单数', dataIndex: 'total', key: 'total' },
+  { title: '通过', dataIndex: 'passed', key: 'passed' },
+  { title: '失败', dataIndex: 'failed', key: 'failed' },
+  { title: '通过率', key: 'pass_rate', width: 120 }
+]
 
 const columns = [
   { title: '测试单名称', dataIndex: 'name', key: 'name', ellipsis: true },

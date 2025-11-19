@@ -49,6 +49,23 @@ export interface TestCaseStatistics {
   running: number
   passed: number
   failed: number
+  pass_rate: number
+  fail_rate: number
+  project_stats: {
+    project_id: number
+    project_name: string
+    total: number
+    passed: number
+    failed: number
+    pass_rate: number
+  }[]
+  type_stats: {
+    type: string
+    total: number
+    passed: number
+    failed: number
+    pass_rate: number
+  }[]
 }
 
 // 获取测试单列表

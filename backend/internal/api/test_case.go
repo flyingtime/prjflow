@@ -263,7 +263,7 @@ func (h *TestCaseHandler) UpdateTestCaseStatus(c *gin.Context) {
 	utils.Success(c, testCase)
 }
 
-// GetTestCaseStatistics 获取测试单统计
+// GetTestCaseStatistics 获取测试单统计（包含覆盖率分析）
 func (h *TestCaseHandler) GetTestCaseStatistics(c *gin.Context) {
 	baseQuery := h.db.Model(&model.TestCase{})
 
@@ -285,12 +285,112 @@ func (h *TestCaseHandler) GetTestCaseStatistics(c *gin.Context) {
 	baseQuery.Session(&gorm.Session{}).Where("status = ?", "passed").Count(&passed)
 	baseQuery.Session(&gorm.Session{}).Where("status = ?", "failed").Count(&failed)
 
+	// 计算通过率和失败率
+	var passRate, failRate float64
+	if total > 0 {
+		passRate = float64(passed) / float64(total) * 100
+		failRate = float64(failed) / float64(total) * 100
+	}
+
+	// 按项目统计
+	var projectStats []struct {
+		ProjectID   uint    `json:"project_id"`
+		ProjectName string  `json:"project_name"`
+		Total       int64   `json:"total"`
+		Passed      int64   `json:"passed"`
+		Failed      int64   `json:"failed"`
+		PassRate    float64 `json:"pass_rate"`
+	}
+	projectQuery := h.db.Model(&model.TestCase{}).
+		Select("test_cases.project_id, projects.name as project_name, COUNT(*) as total, "+
+			"SUM(CASE WHEN test_cases.status = 'passed' THEN 1 ELSE 0 END) as passed, "+
+			"SUM(CASE WHEN test_cases.status = 'failed' THEN 1 ELSE 0 END) as failed").
+		Joins("LEFT JOIN projects ON test_cases.project_id = projects.id")
+	if projectID := c.Query("project_id"); projectID != "" {
+		projectQuery = projectQuery.Where("test_cases.project_id = ?", projectID)
+	}
+	if keyword := c.Query("keyword"); keyword != "" {
+		projectQuery = projectQuery.Where("test_cases.name LIKE ? OR test_cases.description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+	projectQuery.Group("test_cases.project_id, projects.name").Scan(&projectStats)
+	
+	// 计算每个项目的通过率
+	for i := range projectStats {
+		if projectStats[i].Total > 0 {
+			projectStats[i].PassRate = float64(projectStats[i].Passed) / float64(projectStats[i].Total) * 100
+		}
+	}
+
+	// 按测试类型统计
+	var typeStats []struct {
+		Type     string  `json:"type"`
+		Total    int64   `json:"total"`
+		Passed   int64   `json:"passed"`
+		Failed   int64   `json:"failed"`
+		PassRate float64 `json:"pass_rate"`
+	}
+	
+	// 获取所有测试单及其类型
+	var testCases []model.TestCase
+	typeQuery := h.db.Model(&model.TestCase{})
+	if projectID := c.Query("project_id"); projectID != "" {
+		typeQuery = typeQuery.Where("project_id = ?", projectID)
+	}
+	if keyword := c.Query("keyword"); keyword != "" {
+		typeQuery = typeQuery.Where("name LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+	typeQuery.Find(&testCases)
+	
+	// 统计每个类型的测试单数量
+	typeMap := make(map[string]struct {
+		Total  int64
+		Passed int64
+		Failed int64
+	})
+	for _, tc := range testCases {
+		for _, t := range tc.Types {
+			stat := typeMap[t]
+			stat.Total++
+			if tc.Status == "passed" {
+				stat.Passed++
+			} else if tc.Status == "failed" {
+				stat.Failed++
+			}
+			typeMap[t] = stat
+		}
+	}
+	
+	// 转换为数组并计算通过率
+	for t, stat := range typeMap {
+		passRate := 0.0
+		if stat.Total > 0 {
+			passRate = float64(stat.Passed) / float64(stat.Total) * 100
+		}
+		typeStats = append(typeStats, struct {
+			Type     string  `json:"type"`
+			Total    int64   `json:"total"`
+			Passed   int64   `json:"passed"`
+			Failed   int64   `json:"failed"`
+			PassRate float64 `json:"pass_rate"`
+		}{
+			Type:     t,
+			Total:    stat.Total,
+			Passed:   stat.Passed,
+			Failed:   stat.Failed,
+			PassRate: passRate,
+		})
+	}
+
 	utils.Success(c, gin.H{
-		"total":   total,
-		"pending": pending,
-		"running": running,
-		"passed":  passed,
-		"failed":  failed,
+		"total":        total,
+		"pending":      pending,
+		"running":      running,
+		"passed":       passed,
+		"failed":       failed,
+		"pass_rate":    passRate,
+		"fail_rate":    failRate,
+		"project_stats": projectStats,
+		"type_stats":   typeStats,
 	})
 }
 

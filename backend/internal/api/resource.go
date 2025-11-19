@@ -376,6 +376,72 @@ func (h *ResourceHandler) GetResourceStatistics(c *gin.Context) {
 	})
 }
 
+// CheckResourceConflict 检查资源冲突（检查同一人员在同一天的工时是否超过限制）
+func (h *ResourceHandler) CheckResourceConflict(c *gin.Context) {
+	userID := c.Query("user_id")
+	dateStr := c.Query("date")
+	
+	if userID == "" || dateStr == "" {
+		utils.Error(c, 400, "需要提供user_id和date参数")
+		return
+	}
+
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		utils.Error(c, 400, "日期格式错误，应为 YYYY-MM-DD")
+		return
+	}
+
+	// 查询该用户在该日期的所有资源分配（从ResourceAllocation表）
+	var totalHours float64
+	h.db.Model(&model.ResourceAllocation{}).
+		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
+		Where("resources.user_id = ? AND resource_allocations.date = ?", userID, date).
+		Select("COALESCE(SUM(resource_allocations.hours), 0)").
+		Scan(&totalHours)
+
+	conflicts := []string{}
+	if totalHours > 24 {
+		conflicts = append(conflicts, "总工时超过24小时")
+	}
+	if totalHours > 12 {
+		conflicts = append(conflicts, "总工时超过12小时（建议检查）")
+	}
+
+	// 获取该用户在该日期的详细分配情况
+	var allocations []struct {
+		ProjectName string  `json:"project_name"`
+		TaskTitle    *string `json:"task_title"`
+		BugTitle     *string `json:"bug_title"`
+		Hours        float64 `json:"hours"`
+		Description  string  `json:"description"`
+	}
+	h.db.Model(&model.ResourceAllocation{}).
+		Select(`
+			projects.name as project_name,
+			tasks.title as task_title,
+			bugs.title as bug_title,
+			resource_allocations.hours,
+			resource_allocations.description
+		`).
+		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
+		Joins("LEFT JOIN projects ON resource_allocations.project_id = projects.id").
+		Joins("LEFT JOIN tasks ON resource_allocations.task_id = tasks.id").
+		Joins("LEFT JOIN bugs ON resource_allocations.bug_id = bugs.id").
+		Where("resources.user_id = ? AND resource_allocations.date = ?", userID, date).
+		Scan(&allocations)
+
+	utils.Success(c, gin.H{
+		"user_id":     userID,
+		"date":        dateStr,
+		"total_hours": totalHours,
+		"conflicts":   conflicts,
+		"has_conflict": totalHours > 24,
+		"has_warning": totalHours > 12,
+		"allocations": allocations,
+	})
+}
+
 // GetResourceUtilization 获取资源利用率分析
 func (h *ResourceHandler) GetResourceUtilization(c *gin.Context) {
 	// 获取查询参数
