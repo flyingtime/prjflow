@@ -17,117 +17,19 @@ func NewProjectHandler(db *gorm.DB) *ProjectHandler {
 	return &ProjectHandler{db: db}
 }
 
-// GetProjectGroups 获取项目集列表
-func (h *ProjectHandler) GetProjectGroups(c *gin.Context) {
-	var projectGroups []model.ProjectGroup
-	query := h.db
-
-	// 搜索
-	if keyword := c.Query("keyword"); keyword != "" {
-		query = query.Where("name LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
-	}
-
-	// 状态筛选
-	if status := c.Query("status"); status != "" {
-		query = query.Where("status = ?", status)
-	}
-
-	if err := query.Order("created_at DESC").Find(&projectGroups).Error; err != nil {
-		utils.Error(c, utils.CodeError, "查询失败")
-		return
-	}
-
-	utils.Success(c, projectGroups)
-}
-
-// GetProjectGroup 获取项目集详情
-func (h *ProjectHandler) GetProjectGroup(c *gin.Context) {
-	id := c.Param("id")
-	var projectGroup model.ProjectGroup
-	if err := h.db.Preload("Projects").First(&projectGroup, id).Error; err != nil {
-		utils.Error(c, 404, "项目集不存在")
-		return
-	}
-
-	utils.Success(c, projectGroup)
-}
-
-// CreateProjectGroup 创建项目集
-func (h *ProjectHandler) CreateProjectGroup(c *gin.Context) {
-	var projectGroup model.ProjectGroup
-	if err := c.ShouldBindJSON(&projectGroup); err != nil {
-		utils.Error(c, 400, "参数错误")
-		return
-	}
-
-	if err := h.db.Create(&projectGroup).Error; err != nil {
-		utils.Error(c, utils.CodeError, "创建失败")
-		return
-	}
-
-	utils.Success(c, projectGroup)
-}
-
-// UpdateProjectGroup 更新项目集
-func (h *ProjectHandler) UpdateProjectGroup(c *gin.Context) {
-	id := c.Param("id")
-	var projectGroup model.ProjectGroup
-	if err := h.db.First(&projectGroup, id).Error; err != nil {
-		utils.Error(c, 404, "项目集不存在")
-		return
-	}
-
-	if err := c.ShouldBindJSON(&projectGroup); err != nil {
-		utils.Error(c, 400, "参数错误")
-		return
-	}
-
-	if err := h.db.Save(&projectGroup).Error; err != nil {
-		utils.Error(c, utils.CodeError, "更新失败")
-		return
-	}
-
-	utils.Success(c, projectGroup)
-}
-
-// DeleteProjectGroup 删除项目集
-func (h *ProjectHandler) DeleteProjectGroup(c *gin.Context) {
-	id := c.Param("id")
-
-	// 检查是否有项目
-	var count int64
-	h.db.Model(&model.Project{}).Where("project_group_id = ?", id).Count(&count)
-	if count > 0 {
-		utils.Error(c, 400, "项目集下存在项目，无法删除")
-		return
-	}
-
-	if err := h.db.Delete(&model.ProjectGroup{}, id).Error; err != nil {
-		utils.Error(c, utils.CodeError, "删除失败")
-		return
-	}
-
-	utils.Success(c, gin.H{"message": "删除成功"})
-}
-
 // GetProjects 获取项目列表
 func (h *ProjectHandler) GetProjects(c *gin.Context) {
 	var projects []model.Project
-	query := h.db.Preload("ProjectGroup").Preload("Product")
+	query := h.db
 
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("name LIKE ? OR code LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
 	}
 
-	// 项目集筛选
-	if projectGroupID := c.Query("project_group_id"); projectGroupID != "" {
-		query = query.Where("project_group_id = ?", projectGroupID)
-	}
-
-	// 产品筛选
-	if productID := c.Query("product_id"); productID != "" {
-		query = query.Where("product_id = ?", productID)
+	// 标签筛选
+	if tag := c.Query("tag"); tag != "" {
+		query = query.Where("tags LIKE ?", "%\""+tag+"\"%")
 	}
 
 	// 状态筛选
@@ -161,8 +63,6 @@ func (h *ProjectHandler) GetProject(c *gin.Context) {
 	id := c.Param("id")
 	var project model.Project
 	if err := h.db.
-		Preload("ProjectGroup").
-		Preload("Product").
 		Preload("Members.User").
 		First(&project, id).Error; err != nil {
 		utils.Error(c, 404, "项目不存在")
@@ -239,14 +139,13 @@ func (h *ProjectHandler) getProjectStatistics(projectID uint) gin.H {
 // CreateProject 创建项目
 func (h *ProjectHandler) CreateProject(c *gin.Context) {
 	var req struct {
-		Name            string  `json:"name" binding:"required"`
-		Code            string  `json:"code"`
-		Description     string  `json:"description"`
-		Status          int     `json:"status"`
-		ProjectGroupID  uint    `json:"project_group_id"`
-		ProductID       *uint   `json:"product_id"`
-		StartDate       *string `json:"start_date"` // 接收字符串格式的日期
-		EndDate         *string `json:"end_date"`   // 接收字符串格式的日期
+		Name        string   `json:"name" binding:"required"`
+		Code        string   `json:"code"`
+		Description string   `json:"description"`
+		Status      int      `json:"status"`
+		Tags        []string `json:"tags"`        // 标签数组
+		StartDate   *string  `json:"start_date"` // 接收字符串格式的日期
+		EndDate     *string  `json:"end_date"`   // 接收字符串格式的日期
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -267,33 +166,14 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 		}
 	}
 
-	// 验证项目集是否存在
-	if req.ProjectGroupID > 0 {
-		var projectGroup model.ProjectGroup
-		if err := h.db.First(&projectGroup, req.ProjectGroupID).Error; err != nil {
-			utils.Error(c, 404, "项目集不存在")
-			return
-		}
-	}
-
-	// 验证产品是否存在（如果提供了产品ID）
-	if req.ProductID != nil && *req.ProductID > 0 {
-		var product model.Product
-		if err := h.db.First(&product, *req.ProductID).Error; err != nil {
-			utils.Error(c, 404, "产品不存在")
-			return
-		}
-	}
-
 	project := model.Project{
-		Name:           req.Name,
-		Code:           req.Code,
-		Description:    req.Description,
-		Status:         req.Status,
-		ProjectGroupID: req.ProjectGroupID,
-		ProductID:      req.ProductID,
-		StartDate:      startDate,
-		EndDate:        endDate,
+		Name:        req.Name,
+		Code:        req.Code,
+		Description: req.Description,
+		Status:      req.Status,
+		Tags:        model.StringArray(req.Tags),
+		StartDate:   startDate,
+		EndDate:     endDate,
 	}
 
 	if err := h.db.Create(&project).Error; err != nil {
@@ -302,7 +182,7 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("ProjectGroup").Preload("Product").First(&project, project.ID)
+	h.db.Preload("Members.User").First(&project, project.ID)
 
 	utils.Success(c, project)
 }
@@ -317,14 +197,13 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 	}
 
 	var req struct {
-		Name           *string `json:"name"`
-		Code           *string `json:"code"`
-		Description    *string `json:"description"`
-		Status         *int    `json:"status"`
-		ProjectGroupID *uint   `json:"project_group_id"`
-		ProductID      *uint   `json:"product_id"`
-		StartDate      *string `json:"start_date"` // 接收字符串格式的日期
-		EndDate        *string `json:"end_date"`   // 接收字符串格式的日期
+		Name        *string  `json:"name"`
+		Code        *string  `json:"code"`
+		Description *string  `json:"description"`
+		Status      *int     `json:"status"`
+		Tags        *[]string `json:"tags"`        // 标签数组
+		StartDate   *string  `json:"start_date"` // 接收字符串格式的日期
+		EndDate     *string  `json:"end_date"`   // 接收字符串格式的日期
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -345,11 +224,8 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 	if req.Status != nil {
 		project.Status = *req.Status
 	}
-	if req.ProjectGroupID != nil {
-		project.ProjectGroupID = *req.ProjectGroupID
-	}
-	if req.ProductID != nil {
-		project.ProductID = req.ProductID
+	if req.Tags != nil {
+		project.Tags = model.StringArray(*req.Tags)
 	}
 
 	// 解析日期
@@ -372,31 +248,13 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 		}
 	}
 
-	// 验证项目集是否存在
-	if project.ProjectGroupID > 0 {
-		var projectGroup model.ProjectGroup
-		if err := h.db.First(&projectGroup, project.ProjectGroupID).Error; err != nil {
-			utils.Error(c, 404, "项目集不存在")
-			return
-		}
-	}
-
-	// 验证产品是否存在（如果提供了产品ID）
-	if project.ProductID != nil && *project.ProductID > 0 {
-		var product model.Product
-		if err := h.db.First(&product, *project.ProductID).Error; err != nil {
-			utils.Error(c, 404, "产品不存在")
-			return
-		}
-	}
-
 	if err := h.db.Save(&project).Error; err != nil {
 		utils.Error(c, utils.CodeError, "更新失败")
 		return
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("ProjectGroup").Preload("Product").First(&project, project.ID)
+	h.db.Preload("Members.User").First(&project, project.ID)
 
 	utils.Success(c, project)
 }

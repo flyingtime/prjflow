@@ -20,22 +20,16 @@ func NewVersionHandler(db *gorm.DB) *VersionHandler {
 // GetVersions 获取版本列表
 func (h *VersionHandler) GetVersions(c *gin.Context) {
 	var versions []model.Version
-	query := h.db.Preload("Build").Preload("Build.Project").Preload("Build.Creator")
+	query := h.db.Preload("Project")
 
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("version_number LIKE ? OR release_notes LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
 
-	// 构建筛选
-	if buildID := c.Query("build_id"); buildID != "" {
-		query = query.Where("build_id = ?", buildID)
-	}
-
-	// 项目筛选（通过构建）
+	// 项目筛选
 	if projectID := c.Query("project_id"); projectID != "" {
-		query = query.Joins("JOIN builds ON versions.build_id = builds.id").
-			Where("builds.project_id = ?", projectID)
+		query = query.Where("project_id = ?", projectID)
 	}
 
 	// 状态筛选
@@ -68,7 +62,7 @@ func (h *VersionHandler) GetVersions(c *gin.Context) {
 func (h *VersionHandler) GetVersion(c *gin.Context) {
 	id := c.Param("id")
 	var version model.Version
-	if err := h.db.Preload("Build").Preload("Build.Project").Preload("Build.Creator").
+	if err := h.db.Preload("Project").
 		Preload("Requirements").Preload("Bugs").First(&version, id).Error; err != nil {
 		utils.Error(c, 404, "版本不存在")
 		return
@@ -80,13 +74,13 @@ func (h *VersionHandler) GetVersion(c *gin.Context) {
 // CreateVersion 创建版本
 func (h *VersionHandler) CreateVersion(c *gin.Context) {
 	var req struct {
-		VersionNumber string   `json:"version_number" binding:"required"`
-		ReleaseNotes  string   `json:"release_notes"`
-		Status        string   `json:"status"`
-		BuildID       uint     `json:"build_id" binding:"required"`
-		ReleaseDate   *string  `json:"release_date"` // 接收字符串格式的日期
-		RequirementIDs []uint  `json:"requirement_ids"` // 关联的需求ID列表
-		BugIDs        []uint   `json:"bug_ids"`         // 关联的Bug ID列表
+		VersionNumber  string   `json:"version_number" binding:"required"`
+		ReleaseNotes   string   `json:"release_notes"`
+		Status         string   `json:"status"`
+		ProjectID      uint     `json:"project_id" binding:"required"`
+		ReleaseDate    *string  `json:"release_date"` // 接收字符串格式的日期
+		RequirementIDs []uint   `json:"requirement_ids"` // 关联的需求ID列表
+		BugIDs         []uint   `json:"bug_ids"`         // 关联的Bug ID列表
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -103,17 +97,10 @@ func (h *VersionHandler) CreateVersion(c *gin.Context) {
 		return
 	}
 
-	// 验证构建是否存在
-	var build model.Build
-	if err := h.db.First(&build, req.BuildID).Error; err != nil {
-		utils.Error(c, 404, "构建不存在")
-		return
-	}
-
-	// 检查该构建是否已有版本
-	var existingVersion model.Version
-	if err := h.db.Where("build_id = ?", req.BuildID).First(&existingVersion).Error; err == nil {
-		utils.Error(c, 400, "该构建已有关联的版本")
+	// 验证项目是否存在
+	var project model.Project
+	if err := h.db.First(&project, req.ProjectID).Error; err != nil {
+		utils.Error(c, 404, "项目不存在")
 		return
 	}
 
@@ -129,7 +116,7 @@ func (h *VersionHandler) CreateVersion(c *gin.Context) {
 		VersionNumber: req.VersionNumber,
 		ReleaseNotes:  req.ReleaseNotes,
 		Status:        req.Status,
-		BuildID:       req.BuildID,
+		ProjectID:     req.ProjectID,
 		ReleaseDate:   releaseDate,
 	}
 
@@ -153,7 +140,7 @@ func (h *VersionHandler) CreateVersion(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Build").Preload("Build.Project").Preload("Build.Creator").
+	h.db.Preload("Project").
 		Preload("Requirements").Preload("Bugs").First(&version, version.ID)
 
 	utils.Success(c, version)
@@ -233,7 +220,7 @@ func (h *VersionHandler) UpdateVersion(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Build").Preload("Build.Project").Preload("Build.Creator").
+	h.db.Preload("Project").
 		Preload("Requirements").Preload("Bugs").First(&version, version.ID)
 
 	utils.Success(c, version)
@@ -285,7 +272,7 @@ func (h *VersionHandler) UpdateVersionStatus(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Build").Preload("Build.Project").Preload("Build.Creator").
+	h.db.Preload("Project").
 		Preload("Requirements").Preload("Bugs").First(&version, version.ID)
 
 	utils.Success(c, version)
@@ -295,14 +282,8 @@ func (h *VersionHandler) UpdateVersionStatus(c *gin.Context) {
 func (h *VersionHandler) ReleaseVersion(c *gin.Context) {
 	id := c.Param("id")
 	var version model.Version
-	if err := h.db.Preload("Build").First(&version, id).Error; err != nil {
+	if err := h.db.First(&version, id).Error; err != nil {
 		utils.Error(c, 404, "版本不存在")
-		return
-	}
-
-	// 检查构建状态
-	if version.Build.Status != "success" {
-		utils.Error(c, 400, "只有构建成功的版本才能发布")
 		return
 	}
 
@@ -318,7 +299,7 @@ func (h *VersionHandler) ReleaseVersion(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Build").Preload("Build.Project").Preload("Build.Creator").
+	h.db.Preload("Project").
 		Preload("Requirements").Preload("Bugs").First(&version, version.ID)
 
 	utils.Success(c, version)

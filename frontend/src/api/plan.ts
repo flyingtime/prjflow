@@ -22,12 +22,10 @@ export interface Plan {
   id: number
   name: string
   description?: string
-  type: 'product_plan' | 'project_plan'
+  type: 'project_plan'
   status: 'draft' | 'active' | 'completed' | 'cancelled'
   start_date?: string
   end_date?: string
-  product_id?: number
-  product?: any
   project_id?: number
   project?: any
   creator_id: number
@@ -48,9 +46,8 @@ export interface PlanListResponse {
 export interface CreatePlanRequest {
   name: string
   description?: string
-  type: 'product_plan' | 'project_plan'
+  type: 'project_plan'
   status?: 'draft' | 'active' | 'completed' | 'cancelled'
-  product_id?: number
   project_id?: number
   start_date?: string
   end_date?: string
@@ -84,7 +81,6 @@ export const getPlans = async (params?: {
   keyword?: string
   type?: string
   status?: string
-  product_id?: number
   project_id?: number
   creator_id?: number
   page?: number

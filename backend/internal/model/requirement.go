@@ -18,9 +18,6 @@ type Requirement struct {
 	Status      string `gorm:"size:20;default:'pending'" json:"status"` // 状态：pending, in_progress, completed, cancelled
 	Priority    string `gorm:"size:20;default:'medium'" json:"priority"` // 优先级：low, medium, high, urgent
 
-	ProductID *uint   `gorm:"index" json:"product_id"` // 可选关联产品
-	Product   *Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
-
 	ProjectID *uint   `gorm:"index" json:"project_id"` // 可选关联项目
 	Project   *Project `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
 

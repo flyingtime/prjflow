@@ -18,16 +18,11 @@ func NewRequirementHandler(db *gorm.DB) *RequirementHandler {
 // GetRequirements 获取需求列表
 func (h *RequirementHandler) GetRequirements(c *gin.Context) {
 	var requirements []model.Requirement
-	query := h.db.Preload("Product").Preload("Project").Preload("Creator").Preload("Assignee")
+	query := h.db.Preload("Project").Preload("Creator").Preload("Assignee")
 
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
-	}
-
-	// 产品筛选
-	if productID := c.Query("product_id"); productID != "" {
-		query = query.Where("product_id = ?", productID)
 	}
 
 	// 项目筛选
@@ -80,7 +75,7 @@ func (h *RequirementHandler) GetRequirements(c *gin.Context) {
 func (h *RequirementHandler) GetRequirement(c *gin.Context) {
 	id := c.Param("id")
 	var requirement model.Requirement
-	if err := h.db.Preload("Product").Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, id).Error; err != nil {
+	if err := h.db.Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, id).Error; err != nil {
 		utils.Error(c, 404, "需求不存在")
 		return
 	}
@@ -95,7 +90,6 @@ func (h *RequirementHandler) CreateRequirement(c *gin.Context) {
 		Description string `json:"description"`
 		Status      string `json:"status"`
 		Priority    string `json:"priority"`
-		ProductID   *uint  `json:"product_id"`
 		ProjectID  *uint  `json:"project_id"`
 		AssigneeID *uint  `json:"assignee_id"`
 	}
@@ -142,14 +136,6 @@ func (h *RequirementHandler) CreateRequirement(c *gin.Context) {
 		return
 	}
 
-	// 如果指定了产品，验证产品是否存在
-	if req.ProductID != nil {
-		var product model.Product
-		if err := h.db.First(&product, *req.ProductID).Error; err != nil {
-			utils.Error(c, 400, "产品不存在")
-			return
-		}
-	}
 
 	// 如果指定了项目，验证项目是否存在
 	if req.ProjectID != nil {
@@ -174,7 +160,6 @@ func (h *RequirementHandler) CreateRequirement(c *gin.Context) {
 		Description: req.Description,
 		Status:      req.Status,
 		Priority:    req.Priority,
-		ProductID:   req.ProductID,
 		ProjectID:  req.ProjectID,
 		CreatorID:  userID.(uint),
 		AssigneeID: req.AssigneeID,
@@ -186,7 +171,7 @@ func (h *RequirementHandler) CreateRequirement(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Product").Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, requirement.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, requirement.ID)
 
 	utils.Success(c, requirement)
 }
@@ -205,7 +190,6 @@ func (h *RequirementHandler) UpdateRequirement(c *gin.Context) {
 		Description *string `json:"description"`
 		Status      *string `json:"status"`
 		Priority    *string `json:"priority"`
-		ProductID   *uint   `json:"product_id"`
 		ProjectID  *uint   `json:"project_id"`
 		AssigneeID *uint   `json:"assignee_id"`
 	}
@@ -250,19 +234,6 @@ func (h *RequirementHandler) UpdateRequirement(c *gin.Context) {
 		}
 		requirement.Priority = *req.Priority
 	}
-	if req.ProductID != nil {
-		// 验证产品是否存在
-		if *req.ProductID != 0 {
-			var product model.Product
-			if err := h.db.First(&product, *req.ProductID).Error; err != nil {
-				utils.Error(c, 400, "产品不存在")
-				return
-			}
-			requirement.ProductID = req.ProductID
-		} else {
-			requirement.ProductID = nil
-		}
-	}
 	if req.ProjectID != nil {
 		// 验证项目是否存在
 		if *req.ProjectID != 0 {
@@ -296,7 +267,7 @@ func (h *RequirementHandler) UpdateRequirement(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Product").Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, requirement.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, requirement.ID)
 
 	utils.Success(c, requirement)
 }
@@ -340,9 +311,6 @@ func (h *RequirementHandler) GetRequirementStatistics(c *gin.Context) {
 	// 应用筛选条件（与列表查询保持一致）
 	if keyword := c.Query("keyword"); keyword != "" {
 		baseQuery = baseQuery.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
-	}
-	if productID := c.Query("product_id"); productID != "" {
-		baseQuery = baseQuery.Where("product_id = ?", productID)
 	}
 	if projectID := c.Query("project_id"); projectID != "" {
 		baseQuery = baseQuery.Where("project_id = ?", projectID)
@@ -409,7 +377,7 @@ func (h *RequirementHandler) UpdateRequirementStatus(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Product").Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, requirement.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, requirement.ID)
 
 	utils.Success(c, requirement)
 }

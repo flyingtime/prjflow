@@ -21,9 +21,6 @@ type Plan struct {
 	StartDate *time.Time `json:"start_date"` // 开始日期
 	EndDate   *time.Time `json:"end_date"`   // 结束日期
 
-	ProductID *uint   `gorm:"index" json:"product_id"` // 产品计划关联产品
-	Product   *Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
-
 	ProjectID *uint   `gorm:"index" json:"project_id"` // 项目计划关联项目
 	Project   *Project `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
 

@@ -18,7 +18,7 @@ func NewTestCaseHandler(db *gorm.DB) *TestCaseHandler {
 // GetTestCases 获取测试单列表
 func (h *TestCaseHandler) GetTestCases(c *gin.Context) {
 	var testCases []model.TestCase
-	query := h.db.Preload("Project").Preload("Creator").Preload("Bugs").Preload("Reports")
+	query := h.db.Preload("Project").Preload("Creator").Preload("Bugs")
 
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
@@ -71,7 +71,7 @@ func (h *TestCaseHandler) GetTestCases(c *gin.Context) {
 func (h *TestCaseHandler) GetTestCase(c *gin.Context) {
 	id := c.Param("id")
 	var testCase model.TestCase
-	if err := h.db.Preload("Project").Preload("Creator").Preload("Bugs").Preload("Reports").First(&testCase, id).Error; err != nil {
+	if err := h.db.Preload("Project").Preload("Creator").Preload("Bugs").First(&testCase, id).Error; err != nil {
 		utils.Error(c, 404, "测试单不存在")
 		return
 	}
@@ -87,6 +87,8 @@ func (h *TestCaseHandler) CreateTestCase(c *gin.Context) {
 		TestSteps   string   `json:"test_steps"`
 		Types       []string `json:"types"` // 测试类型（多选）
 		Status      string   `json:"status"`
+		Result      string   `json:"result"`      // 测试结果：passed, failed, blocked（合并自TestReport）
+		Summary     string   `json:"summary"`     // 测试摘要（合并自TestReport）
 		ProjectID   uint     `json:"project_id" binding:"required"`
 		BugIDs      []uint   `json:"bug_ids"` // 关联的Bug ID列表
 	}
@@ -132,6 +134,8 @@ func (h *TestCaseHandler) CreateTestCase(c *gin.Context) {
 		TestSteps:   req.TestSteps,
 		Types:       model.StringArray(req.Types),
 		Status:      req.Status,
+		Result:      req.Result,
+		Summary:     req.Summary,
 		ProjectID:   req.ProjectID,
 		CreatorID:   uid,
 	}
@@ -150,7 +154,7 @@ func (h *TestCaseHandler) CreateTestCase(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Project").Preload("Creator").Preload("Bugs").Preload("Reports").First(&testCase, testCase.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Bugs").First(&testCase, testCase.ID)
 
 	utils.Success(c, testCase)
 }
@@ -170,6 +174,8 @@ func (h *TestCaseHandler) UpdateTestCase(c *gin.Context) {
 		TestSteps   *string  `json:"test_steps"`
 		Types       []string `json:"types"` // 测试类型（多选）
 		Status      *string  `json:"status"`
+		Result      *string  `json:"result"`      // 测试结果：passed, failed, blocked（合并自TestReport）
+		Summary     *string  `json:"summary"`     // 测试摘要（合并自TestReport）
 		BugIDs      []uint   `json:"bug_ids"` // 关联的Bug ID列表
 	}
 
@@ -197,6 +203,12 @@ func (h *TestCaseHandler) UpdateTestCase(c *gin.Context) {
 		}
 		testCase.Status = *req.Status
 	}
+	if req.Result != nil {
+		testCase.Result = *req.Result
+	}
+	if req.Summary != nil {
+		testCase.Summary = *req.Summary
+	}
 
 	if err := h.db.Save(&testCase).Error; err != nil {
 		utils.Error(c, utils.CodeError, "更新失败")
@@ -213,7 +225,7 @@ func (h *TestCaseHandler) UpdateTestCase(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Project").Preload("Creator").Preload("Bugs").Preload("Reports").First(&testCase, testCase.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Bugs").First(&testCase, testCase.ID)
 
 	utils.Success(c, testCase)
 }
@@ -258,7 +270,7 @@ func (h *TestCaseHandler) UpdateTestCaseStatus(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Project").Preload("Creator").Preload("Bugs").Preload("Reports").First(&testCase, testCase.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Bugs").First(&testCase, testCase.ID)
 
 	utils.Success(c, testCase)
 }

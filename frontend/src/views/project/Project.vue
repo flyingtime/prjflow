@@ -4,68 +4,8 @@
       <AppHeader />
       <a-layout-content class="content">
         <div class="content-inner">
-          <a-tabs v-model:activeKey="activeTab">
-            <!-- 项目集管理 -->
-            <a-tab-pane key="projectGroups" tab="项目集管理">
-              <a-page-header title="项目集管理">
-                <template #extra>
-                  <a-button type="primary" @click="handleCreateProjectGroup">
-                    <template #icon><PlusOutlined /></template>
-                    新增项目集
-                  </a-button>
-                </template>
-              </a-page-header>
-
-              <a-card :bordered="false" style="margin-bottom: 16px">
-                <a-form layout="inline" :model="projectGroupSearchForm">
-                  <a-form-item label="关键词">
-                    <a-input
-                      v-model:value="projectGroupSearchForm.keyword"
-                      placeholder="项目集名称/描述"
-                      allow-clear
-                      style="width: 200px"
-                    />
-                  </a-form-item>
-                  <a-form-item>
-                    <a-button type="primary" @click="handleSearchProjectGroup">查询</a-button>
-                    <a-button style="margin-left: 8px" @click="handleResetProjectGroup">重置</a-button>
-                  </a-form-item>
-                </a-form>
-              </a-card>
-
-              <a-card :bordered="false">
-                <a-table
-                  :columns="projectGroupColumns"
-                  :data-source="projectGroups"
-                  :loading="projectGroupLoading"
-                  row-key="id"
-                >
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'status'">
-                      <a-tag :color="record.status === 1 ? 'green' : 'red'">
-                        {{ record.status === 1 ? '正常' : '禁用' }}
-                      </a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-space>
-                        <a-button type="link" size="small" @click="handleEditProjectGroup(record)">
-                          编辑
-                        </a-button>
-                        <a-popconfirm
-                          title="确定要删除这个项目集吗？"
-                          @confirm="handleDeleteProjectGroup(record.id)"
-                        >
-                          <a-button type="link" size="small" danger>删除</a-button>
-                        </a-popconfirm>
-                      </a-space>
-                    </template>
-                  </template>
-                </a-table>
-              </a-card>
-            </a-tab-pane>
-
-            <!-- 项目管理 -->
-            <a-tab-pane key="projects" tab="项目管理">
+          <!-- 项目管理 -->
+          <div>
               <a-page-header title="项目管理">
                 <template #extra>
                   <a-button type="primary" @click="handleCreateProject">
@@ -85,21 +25,13 @@
                       style="width: 200px"
                     />
                   </a-form-item>
-                  <a-form-item label="项目集">
-                    <a-select
-                      v-model:value="projectSearchForm.project_group_id"
-                      placeholder="选择项目集"
+                  <a-form-item label="标签">
+                    <a-input
+                      v-model:value="projectSearchForm.tag"
+                      placeholder="输入标签筛选"
                       allow-clear
                       style="width: 200px"
-                    >
-                      <a-select-option
-                        v-for="group in projectGroups"
-                        :key="group.id"
-                        :value="group.id"
-                      >
-                        {{ group.name }}
-                      </a-select-option>
-                    </a-select>
+                    />
                   </a-form-item>
                   <a-form-item>
                     <a-button type="primary" @click="handleSearchProject">查询</a-button>
@@ -123,11 +55,13 @@
                         {{ record.status === 1 ? '正常' : '禁用' }}
                       </a-tag>
                     </template>
-                    <template v-else-if="column.key === 'project_group'">
-                      {{ record.project_group?.name || '-' }}
-                    </template>
-                    <template v-else-if="column.key === 'product'">
-                      {{ record.product?.name || '-' }}
+                    <template v-else-if="column.key === 'tags'">
+                      <div v-if="record.tags && record.tags.length > 0" style="display: flex; flex-wrap: wrap; gap: 4px;">
+                        <a-tag v-for="tag in record.tags" :key="tag" style="margin: 0;">
+                          {{ tag }}
+                        </a-tag>
+                      </div>
+                      <span v-else>-</span>
                     </template>
                     <template v-else-if="column.key === 'action'">
                       <a-space>
@@ -151,41 +85,10 @@
                   </template>
                 </a-table>
               </a-card>
-            </a-tab-pane>
-          </a-tabs>
+          </div>
         </div>
       </a-layout-content>
     </a-layout>
-
-    <!-- 项目集编辑对话框 -->
-    <a-modal
-      v-model:open="projectGroupModalVisible"
-      :title="projectGroupModalTitle"
-      @ok="handleProjectGroupSubmit"
-      @cancel="handleProjectGroupCancel"
-      :confirm-loading="projectGroupSubmitting"
-    >
-      <a-form
-        ref="projectGroupFormRef"
-        :model="projectGroupFormData"
-        :rules="projectGroupFormRules"
-        :label-col="{ span: 6 }"
-        :wrapper-col="{ span: 18 }"
-      >
-        <a-form-item label="项目集名称" name="name">
-          <a-input v-model:value="projectGroupFormData.name" placeholder="请输入项目集名称" />
-        </a-form-item>
-        <a-form-item label="描述" name="description">
-          <a-textarea v-model:value="projectGroupFormData.description" placeholder="请输入描述" :rows="3" />
-        </a-form-item>
-        <a-form-item label="状态" name="status">
-          <a-select v-model:value="projectGroupFormData.status" placeholder="选择状态">
-            <a-select-option :value="1">正常</a-select-option>
-            <a-select-option :value="0">禁用</a-select-option>
-          </a-select>
-        </a-form-item>
-      </a-form>
-    </a-modal>
 
     <!-- 项目编辑对话框 -->
     <a-modal
@@ -209,34 +112,14 @@
         <a-form-item label="项目编码" name="code">
           <a-input v-model:value="projectFormData.code" placeholder="请输入项目编码" />
         </a-form-item>
-        <a-form-item label="项目集" name="project_group_id">
+        <a-form-item label="标签">
           <a-select
-            v-model:value="projectFormData.project_group_id"
-            placeholder="选择项目集"
-          >
-            <a-select-option
-              v-for="group in projectGroups"
-              :key="group.id"
-              :value="group.id"
-            >
-              {{ group.name }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="关联产品">
-          <a-select
-            v-model:value="projectFormData.product_id"
-            placeholder="选择产品（可选）"
+            v-model:value="projectFormData.tags"
+            mode="tags"
+            placeholder="输入标签后按回车添加（可选）"
             allow-clear
-          >
-            <a-select-option
-              v-for="product in products"
-              :key="product.id"
-              :value="product.id"
-            >
-              {{ product.name }}
-            </a-select-option>
-          </a-select>
+            :token-separators="[',']"
+          />
         </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
@@ -352,10 +235,6 @@ import AppHeader from '@/components/AppHeader.vue'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import {
-  getProjectGroups,
-  createProjectGroup,
-  updateProjectGroup,
-  deleteProjectGroup,
   getProjects,
   createProject,
   updateProject,
@@ -364,39 +243,27 @@ import {
   addProjectMembers,
   updateProjectMember,
   removeProjectMember,
-  type ProjectGroup,
   type Project,
   type ProjectMember,
-  type CreateProjectGroupRequest,
   type CreateProjectRequest
 } from '@/api/project'
-import { getProducts } from '@/api/product'
 import { getUsers, type User } from '@/api/user'
 
 const route = useRoute()
 const router = useRouter()
-const activeTab = ref('projectGroups')
 
-const projectGroupLoading = ref(false)
 const projectLoading = ref(false)
 const memberLoading = ref(false)
-const projectGroupSubmitting = ref(false)
 const projectSubmitting = ref(false)
 
-const projectGroups = ref<ProjectGroup[]>([])
 const projects = ref<Project[]>([])
-const products = ref<any[]>([])
 const users = ref<User[]>([])
 const projectMembers = ref<ProjectMember[]>([])
 const currentProjectId = ref<number>()
 
-const projectGroupSearchForm = reactive({
-  keyword: ''
-})
-
 const projectSearchForm = reactive({
   keyword: '',
-  project_group_id: undefined as number | undefined
+  tag: undefined as string | undefined
 })
 
 const projectPagination = reactive({
@@ -408,18 +275,10 @@ const projectPagination = reactive({
   showQuickJumper: true
 })
 
-const projectGroupColumns = [
-  { title: '项目集名称', dataIndex: 'name', key: 'name' },
-  { title: '描述', dataIndex: 'description', key: 'description' },
-  { title: '状态', key: 'status', width: 80 },
-  { title: '操作', key: 'action', width: 150, fixed: 'right' as const }
-]
-
 const projectColumns = [
   { title: '项目名称', dataIndex: 'name', key: 'name' },
   { title: '项目编码', dataIndex: 'code', key: 'code' },
-  { title: '项目集', key: 'project_group', width: 120 },
-  { title: '关联产品', key: 'product', width: 120 },
+  { title: '标签', key: 'tags', width: 200 },
   { title: '开始日期', dataIndex: 'start_date', key: 'start_date', width: 120 },
   { title: '结束日期', dataIndex: 'end_date', key: 'end_date', width: 120 },
   { title: '状态', key: 'status', width: 80 },
@@ -432,19 +291,6 @@ const memberColumns = [
   { title: '操作', key: 'action', width: 100 }
 ]
 
-const projectGroupModalVisible = ref(false)
-const projectGroupModalTitle = ref('新增项目集')
-const projectGroupFormRef = ref()
-const projectGroupFormData = reactive<CreateProjectGroupRequest & { id?: number }>({
-  name: '',
-  description: '',
-  status: 1
-})
-
-const projectGroupFormRules = {
-  name: [{ required: true, message: '请输入项目集名称', trigger: 'blur' }]
-}
-
 const projectModalVisible = ref(false)
 const projectModalTitle = ref('新增项目')
 const projectFormRef = ref()
@@ -453,30 +299,17 @@ const projectFormData = reactive<CreateProjectRequest & { id?: number; start_dat
   code: '',
   description: '',
   status: 1,
-  project_group_id: 0
+  tags: []
 })
 
 const projectFormRules = {
   name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入项目编码', trigger: 'blur' }],
-  project_group_id: [{ required: true, message: '请选择项目集', trigger: 'change' }]
+  code: [{ required: true, message: '请输入项目编码', trigger: 'blur' }]
 }
 
 const memberModalVisible = ref(false)
 const selectedUserIds = ref<number[]>([])
 const memberRole = ref('member')
-
-// 加载项目集列表
-const loadProjectGroups = async () => {
-  projectGroupLoading.value = true
-  try {
-    projectGroups.value = await getProjectGroups()
-  } catch (error: any) {
-    message.error(error.message || '加载项目集列表失败')
-  } finally {
-    projectGroupLoading.value = false
-  }
-}
 
 // 加载项目列表
 const loadProjects = async () => {
@@ -489,8 +322,8 @@ const loadProjects = async () => {
     if (projectSearchForm.keyword) {
       params.keyword = projectSearchForm.keyword
     }
-    if (projectSearchForm.project_group_id) {
-      params.project_group_id = projectSearchForm.project_group_id
+    if (projectSearchForm.tag) {
+      params.tag = projectSearchForm.tag
     }
     const response = await getProjects(params)
     projects.value = response.list
@@ -499,16 +332,6 @@ const loadProjects = async () => {
     message.error(error.message || '加载项目列表失败')
   } finally {
     projectLoading.value = false
-  }
-}
-
-// 加载产品列表
-const loadProducts = async () => {
-  try {
-    const response = await getProducts()
-    products.value = response.list || []
-  } catch (error: any) {
-    console.error('加载产品列表失败:', error)
   }
 }
 
@@ -534,17 +357,6 @@ const loadProjectMembers = async (projectId: number) => {
   }
 }
 
-// 项目集搜索
-const handleSearchProjectGroup = () => {
-  loadProjectGroups()
-}
-
-// 项目集重置
-const handleResetProjectGroup = () => {
-  projectGroupSearchForm.keyword = ''
-  loadProjectGroups()
-}
-
 // 项目搜索
 const handleSearchProject = () => {
   projectPagination.current = 1
@@ -554,7 +366,7 @@ const handleSearchProject = () => {
 // 项目重置
 const handleResetProject = () => {
   projectSearchForm.keyword = ''
-  projectSearchForm.project_group_id = undefined
+  projectSearchForm.tag = undefined
   handleSearchProject()
 }
 
@@ -565,73 +377,6 @@ const handleProjectTableChange = (pag: any) => {
   loadProjects()
 }
 
-// 新增项目集
-const handleCreateProjectGroup = () => {
-  projectGroupModalTitle.value = '新增项目集'
-  Object.assign(projectGroupFormData, {
-    name: '',
-    description: '',
-    status: 1
-  })
-  delete projectGroupFormData.id
-  projectGroupModalVisible.value = true
-}
-
-// 编辑项目集
-const handleEditProjectGroup = (record: ProjectGroup) => {
-  projectGroupModalTitle.value = '编辑项目集'
-  Object.assign(projectGroupFormData, {
-    id: record.id,
-    name: record.name,
-    description: record.description || '',
-    status: record.status
-  })
-  projectGroupModalVisible.value = true
-}
-
-// 提交项目集
-const handleProjectGroupSubmit = async () => {
-  try {
-    await projectGroupFormRef.value.validate()
-    projectGroupSubmitting.value = true
-
-    if (projectGroupFormData.id) {
-      await updateProjectGroup(projectGroupFormData.id, projectGroupFormData)
-      message.success('更新成功')
-    } else {
-      await createProjectGroup(projectGroupFormData)
-      message.success('创建成功')
-    }
-
-    projectGroupModalVisible.value = false
-    loadProjectGroups()
-  } catch (error: any) {
-    if (error.errorFields) {
-      return
-    }
-    message.error(error.message || '操作失败')
-  } finally {
-    projectGroupSubmitting.value = false
-  }
-}
-
-// 取消项目集
-const handleProjectGroupCancel = () => {
-  projectGroupModalVisible.value = false
-  projectGroupFormRef.value?.resetFields()
-}
-
-// 删除项目集
-const handleDeleteProjectGroup = async (id: number) => {
-  try {
-    await deleteProjectGroup(id)
-    message.success('删除成功')
-    loadProjectGroups()
-  } catch (error: any) {
-    message.error(error.message || '删除失败')
-  }
-}
-
 // 新增项目
 const handleCreateProject = () => {
   projectModalTitle.value = '新增项目'
@@ -640,7 +385,7 @@ const handleCreateProject = () => {
     code: '',
     description: '',
     status: 1,
-    project_group_id: projectGroups.value[0]?.id || 0
+    tags: []
   })
   delete projectFormData.id
   projectFormData.start_date = undefined
@@ -662,8 +407,7 @@ const handleEditProject = (record: Project) => {
     code: record.code,
     description: record.description || '',
     status: record.status,
-    project_group_id: record.project_group_id,
-    product_id: record.product_id
+    tags: record.tags || []
   })
   if (record.start_date) {
     projectFormData.start_date = dayjs(record.start_date)
@@ -685,10 +429,7 @@ const handleProjectSubmit = async () => {
       code: projectFormData.code,
       description: projectFormData.description,
       status: projectFormData.status,
-      project_group_id: projectFormData.project_group_id
-    }
-    if (projectFormData.product_id) {
-      data.product_id = projectFormData.product_id
+      tags: projectFormData.tags || []
     }
     if (projectFormData.start_date) {
       data.start_date = projectFormData.start_date.format('YYYY-MM-DD')
@@ -794,9 +535,7 @@ const handleCloseMemberModal = () => {
 }
 
 onMounted(() => {
-  loadProjectGroups()
   loadProjects()
-  loadProducts()
   loadUsers()
 })
 </script>

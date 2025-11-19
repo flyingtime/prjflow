@@ -1,25 +1,12 @@
 import request from '../utils/request'
 
-export interface ProjectGroup {
-  id: number
-  name: string
-  description?: string
-  status: number
-  created_at?: string
-  updated_at?: string
-  projects?: Project[]
-}
-
 export interface Project {
   id: number
   name: string
   code: string
   description?: string
   status: number
-  project_group_id: number
-  project_group?: ProjectGroup
-  product_id?: number
-  product?: any
+  tags?: string[]  // 标签数组
   start_date?: string
   end_date?: string
   created_at?: string
@@ -64,19 +51,12 @@ export interface ProjectListResponse {
   size: number
 }
 
-export interface CreateProjectGroupRequest {
-  name: string
-  description?: string
-  status?: number
-}
-
 export interface CreateProjectRequest {
   name: string
   code: string
   description?: string
   status?: number
-  project_group_id: number
-  product_id?: number
+  tags?: string[]  // 标签数组
   start_date?: string
   end_date?: string
 }
@@ -86,35 +66,10 @@ export interface AddProjectMembersRequest {
   role: string
 }
 
-// 项目集相关API
-export const getProjectGroups = async (params?: {
-  keyword?: string
-  status?: number
-}): Promise<ProjectGroup[]> => {
-  return request.get('/project-groups', { params })
-}
-
-export const getProjectGroup = async (id: number): Promise<ProjectGroup> => {
-  return request.get(`/project-groups/${id}`)
-}
-
-export const createProjectGroup = async (data: CreateProjectGroupRequest): Promise<ProjectGroup> => {
-  return request.post('/project-groups', data)
-}
-
-export const updateProjectGroup = async (id: number, data: Partial<CreateProjectGroupRequest>): Promise<ProjectGroup> => {
-  return request.put(`/project-groups/${id}`, data)
-}
-
-export const deleteProjectGroup = async (id: number): Promise<void> => {
-  return request.delete(`/project-groups/${id}`)
-}
-
 // 项目相关API
 export const getProjects = async (params?: {
   keyword?: string
-  project_group_id?: number
-  product_id?: number
+  tag?: string
   status?: number
   page?: number
   size?: number

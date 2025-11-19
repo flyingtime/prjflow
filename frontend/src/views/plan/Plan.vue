@@ -23,17 +23,6 @@
                   style="width: 200px"
                 />
               </a-form-item>
-              <a-form-item label="类型">
-                <a-select
-                  v-model:value="searchForm.type"
-                  placeholder="选择类型"
-                  allow-clear
-                  style="width: 120px"
-                >
-                  <a-select-option value="product_plan">产品计划</a-select-option>
-                  <a-select-option value="project_plan">项目计划</a-select-option>
-                </a-select>
-              </a-form-item>
               <a-form-item label="状态">
                 <a-select
                   v-model:value="searchForm.status"
@@ -45,22 +34,6 @@
                   <a-select-option value="active">进行中</a-select-option>
                   <a-select-option value="completed">已完成</a-select-option>
                   <a-select-option value="cancelled">已取消</a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item label="产品">
-                <a-select
-                  v-model:value="searchForm.product_id"
-                  placeholder="选择产品"
-                  allow-clear
-                  style="width: 150px"
-                >
-                  <a-select-option
-                    v-for="product in products"
-                    :key="product.id"
-                    :value="product.id"
-                  >
-                    {{ product.name }}
-                  </a-select-option>
                 </a-select>
               </a-form-item>
               <a-form-item label="项目">
@@ -97,17 +70,14 @@
             >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'type'">
-                  <a-tag :color="record.type === 'product_plan' ? 'blue' : 'green'">
-                    {{ record.type === 'product_plan' ? '产品计划' : '项目计划' }}
+                  <a-tag color="green">
+                    项目计划
                   </a-tag>
                 </template>
                 <template v-else-if="column.key === 'status'">
                   <a-tag :color="getStatusColor(record.status)">
                     {{ getStatusText(record.status) }}
                   </a-tag>
-                </template>
-                <template v-else-if="column.key === 'product'">
-                  {{ record.product?.name || '-' }}
                 </template>
                 <template v-else-if="column.key === 'project'">
                   {{ record.project?.name || '-' }}
@@ -189,29 +159,7 @@
             :rows="8"
           />
         </a-form-item>
-        <a-form-item label="计划类型" name="type">
-          <a-select v-model:value="formData.type" @change="handleTypeChange">
-            <a-select-option value="product_plan">产品计划</a-select-option>
-            <a-select-option value="project_plan">项目计划</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="产品" name="product_id" v-if="formData.type === 'product_plan'">
-          <a-select
-            v-model:value="formData.product_id"
-            placeholder="选择产品"
-            show-search
-            :filter-option="filterProductOption"
-          >
-            <a-select-option
-              v-for="product in products"
-              :key="product.id"
-              :value="product.id"
-            >
-              {{ product.name }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="项目" name="project_id" v-if="formData.type === 'project_plan'">
+        <a-form-item label="项目" name="project_id">
           <a-select
             v-model:value="formData.project_id"
             placeholder="选择项目"
@@ -474,7 +422,6 @@ import {
   type PlanExecution,
   type CreatePlanRequest
 } from '@/api/plan'
-import { getProducts, type Product } from '@/api/product'
 import { getProjects, type Project } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
 import { getTasks, type Task } from '@/api/task'
@@ -483,7 +430,6 @@ const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const plans = ref<Plan[]>([])
-const products = ref<Product[]>([])
 const projects = ref<Project[]>([])
 const users = ref<User[]>([])
 const availableTasks = ref<Task[]>([])
@@ -491,9 +437,7 @@ const taskLoading = ref(false)
 
 const searchForm = reactive({
   keyword: '',
-  type: undefined as string | undefined,
   status: undefined as string | undefined,
-  product_id: undefined as number | undefined,
   project_id: undefined as number | undefined
 })
 
@@ -510,7 +454,6 @@ const columns = [
   { title: '计划名称', dataIndex: 'name', key: 'name', ellipsis: true },
   { title: '类型', key: 'type', width: 100 },
   { title: '状态', key: 'status', width: 100 },
-  { title: '产品', key: 'product', width: 120 },
   { title: '项目', key: 'project', width: 120 },
   { title: '进度', key: 'progress', width: 150 },
   { title: '执行', key: 'executions', width: 100 },
@@ -526,7 +469,6 @@ const formData = reactive<CreatePlanRequest & { id?: number; start_date?: Dayjs;
   description: '',
   type: 'project_plan',
   status: 'draft',
-  product_id: undefined,
   project_id: undefined,
   start_date: undefined,
   end_date: undefined
@@ -535,8 +477,7 @@ const formData = reactive<CreatePlanRequest & { id?: number; start_date?: Dayjs;
 const formRules = {
   name: [{ required: true, message: '请输入计划名称', trigger: 'blur' }],
   type: [{ required: true, message: '请选择计划类型', trigger: 'change' }],
-  product_id: [{ required: false }],
-  project_id: [{ required: false }]
+  project_id: [{ required: true, message: '请选择项目', trigger: 'change' }]
 }
 
 // 执行管理相关
@@ -605,14 +546,8 @@ const loadPlans = async () => {
     if (searchForm.keyword) {
       params.keyword = searchForm.keyword
     }
-    if (searchForm.type) {
-      params.type = searchForm.type
-    }
     if (searchForm.status) {
       params.status = searchForm.status
-    }
-    if (searchForm.product_id) {
-      params.product_id = searchForm.product_id
     }
     if (searchForm.project_id) {
       params.project_id = searchForm.project_id
@@ -624,16 +559,6 @@ const loadPlans = async () => {
     message.error(error.message || '加载计划列表失败')
   } finally {
     loading.value = false
-  }
-}
-
-// 加载产品列表
-const loadProducts = async () => {
-  try {
-    const response = await getProducts()
-    products.value = response.list || []
-  } catch (error: any) {
-    console.error('加载产品列表失败:', error)
   }
 }
 
@@ -679,11 +604,6 @@ const loadTasksForProject = async () => {
   }
 }
 
-// 监听计划类型变化
-watch(() => formData.type, () => {
-  formData.product_id = undefined
-  formData.project_id = undefined
-})
 
 // 搜索
 const handleSearch = () => {
@@ -694,9 +614,7 @@ const handleSearch = () => {
 // 重置
 const handleReset = () => {
   searchForm.keyword = ''
-  searchForm.type = undefined
   searchForm.status = undefined
-  searchForm.product_id = undefined
   searchForm.project_id = undefined
   pagination.current = 1
   loadPlans()
@@ -717,7 +635,6 @@ const handleCreate = () => {
   formData.description = ''
   formData.type = 'project_plan'
   formData.status = 'draft'
-  formData.product_id = undefined
   formData.project_id = undefined
   formData.start_date = undefined
   formData.end_date = undefined
@@ -732,7 +649,6 @@ const handleEdit = (record: Plan) => {
   formData.description = record.description || ''
   formData.type = record.type
   formData.status = record.status
-  formData.product_id = record.product_id
   formData.project_id = record.project_id
   formData.start_date = record.start_date ? dayjs(record.start_date) : undefined
   formData.end_date = record.end_date ? dayjs(record.end_date) : undefined
@@ -771,12 +687,6 @@ const loadExecutions = async (planId: number) => {
   }
 }
 
-// 类型变化
-const handleTypeChange = () => {
-  formData.product_id = undefined
-  formData.project_id = undefined
-}
-
 // 提交
 const handleSubmit = async () => {
   try {
@@ -786,7 +696,6 @@ const handleSubmit = async () => {
       description: formData.description,
       type: formData.type,
       status: formData.status,
-      product_id: formData.product_id,
       project_id: formData.project_id,
       start_date: formData.start_date ? formData.start_date.format('YYYY-MM-DD') : undefined,
       end_date: formData.end_date ? formData.end_date.format('YYYY-MM-DD') : undefined
@@ -1015,14 +924,6 @@ const getExecutionStatusText = (status: string) => {
   return texts[status] || status
 }
 
-// 产品筛选
-const filterProductOption = (input: string, option: any) => {
-  const product = products.value.find(p => p.id === option.value)
-  if (!product) return false
-  const searchText = input.toLowerCase()
-  return product.name.toLowerCase().includes(searchText)
-}
-
 // 项目筛选
 const filterProjectOption = (input: string, option: any) => {
   const project = projects.value.find(p => p.id === option.value)
@@ -1055,7 +956,6 @@ const filterUserOption = (input: string, option: any) => {
 
 onMounted(() => {
   loadPlans()
-  loadProducts()
   loadProjects()
   loadUsers()
 })

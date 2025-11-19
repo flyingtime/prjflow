@@ -73,14 +73,8 @@
                     {{ getStatusText(record.status) }}
                   </a-tag>
                 </template>
-                <template v-else-if="column.key === 'build'">
-                  <a-button v-if="record.build" type="link" @click="router.push(`/build`)">
-                    {{ record.build.build_number }}
-                  </a-button>
-                  <span v-else>-</span>
-                </template>
                 <template v-else-if="column.key === 'project'">
-                  {{ record.build?.project?.name || '-' }}
+                  {{ record.project?.name || '-' }}
                 </template>
                 <template v-else-if="column.key === 'requirements'">
                   <a-tag v-for="req in record.requirements?.slice(0, 2)" :key="req.id" style="margin-right: 4px">
@@ -111,7 +105,7 @@
                     <a-button type="link" size="small" @click="handleEdit(record)">
                       编辑
                     </a-button>
-                    <a-button v-if="record.status === 'draft' && record.build?.status === 'success'" type="link" size="small" @click="handleRelease(record.id)">
+                    <a-button v-if="record.status === 'draft'" type="link" size="small" @click="handleRelease(record.id)">
                       发布
                     </a-button>
                     <a-dropdown>
@@ -159,20 +153,20 @@
         <a-form-item label="版本号" name="version_number">
           <a-input v-model:value="formData.version_number" placeholder="请输入版本号" />
         </a-form-item>
-        <a-form-item label="构建" name="build_id">
+        <a-form-item label="项目" name="project_id">
           <a-select
-            v-model:value="formData.build_id"
-            placeholder="选择构建"
+            v-model:value="formData.project_id"
+            placeholder="选择项目"
             show-search
-            :filter-option="filterBuildOption"
+            :filter-option="filterProjectOption"
             :disabled="!!formData.id"
           >
             <a-select-option
-              v-for="build in availableBuilds"
-              :key="build.id"
-              :value="build.id"
+              v-for="project in projects"
+              :key="project.id"
+              :value="project.id"
             >
-              {{ build.build_number }} ({{ build.project?.name || '' }}) - {{ getBuildStatusText(build.status) }}
+              {{ project.name }}
             </a-select-option>
           </a-select>
         </a-form-item>
@@ -258,7 +252,6 @@ import {
   type Version,
   type CreateVersionRequest
 } from '@/api/version'
-import { getBuilds, type Build } from '@/api/build'
 import { getProjects, type Project } from '@/api/project'
 import { getRequirements, type Requirement } from '@/api/requirement'
 import { getBugs, type Bug } from '@/api/bug'
@@ -267,7 +260,6 @@ const router = useRouter()
 const loading = ref(false)
 const versions = ref<Version[]>([])
 const projects = ref<Project[]>([])
-const availableBuilds = ref<Build[]>([])
 const availableRequirements = ref<Requirement[]>([])
 const availableBugs = ref<Bug[]>([])
 
@@ -288,7 +280,6 @@ const pagination = reactive({
 
 const columns = [
   { title: '版本号', dataIndex: 'version_number', key: 'version_number' },
-  { title: '构建', key: 'build', width: 150 },
   { title: '项目', key: 'project', width: 150 },
   { title: '状态', key: 'status', width: 100 },
   { title: '关联需求', key: 'requirements', width: 200 },
@@ -305,7 +296,7 @@ const formData = reactive<CreateVersionRequest & { id?: number; release_date?: D
   version_number: '',
   release_notes: '',
   status: 'draft',
-  build_id: 0,
+  project_id: 0,
   release_date: undefined,
   requirement_ids: [],
   bug_ids: []
@@ -313,7 +304,7 @@ const formData = reactive<CreateVersionRequest & { id?: number; release_date?: D
 
 const formRules = {
   version_number: [{ required: true, message: '请输入版本号', trigger: 'blur' }],
-  build_id: [{ required: true, message: '请选择构建', trigger: 'change' }]
+  project_id: [{ required: true, message: '请选择项目', trigger: 'change' }]
 }
 
 // 加载版本列表
@@ -345,23 +336,6 @@ const loadProjects = async () => {
     projects.value = res.list
   } catch (error: any) {
     message.error(error.response?.data?.message || '加载项目失败')
-  }
-}
-
-// 加载可用构建列表（未关联版本的构建）
-const loadAvailableBuilds = async () => {
-  try {
-    const res = await getBuilds({ page: 1, page_size: 1000 })
-    // 过滤掉已有版本的构建（创建时）
-    if (!formData.id) {
-      const versionRes = await getVersions({ page: 1, page_size: 1000 })
-      const usedBuildIds = new Set(versionRes.list.map((v: Version) => v.build_id))
-      availableBuilds.value = res.list.filter((b: Build) => !usedBuildIds.has(b.id))
-    } else {
-      availableBuilds.value = res.list
-    }
-  } catch (error: any) {
-    message.error(error.response?.data?.message || '加载构建失败')
   }
 }
 
@@ -407,11 +381,10 @@ const handleCreate = () => {
   formData.version_number = ''
   formData.release_notes = ''
   formData.status = 'draft'
-  formData.build_id = 0
+  formData.project_id = 0
   formData.release_date = undefined
   formData.requirement_ids = []
   formData.bug_ids = []
-  loadAvailableBuilds()
   loadAvailableRequirementsAndBugs()
   modalVisible.value = true
 }
@@ -423,7 +396,7 @@ const handleEdit = async (record: Version) => {
   formData.version_number = record.version_number
   formData.release_notes = record.release_notes || ''
   formData.status = record.status
-  formData.build_id = record.build_id
+  formData.project_id = record.project_id
   if (record.release_date) {
     formData.release_date = dayjs(record.release_date)
   } else {
@@ -431,7 +404,6 @@ const handleEdit = async (record: Version) => {
   }
   formData.requirement_ids = record.requirements?.map((r: any) => r.id) || []
   formData.bug_ids = record.bugs?.map((b: any) => b.id) || []
-  await loadAvailableBuilds()
   await loadAvailableRequirementsAndBugs()
   modalVisible.value = true
 }
@@ -444,7 +416,7 @@ const handleSubmit = async () => {
       version_number: formData.version_number,
       release_notes: formData.release_notes,
       status: formData.status,
-      build_id: formData.build_id,
+      project_id: formData.project_id,
       release_date: formData.release_date && formData.release_date.isValid() ? formData.release_date.format('YYYY-MM-DD') : undefined,
       requirement_ids: formData.requirement_ids,
       bug_ids: formData.bug_ids
@@ -525,20 +497,15 @@ const getStatusText = (status: string) => {
   return texts[status] || status
 }
 
-// 构建状态文本
-const getBuildStatusText = (status: string) => {
-  const texts: Record<string, string> = {
-    pending: '待构建',
-    building: '构建中',
-    success: '成功',
-    failed: '失败'
-  }
-  return texts[status] || status
-}
-
 // 筛选函数
-const filterBuildOption = (input: string, option: any) => {
-  return option.children[0].children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+const filterProjectOption = (input: string, option: any) => {
+  const project = projects.value.find(p => p.id === option.value)
+  if (!project) return false
+  const searchText = input.toLowerCase()
+  return (
+    project.name.toLowerCase().includes(searchText) ||
+    (project.code && project.code.toLowerCase().includes(searchText))
+  )
 }
 
 const filterRequirementOption = (input: string, option: any) => {

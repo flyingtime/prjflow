@@ -14,6 +14,11 @@ func AutoMigrate(db *gorm.DB) error {
 		return err
 	}
 
+	// 处理 Version 表的 project_id 字段迁移（从 build_id 迁移）
+	if err := migrateVersionProjectID(db); err != nil {
+		return err
+	}
+
 	return db.AutoMigrate(
 		// 用户与权限
 		&model.User{},
@@ -21,10 +26,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.Role{},
 		&model.Permission{},
 
-		// 产品与项目
-		&model.ProductLine{},
-		&model.Product{},
-		&model.ProjectGroup{},
+		// 项目
 		&model.Project{},
 		&model.ProjectMember{},
 
@@ -43,15 +45,12 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.Plan{},
 		&model.PlanExecution{},
 
-		// 版本与构建
-		&model.Build{},
+		// 版本
 		&model.Version{},
 
 		// 测试
 		&model.TestCase{},
-		&model.TestReport{},
 		&model.TestCaseBug{},
-		&model.TestCaseReport{},
 
 		// 资源管理
 		&model.Resource{},
@@ -119,6 +118,75 @@ func migrateUserNickname(db *gorm.DB) error {
 	if err := db.Exec("UPDATE `users` SET `nickname` = `username` WHERE `nickname` IS NULL OR `nickname` = ''").Error; err != nil {
 		return err
 	}
+
+	return nil
+}
+
+// migrateVersionProjectID 迁移 Version 表的 project_id 字段
+// 从 build_id 迁移到 project_id，SQLite 不支持直接添加 NOT NULL 列
+func migrateVersionProjectID(db *gorm.DB) error {
+	// 检查数据库类型
+	if config.AppConfig.Database.Type != "sqlite" {
+		// 不是 SQLite，让 AutoMigrate 处理
+		return nil
+	}
+
+	// 检查 versions 表是否存在
+	var tableExists int64
+	err := db.Raw(`
+		SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='versions'
+	`).Scan(&tableExists).Error
+	if err != nil || tableExists == 0 {
+		// 表不存在，让 AutoMigrate 创建
+		return nil
+	}
+
+	// 检查 project_id 列是否已存在
+	var projectIDExists int64
+	err = db.Raw(`
+		SELECT COUNT(*) FROM pragma_table_info('versions') WHERE name = 'project_id'
+	`).Scan(&projectIDExists).Error
+	if err != nil {
+		return nil
+	}
+
+	// 检查 build_id 列是否存在
+	var buildIDExists int64
+	err = db.Raw(`
+		SELECT COUNT(*) FROM pragma_table_info('versions') WHERE name = 'build_id'
+	`).Scan(&buildIDExists).Error
+	if err != nil {
+		return nil
+	}
+
+	// 如果 project_id 已存在，检查是否需要清理数据
+	if projectIDExists > 0 {
+		// 删除所有没有 project_id 的记录（确保数据完整性）
+		if err := db.Exec("DELETE FROM `versions` WHERE `project_id` IS NULL").Error; err != nil {
+			return err
+		}
+		// 如果 build_id 还存在，GORM 会在 AutoMigrate 时处理
+		return nil
+	}
+
+	// project_id 不存在，需要添加
+	// 先添加可空的 project_id 列
+	if err := db.Exec("ALTER TABLE `versions` ADD COLUMN `project_id` integer").Error; err != nil {
+		// 如果添加失败（可能列已存在），继续
+		return nil
+	}
+
+	// 由于 build_id 关联的 builds 表已不存在，现有版本记录无法自动迁移到 project_id
+	// 删除所有没有 project_id 的记录（因为无法确定它们属于哪个项目）
+	// 这些记录无法在新系统中使用，因为版本必须关联项目
+	if err := db.Exec("DELETE FROM `versions` WHERE `project_id` IS NULL").Error; err != nil {
+		return err
+	}
+
+	// 注意：GORM 的 AutoMigrate 会尝试添加 NOT NULL 约束
+	// 在 SQLite 中，这需要重建表。由于我们已经删除了所有 NULL 记录，
+	// GORM 应该能够成功重建表并添加约束
+	// 如果仍然失败，可能需要手动重建表（但通常不需要）
 
 	return nil
 }

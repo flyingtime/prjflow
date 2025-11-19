@@ -5,8 +5,8 @@ export interface Version {
   version_number: string
   release_notes?: string
   status: 'draft' | 'released' | 'archived'
-  build_id: number
-  build?: any
+  project_id: number
+  project?: any
   release_date?: string
   requirements?: any[]
   bugs?: any[]
@@ -25,7 +25,7 @@ export interface CreateVersionRequest {
   version_number: string
   release_notes?: string
   status?: 'draft' | 'released' | 'archived'
-  build_id: number
+  project_id: number
   release_date?: string
   requirement_ids?: number[]
   bug_ids?: number[]
@@ -43,7 +43,6 @@ export interface UpdateVersionRequest {
 // 获取版本列表
 export const getVersions = (params?: {
   keyword?: string
-  build_id?: number
   project_id?: number
   status?: string
   page?: number

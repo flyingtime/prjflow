@@ -11,8 +11,9 @@ export interface TestCase {
   project?: any
   creator_id: number
   creator?: any
+  result?: string  // 测试结果：passed, failed, blocked（合并自TestReport）
+  summary?: string  // 测试摘要（合并自TestReport）
   bugs?: any[]
-  reports?: any[]
   created_at?: string
   updated_at?: string
 }
@@ -30,6 +31,8 @@ export interface CreateTestCaseRequest {
   test_steps?: string
   types?: string[] // 测试类型（多选）
   status?: 'pending' | 'running' | 'passed' | 'failed'
+  result?: string  // 测试结果：passed, failed, blocked（合并自TestReport）
+  summary?: string  // 测试摘要（合并自TestReport）
   project_id: number
   bug_ids?: number[]
 }
@@ -40,6 +43,8 @@ export interface UpdateTestCaseRequest {
   test_steps?: string
   types?: string[] // 测试类型（多选）
   status?: 'pending' | 'running' | 'passed' | 'failed'
+  result?: string  // 测试结果：passed, failed, blocked（合并自TestReport）
+  summary?: string  // 测试摘要（合并自TestReport）
   bug_ids?: number[]
 }
 

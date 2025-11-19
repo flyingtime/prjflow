@@ -142,35 +142,8 @@ func main() {
 		dashboardGroup.GET("", dashboardHandler.GetDashboard)
 	}
 
-	// 产品管理路由
-	productHandler := api.NewProductHandler(db)
-	productLineGroup := r.Group("/api/product-lines", middleware.Auth())
-	{
-		productLineGroup.GET("", productHandler.GetProductLines)
-		productLineGroup.GET("/:id", productHandler.GetProductLine)
-		productLineGroup.POST("", productHandler.CreateProductLine)
-		productLineGroup.PUT("/:id", productHandler.UpdateProductLine)
-		productLineGroup.DELETE("/:id", productHandler.DeleteProductLine)
-	}
-	productGroup := r.Group("/api/products", middleware.Auth())
-	{
-		productGroup.GET("", productHandler.GetProducts)
-		productGroup.GET("/:id", productHandler.GetProduct)
-		productGroup.POST("", productHandler.CreateProduct)
-		productGroup.PUT("/:id", productHandler.UpdateProduct)
-		productGroup.DELETE("/:id", productHandler.DeleteProduct)
-	}
-
 	// 项目管理路由
 	projectHandler := api.NewProjectHandler(db)
-	projectGroupGroup := r.Group("/api/project-groups", middleware.Auth())
-	{
-		projectGroupGroup.GET("", projectHandler.GetProjectGroups)
-		projectGroupGroup.GET("/:id", projectHandler.GetProjectGroup)
-		projectGroupGroup.POST("", projectHandler.CreateProjectGroup)
-		projectGroupGroup.PUT("/:id", projectHandler.UpdateProjectGroup)
-		projectGroupGroup.DELETE("/:id", projectHandler.DeleteProjectGroup)
-	}
 	
 	// 看板管理路由（需要在项目路由之前定义，因为项目路由中会用到）
 	boardHandler := api.NewBoardHandler(db)
@@ -275,17 +248,6 @@ func main() {
 		planExecutionGroup.PATCH("/:id/executions/:execution_id/progress", planExecutionHandler.UpdatePlanExecutionProgress)
 	}
 
-	// 构建管理路由
-	buildHandler := api.NewBuildHandler(db)
-	buildGroup := r.Group("/api/builds", middleware.Auth())
-	{
-		buildGroup.GET("", buildHandler.GetBuilds)
-		buildGroup.GET("/:id", buildHandler.GetBuild)
-		buildGroup.POST("", buildHandler.CreateBuild)
-		buildGroup.PUT("/:id", buildHandler.UpdateBuild)
-		buildGroup.DELETE("/:id", buildHandler.DeleteBuild)
-		buildGroup.PATCH("/:id/status", buildHandler.UpdateBuildStatus)
-	}
 
 	// 版本管理路由
 	versionHandler := api.NewVersionHandler(db)
@@ -313,17 +275,6 @@ func main() {
 		testCaseGroup.PATCH("/:id/status", testCaseHandler.UpdateTestCaseStatus)
 	}
 
-	// 测试报告管理路由
-	testReportHandler := api.NewTestReportHandler(db)
-	testReportGroup := r.Group("/api/test-reports", middleware.Auth())
-	{
-		testReportGroup.GET("/statistics", testReportHandler.GetTestReportStatistics)
-		testReportGroup.GET("", testReportHandler.GetTestReports)
-		testReportGroup.GET("/:id", testReportHandler.GetTestReport)
-		testReportGroup.POST("", testReportHandler.CreateTestReport)
-		testReportGroup.PUT("/:id", testReportHandler.UpdateTestReport)
-		testReportGroup.DELETE("/:id", testReportHandler.DeleteTestReport)
-	}
 
 	// 资源管理路由 (统计、冲突检测、利用率分析)
 	resourceHandler := api.NewResourceHandler(db)

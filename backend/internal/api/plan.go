@@ -20,7 +20,7 @@ func NewPlanHandler(db *gorm.DB) *PlanHandler {
 // GetPlans 获取计划列表
 func (h *PlanHandler) GetPlans(c *gin.Context) {
 	var plans []model.Plan
-	query := h.db.Preload("Product").Preload("Project").Preload("Creator").Preload("Executions")
+	query := h.db.Preload("Project").Preload("Creator").Preload("Executions")
 
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
@@ -38,9 +38,6 @@ func (h *PlanHandler) GetPlans(c *gin.Context) {
 	}
 
 	// 产品筛选
-	if productID := c.Query("product_id"); productID != "" {
-		query = query.Where("product_id = ?", productID)
-	}
 
 	// 项目筛选
 	if projectID := c.Query("project_id"); projectID != "" {
@@ -80,8 +77,6 @@ func (h *PlanHandler) GetPlans(c *gin.Context) {
 			"status":      plan.Status,
 			"start_date":  plan.StartDate,
 			"end_date":    plan.EndDate,
-			"product_id":  plan.ProductID,
-			"product":     plan.Product,
 			"project_id":  plan.ProjectID,
 			"project":     plan.Project,
 			"creator_id":  plan.CreatorID,
@@ -124,8 +119,6 @@ func (h *PlanHandler) GetPlan(c *gin.Context) {
 		"status":      plan.Status,
 		"start_date":  plan.StartDate,
 		"end_date":    plan.EndDate,
-		"product_id":  plan.ProductID,
-		"product":     plan.Product,
 		"project_id":  plan.ProjectID,
 		"project":     plan.Project,
 		"creator_id":  plan.CreatorID,
@@ -146,7 +139,6 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 		Description string  `json:"description"`
 		Type        string  `json:"type" binding:"required"`
 		Status      string  `json:"status"`
-		ProductID   *uint   `json:"product_id"`
 		ProjectID   *uint   `json:"project_id"`
 		StartDate   *string `json:"start_date"` // 接收字符串格式的日期
 		EndDate     *string `json:"end_date"`   // 接收字符串格式的日期
@@ -170,9 +162,9 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 		}
 	}
 
-	// 验证计划类型
-	if req.Type != "product_plan" && req.Type != "project_plan" {
-		utils.Error(c, 400, "无效的计划类型")
+	// 验证计划类型（只保留项目计划）
+	if req.Type != "project_plan" {
+		utils.Error(c, 400, "无效的计划类型，只支持项目计划")
 		return
 	}
 
@@ -186,22 +178,9 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 	}
 
 	// 验证关联关系
-	if req.Type == "product_plan" && req.ProductID == nil {
-		utils.Error(c, 400, "产品计划必须关联产品")
-		return
-	}
-	if req.Type == "project_plan" && req.ProjectID == nil {
+	if req.ProjectID == nil {
 		utils.Error(c, 400, "项目计划必须关联项目")
 		return
-	}
-
-	// 验证产品是否存在
-	if req.ProductID != nil {
-		var product model.Product
-		if err := h.db.First(&product, *req.ProductID).Error; err != nil {
-			utils.Error(c, 404, "产品不存在")
-			return
-		}
 	}
 
 	// 验证项目是否存在
@@ -226,7 +205,6 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 		Description: req.Description,
 		Type:        req.Type,
 		Status:      req.Status,
-		ProductID:   req.ProductID,
 		ProjectID:   req.ProjectID,
 		StartDate:   startDate,
 		EndDate:     endDate,
@@ -239,7 +217,7 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Product").Preload("Project").Preload("Creator").Preload("Executions").First(&plan, plan.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Executions").First(&plan, plan.ID)
 
 	utils.Success(c, plan)
 }
@@ -297,7 +275,7 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Product").Preload("Project").Preload("Creator").Preload("Executions").First(&plan, plan.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Executions").First(&plan, plan.ID)
 
 	utils.Success(c, plan)
 }
@@ -352,7 +330,7 @@ func (h *PlanHandler) UpdatePlanStatus(c *gin.Context) {
 	}
 
 	// 重新加载关联数据
-	h.db.Preload("Product").Preload("Project").Preload("Creator").Preload("Executions").First(&plan, plan.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Executions").First(&plan, plan.ID)
 
 	utils.Success(c, plan)
 }

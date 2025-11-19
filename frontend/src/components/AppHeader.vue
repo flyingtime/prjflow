@@ -19,9 +19,6 @@
         <a-menu-item key="department" @click="$router.push('/department')">
           部门管理
         </a-menu-item>
-        <a-menu-item key="product" @click="$router.push('/product')">
-          产品管理
-        </a-menu-item>
         <a-menu-item key="project" @click="$router.push('/project')">
           项目管理
         </a-menu-item>
@@ -37,17 +34,11 @@
         <a-menu-item key="plan" @click="$router.push('/plan')">
           计划管理
         </a-menu-item>
-        <a-menu-item key="build" @click="$router.push('/build')">
-          构建管理
-        </a-menu-item>
         <a-menu-item key="version" @click="$router.push('/version')">
           版本管理
         </a-menu-item>
         <a-menu-item key="test-case" @click="$router.push('/test-case')">
-          测试单管理
-        </a-menu-item>
-        <a-menu-item key="test-report" @click="$router.push('/test-report')">
-          测试报告
+          测试管理
         </a-menu-item>
         <a-menu-item key="resource-statistics" @click="$router.push('/resource/statistics')">
           资源统计

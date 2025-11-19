@@ -62,12 +62,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/product',
-    name: 'Product',
-    component: () => import('../views/product/Product.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/project/:id/boards',
     name: 'BoardList',
     component: () => import('../views/board/BoardList.vue'),
@@ -146,12 +140,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/build',
-    name: 'Build',
-    component: () => import('../views/build/Build.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/version/:id',
     name: 'VersionDetail',
     component: () => import('../views/version/VersionDetail.vue'),
@@ -167,12 +155,6 @@ const routes: RouteRecordRaw[] = [
     path: '/test-case',
     name: 'TestCase',
     component: () => import('../views/test/TestCase.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/test-report',
-    name: 'TestReport',
-    component: () => import('../views/test/TestReport.vue'),
     meta: { requiresAuth: true }
   },
   {

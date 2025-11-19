@@ -23,22 +23,6 @@
                   style="width: 200px"
                 />
               </a-form-item>
-              <a-form-item label="产品">
-                <a-select
-                  v-model:value="searchForm.product_id"
-                  placeholder="选择产品"
-                  allow-clear
-                  style="width: 150px"
-                >
-                  <a-select-option
-                    v-for="product in products"
-                    :key="product.id"
-                    :value="product.id"
-                  >
-                    {{ product.name }}
-                  </a-select-option>
-                </a-select>
-              </a-form-item>
               <a-form-item label="项目">
                 <a-select
                   v-model:value="searchForm.project_id"
@@ -182,9 +166,6 @@
                     {{ getPriorityText(record.priority) }}
                   </a-tag>
                 </template>
-                <template v-else-if="column.key === 'product'">
-                  {{ record.product?.name || '-' }}
-                </template>
                 <template v-else-if="column.key === 'project'">
                   {{ record.project?.name || '-' }}
                 </template>
@@ -254,21 +235,6 @@
             placeholder="请输入需求描述（支持Markdown）"
             :rows="8"
           />
-        </a-form-item>
-        <a-form-item label="产品" name="product_id">
-          <a-select
-            v-model:value="formData.product_id"
-            placeholder="选择产品（可选）"
-            allow-clear
-          >
-            <a-select-option
-              v-for="product in products"
-              :key="product.id"
-              :value="product.id"
-            >
-              {{ product.name }}
-            </a-select-option>
-          </a-select>
         </a-form-item>
         <a-form-item label="项目" name="project_id">
           <a-select
@@ -342,21 +308,18 @@ import {
   type CreateRequirementRequest,
   type RequirementStatistics
 } from '@/api/requirement'
-import { getProducts, type Product } from '@/api/product'
 import { getProjects, type Project } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
 
 const router = useRouter()
 const loading = ref(false)
 const requirements = ref<Requirement[]>([])
-const products = ref<Product[]>([])
 const projects = ref<Project[]>([])
 const users = ref<User[]>([])
 const statistics = ref<RequirementStatistics | null>(null)
 
 const searchForm = reactive({
   keyword: '',
-  product_id: undefined as number | undefined,
   project_id: undefined as number | undefined,
   status: undefined as string | undefined,
   priority: undefined as string | undefined
@@ -373,7 +336,6 @@ const pagination = reactive({
 
 const columns = [
   { title: '需求标题', dataIndex: 'title', key: 'title', ellipsis: true },
-  { title: '产品', key: 'product', width: 120 },
   { title: '项目', key: 'project', width: 120 },
   { title: '状态', key: 'status', width: 100 },
   { title: '优先级', key: 'priority', width: 100 },
@@ -390,7 +352,6 @@ const formData = reactive<CreateRequirementRequest & { id?: number }>({
   description: '',
   status: 'pending',
   priority: 'medium',
-  product_id: undefined,
   project_id: undefined,
   assignee_id: undefined
 })
@@ -409,9 +370,6 @@ const loadRequirements = async () => {
     }
     if (searchForm.keyword) {
       params.keyword = searchForm.keyword
-    }
-    if (searchForm.product_id) {
-      params.product_id = searchForm.product_id
     }
     if (searchForm.project_id) {
       params.project_id = searchForm.project_id
@@ -441,25 +399,12 @@ const loadStatistics = async () => {
     if (searchForm.keyword) {
       params.keyword = searchForm.keyword
     }
-    if (searchForm.product_id) {
-      params.product_id = searchForm.product_id
-    }
     if (searchForm.project_id) {
       params.project_id = searchForm.project_id
     }
     statistics.value = await getRequirementStatistics(params)
   } catch (error: any) {
     console.error('加载统计信息失败:', error)
-  }
-}
-
-// 加载产品列表
-const loadProducts = async () => {
-  try {
-    const response = await getProducts()
-    products.value = response.list || []
-  } catch (error: any) {
-    console.error('加载产品列表失败:', error)
   }
 }
 
@@ -492,7 +437,6 @@ const handleSearch = () => {
 // 重置
 const handleReset = () => {
   searchForm.keyword = ''
-  searchForm.product_id = undefined
   searchForm.project_id = undefined
   searchForm.status = undefined
   searchForm.priority = undefined
@@ -515,7 +459,6 @@ const handleCreate = () => {
   formData.description = ''
   formData.status = 'pending'
   formData.priority = 'medium'
-  formData.product_id = undefined
   formData.project_id = undefined
   formData.assignee_id = undefined
   modalVisible.value = true
@@ -529,7 +472,6 @@ const handleEdit = (record: Requirement) => {
   formData.description = record.description || ''
   formData.status = record.status
   formData.priority = record.priority
-  formData.product_id = record.product_id
   formData.project_id = record.project_id
   formData.assignee_id = record.assignee_id
   modalVisible.value = true
@@ -549,7 +491,6 @@ const handleSubmit = async () => {
       description: formData.description,
       status: formData.status,
       priority: formData.priority,
-      product_id: formData.product_id,
       project_id: formData.project_id,
       assignee_id: formData.assignee_id
     }
@@ -654,7 +595,6 @@ const filterUserOption = (input: string, option: any) => {
 
 onMounted(() => {
   loadRequirements()
-  loadProducts()
   loadProjects()
   loadUsers()
 })
