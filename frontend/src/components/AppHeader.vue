@@ -25,17 +25,17 @@
         <a-menu-item key="requirement" @click="$router.push('/requirement')">
           需求管理
         </a-menu-item>
-        <a-menu-item key="bug" @click="$router.push('/bug')">
-          Bug管理
-        </a-menu-item>
         <a-menu-item key="task" @click="$router.push('/task')">
           任务管理
         </a-menu-item>
-        <a-menu-item key="version" @click="$router.push('/version')">
-          版本管理
-        </a-menu-item>
         <a-menu-item key="test-case" @click="$router.push('/test-case')">
           测试管理
+        </a-menu-item>
+        <a-menu-item key="bug" @click="$router.push('/bug')">
+          Bug管理
+        </a-menu-item>
+        <a-menu-item key="version" @click="$router.push('/version')">
+          版本管理
         </a-menu-item>
         <a-menu-item key="resource-statistics" @click="$router.push('/resource/statistics')">
           资源统计
