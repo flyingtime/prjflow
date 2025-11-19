@@ -303,11 +303,11 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.BoardColumn{},
 
 
-		// 版本 - 注意：GORM 在重建表时可能只复制部分字段，导致 NOT NULL 约束失败
+		// 版本 - 由于 GORM 在重建表时可能只复制部分字段，导致 NOT NULL 约束失败
 		// 我们已经尝试在 AutoMigrate 之前修复表结构，但 GORM 仍然可能检测到差异
-		// 如果问题持续存在，可能需要手动修复数据库或升级 GORM 版本
-		// 暂时注释掉，避免 GORM 尝试重建表
-		// &model.Version{},
+		// 解决方案：将 Version 表加入 AutoMigrate，但在此之前确保表结构完全正确
+		// 这样 GORM 在重建表时应该能够正确复制所有字段
+		&model.Version{},
 
 		// 测试
 		&model.TestCase{},
