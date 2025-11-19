@@ -102,6 +102,7 @@
       @cancel="handleProjectCancel"
       :confirm-loading="projectSubmitting"
       width="800px"
+      :mask-closable="false"
     >
       <a-form
         ref="projectFormRef"
@@ -388,18 +389,25 @@ const handleProjectTableChange = (pag: any) => {
 
 // 新增项目
 const handleCreateProject = () => {
-  projectModalTitle.value = '新增项目'
-  Object.assign(projectFormData, {
-    name: '',
-    code: '',
-    description: '',
-    status: 1,
-    tag_ids: [] as number[]
-  })
-  delete projectFormData.id
-  projectFormData.start_date = undefined
-  projectFormData.end_date = undefined
-  projectModalVisible.value = true
+  try {
+    projectModalTitle.value = '新增项目'
+    // 重置表单数据
+    projectFormData.name = ''
+    projectFormData.code = ''
+    projectFormData.description = ''
+    projectFormData.status = 1
+    projectFormData.tag_ids = []
+    delete projectFormData.id
+    projectFormData.start_date = undefined
+    projectFormData.end_date = undefined
+    // 打开对话框
+    projectModalVisible.value = true
+    // 重置表单验证状态
+    projectFormRef.value?.resetFields()
+  } catch (error) {
+    console.error('创建项目对话框打开失败:', error)
+    message.error('打开对话框失败')
+  }
 }
 
 // 查看项目详情
