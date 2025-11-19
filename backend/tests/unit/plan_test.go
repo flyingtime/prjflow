@@ -266,6 +266,50 @@ func TestPlanHandler_UpdatePlan(t *testing.T) {
 	})
 }
 
+func TestPlanHandler_UpdatePlanStatus(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "更新计划状态项目")
+	user := CreateTestUser(t, db, "updateplanstatus", "更新计划状态用户")
+
+	projectID := project.ID
+	plan := &model.Plan{
+		Name:      "更新状态计划",
+		Type:      "project_plan",
+		ProjectID: &projectID,
+		CreatorID: user.ID,
+		Status:    "draft",
+	}
+	db.Create(&plan)
+
+	handler := api.NewPlanHandler(db)
+
+	t.Run("更新计划状态成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"status": "active",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/plans/1/status", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+
+		handler.UpdatePlanStatus(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// 验证状态已更新
+		var updatedPlan model.Plan
+		err := db.First(&updatedPlan, plan.ID).Error
+		assert.NoError(t, err)
+		assert.Equal(t, "active", updatedPlan.Status)
+	})
+}
+
 func TestPlanHandler_DeletePlan(t *testing.T) {
 	db := SetupTestDB(t)
 	defer TeardownTestDB(t, db)

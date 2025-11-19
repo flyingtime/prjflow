@@ -411,4 +411,3 @@ func TestProjectHandler_GetProjectStatistics(t *testing.T) {
 		assert.NotNil(t, data["total_members"])
 	})
 }
-

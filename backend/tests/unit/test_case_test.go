@@ -290,6 +290,68 @@ func TestTestCaseHandler_UpdateTestCase(t *testing.T) {
 	})
 }
 
+func TestTestCaseHandler_UpdateTestCaseStatus(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "更新测试单状态项目")
+	user := CreateTestUser(t, db, "updatestatus", "更新状态用户")
+
+	testCase := &model.TestCase{
+		Name:      "更新状态测试单",
+		ProjectID: project.ID,
+		CreatorID: user.ID,
+		Status:    "pending",
+	}
+	db.Create(&testCase)
+
+	handler := api.NewTestCaseHandler(db)
+
+	t.Run("更新测试单状态成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"status": "running",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/test-cases/1/status", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+
+		handler.UpdateTestCaseStatus(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// 验证状态已更新
+		var updatedTestCase model.TestCase
+		err := db.First(&updatedTestCase, testCase.ID).Error
+		assert.NoError(t, err)
+		assert.Equal(t, "running", updatedTestCase.Status)
+	})
+
+	t.Run("更新测试单状态失败-无效状态", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"status": "invalid_status",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/test-cases/1/status", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+
+		handler.UpdateTestCaseStatus(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, response["code"] != nil && response["code"] != float64(200))
+	})
+}
+
 func TestTestCaseHandler_GetTestCaseStatistics(t *testing.T) {
 	db := SetupTestDB(t)
 	defer TeardownTestDB(t, db)

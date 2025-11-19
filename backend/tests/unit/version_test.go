@@ -266,6 +266,81 @@ func TestVersionHandler_UpdateVersion(t *testing.T) {
 	})
 }
 
+func TestVersionHandler_UpdateVersionStatus(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "更新版本状态项目")
+
+	version := &model.Version{
+		VersionNumber: "v1.0.0",
+		ProjectID:    project.ID,
+		Status:        "draft",
+	}
+	db.Create(&version)
+
+	handler := api.NewVersionHandler(db)
+
+	t.Run("更新版本状态成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"status": "released",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/versions/1/status", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+
+		handler.UpdateVersionStatus(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// 验证状态已更新
+		var updatedVersion model.Version
+		err := db.First(&updatedVersion, version.ID).Error
+		assert.NoError(t, err)
+		assert.Equal(t, "released", updatedVersion.Status)
+	})
+}
+
+func TestVersionHandler_ReleaseVersion(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "发布版本项目")
+
+	version := &model.Version{
+		VersionNumber: "v2.0.0",
+		ProjectID:    project.ID,
+		Status:        "draft",
+	}
+	db.Create(&version)
+
+	handler := api.NewVersionHandler(db)
+
+	t.Run("发布版本成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/versions/1/release", nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+
+		handler.ReleaseVersion(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// 验证版本已发布
+		var releasedVersion model.Version
+		err := db.First(&releasedVersion, version.ID).Error
+		assert.NoError(t, err)
+		assert.Equal(t, "released", releasedVersion.Status)
+		assert.NotNil(t, releasedVersion.ReleaseDate)
+	})
+}
+
 func TestVersionHandler_DeleteVersion(t *testing.T) {
 	db := SetupTestDB(t)
 	defer TeardownTestDB(t, db)
