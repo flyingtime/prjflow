@@ -104,24 +104,34 @@ utils.Error(c, 404, "项目不存在")
 - 使用 GORM 标签定义模型
 - 软删除使用 `gorm.DeletedAt`
 - 时间字段使用 `time.Time`
-- JSON 数组使用自定义 `StringArray` 类型（实现 `driver.Valuer` 和 `sql.Scanner`）
+- JSON 数组使用自定义 `StringArray` 类型（实现 `driver.Valuer` 和 `sql.Scanner`），仅用于测试类型等场景
+- 标签使用独立表（Tag）和关联表（project_tags）实现多对多关系
 - 关联关系使用 GORM 的 `Preload` 和 `Joins` 避免 N+1 问题
 
 ```go
 type Project struct {
     ID          uint           `gorm:"primaryKey" json:"id"`
     Name        string         `gorm:"not null" json:"name"`
-    Tags        model.StringArray `gorm:"type:text" json:"tags"`
+    Tags        []Tag          `gorm:"many2many:project_tags;" json:"tags,omitempty"`
     DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
     CreatedAt   time.Time      `json:"created_at"`
     UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+type Tag struct {
+    ID          uint           `gorm:"primaryKey" json:"id"`
+    Name        string         `gorm:"size:50;not null;uniqueIndex" json:"name"`
+    Description string         `gorm:"size:200" json:"description"`
+    Color       string         `gorm:"size:20;default:'blue'" json:"color"`
+    Projects    []Project      `gorm:"many2many:project_tags;" json:"projects,omitempty"`
 }
 ```
 
 #### 查询和分页
 - 使用 `utils.GetPage(c)` 和 `utils.GetPageSize(c)` 获取分页参数
-- 搜索使用 `c.Query("keyword")` 和 `c.QueryArray("tags")`
-- 多标签搜索使用 OR 逻辑：`tags LIKE ? OR tags LIKE ?`
+- 搜索使用 `c.Query("keyword")` 和 `c.QueryArray("tags")`（标签ID数组）
+- 多标签搜索使用 JOIN 查询：`JOIN project_tags ON ... WHERE tag_id IN ?`
+- 标签筛选使用标签ID，不是标签名称
 - 分页查询必须返回 `total` 字段
 
 ```go
@@ -129,10 +139,17 @@ page := utils.GetPage(c)
 pageSize := utils.GetPageSize(c)
 offset := (page - 1) * pageSize
 
+// 标签筛选（使用JOIN）
+if tagIDs := c.QueryArray("tags"); len(tagIDs) > 0 {
+    query = query.Joins("JOIN project_tags ON project_tags.project_id = projects.id").
+        Where("project_tags.tag_id IN ?", tagIDs).
+        Group("projects.id")
+}
+
 var total int64
 query.Model(&model.Project{}).Count(&total)
 
-query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&projects)
+query.Preload("Tags").Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&projects)
 ```
 
 #### 日期处理
@@ -184,15 +201,26 @@ const loadProjects = async () => {
 ```typescript
 import request from '@/utils/request'
 
+export interface Tag {
+  id: number
+  name: string
+  description?: string
+  color?: string
+}
+
 export interface Project {
   id: number
   name: string
-  tags?: string[]
+  tags?: Tag[]  // 标签对象数组
+}
+
+export const getTags = async (): Promise<Tag[]> => {
+  return request.get('/tags')
 }
 
 export const getProjects = async (params?: {
   keyword?: string
-  tags?: string[]
+  tags?: number[]  // 标签ID数组
   page?: number
   size?: number
 }): Promise<{ list: Project[]; total: number }> => {
@@ -218,17 +246,20 @@ const dateOnly = dayjs(date).format('YYYY-MM-DD')
 
 #### 表单处理
 - 使用 Ant Design Vue 的表单组件
-- 多选标签使用 `a-select` 的 `mode="tags"`
+- 标签选择使用 `a-select` 的 `mode="multiple"`，从API加载所有标签
+- 标签字段使用 `tag_ids`（标签ID数组），不是 `tags`（标签名称数组）
 - 表单验证使用 Ant Design Vue 的验证规则
 - 日期选择器使用 `a-date-picker`
 
 ```vue
-<a-form-item label="标签" name="tags">
+<a-form-item label="标签" name="tag_ids">
   <a-select
-    v-model:value="form.tags"
-    mode="tags"
-    placeholder="选择或输入标签（支持多选）"
+    v-model:value="form.tag_ids"
+    mode="multiple"
+    placeholder="选择标签（支持多选）"
     allow-clear
+    :options="tagOptions"
+    :field-names="{ label: 'name', value: 'id' }"
   />
 </a-form-item>
 ```
@@ -284,11 +315,14 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 
 ## 特殊约定
 
-### 标签搜索
-- 支持单个标签：`?tag=前端`
-- 支持多个标签（OR逻辑）：`?tags=前端&tags=后端`
-- 前端使用 `a-select` 的 `mode="tags"` 实现多选
-- 后端使用 `c.QueryArray("tags")` 获取多个标签参数
+### 标签管理
+- 标签使用独立表（Tag）管理，不是JSON数组
+- 标签与项目通过关联表（project_tags）实现多对多关系
+- 标签API：`GET /api/tags` 获取所有标签，支持CRUD操作
+- 标签搜索：使用标签ID进行筛选，`?tags=1&tags=2`（标签ID数组）
+- 前端标签选择：从API加载所有标签，使用 `a-select` 的 `mode="multiple"`
+- 项目创建/更新：使用 `tag_ids` 字段（标签ID数组），不是 `tags`（标签名称数组）
+- 标签显示：显示标签名称和颜色，标签对象包含 `{id, name, color}` 字段
 
 ### 工时管理
 - 任务和 Bug 支持预估工时和实际工时
@@ -320,8 +354,10 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 - 使用 GORM 抽象层，支持 SQLite 和 MySQL
 - 避免使用数据库特定的 SQL 语法
 - 日期时间使用 `time.Time` 类型，由 GORM 自动处理
-- JSON 数组使用 `StringArray` 类型存储为 JSON 文本
+- JSON 数组使用 `StringArray` 类型存储为 JSON 文本（仅用于测试类型等场景）
+- 标签使用独立表和关联表，不使用JSON数组
 - 迁移时注意 SQLite 的 NOT NULL 字段添加限制
+- 数据迁移：从JSON字段迁移到关联表时，需要提取数据并创建关联关系
 
 ## 错误处理
 
