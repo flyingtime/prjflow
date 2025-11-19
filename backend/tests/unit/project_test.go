@@ -85,6 +85,62 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 		assert.Equal(t, 1, len(list))
 	})
 
+	t.Run("按单个标签搜索项目", func(t *testing.T) {
+		// 创建带标签的项目
+		projectWithTag := CreateTestProject(t, db, "标签项目")
+		projectWithTag.Tags = model.StringArray{"前端", "重要"}
+		db.Save(&projectWithTag)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects?tag=前端", nil)
+
+		handler.GetProjects(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		assert.GreaterOrEqual(t, len(list), 1)
+	})
+
+	t.Run("按多个标签搜索项目（OR逻辑）", func(t *testing.T) {
+		// 创建带不同标签的项目
+		project1 := CreateTestProject(t, db, "标签项目1")
+		project1.Tags = model.StringArray{"前端", "重要"}
+		db.Save(&project1)
+
+		project2 := CreateTestProject(t, db, "标签项目2")
+		project2.Tags = model.StringArray{"后端", "紧急"}
+		db.Save(&project2)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		// 使用QueryArray方式传递多个标签
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects?tags=前端&tags=后端", nil)
+
+		handler.GetProjects(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		// 应该返回包含"前端"或"后端"标签的项目，至少2个
+		assert.GreaterOrEqual(t, len(list), 2)
+	})
+
 	// 使用测试数据（避免未使用变量警告）
 	_ = project1
 	_ = project2
