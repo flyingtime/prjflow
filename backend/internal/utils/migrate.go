@@ -89,12 +89,17 @@ func AutoMigrate(db *gorm.DB) error {
 						)
 					`)
 					
-					// 复制所有数据
-					db.Exec(`
+					// 复制所有数据（只复制 project_id 不为 NULL 的记录）
+					if err := db.Exec(`
 						INSERT INTO versions_temp (id, created_at, updated_at, deleted_at, version_number, release_notes, status, project_id, release_date)
 						SELECT id, created_at, updated_at, deleted_at, version_number, release_notes, status, project_id, release_date
 						FROM versions
-					`)
+						WHERE project_id IS NOT NULL
+					`).Error; err != nil {
+						// 如果复制失败，删除临时表并返回错误
+						db.Exec("DROP TABLE IF EXISTS versions_temp")
+						return err
+					}
 					
 					// 删除旧表
 					db.Exec("DROP TABLE versions")
