@@ -36,8 +36,12 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 		var args []interface{}
 		for _, tag := range tags {
 			if tag != "" {
+				// 转义LIKE特殊字符：% 和 _
+				escapedTag := strings.ReplaceAll(tag, `%`, `\%`)
+				escapedTag = strings.ReplaceAll(escapedTag, `_`, `\_`)
+				// 构建LIKE模式：匹配JSON数组中的标签值
 				conditions = append(conditions, "tags LIKE ?")
-				args = append(args, "%\""+tag+"\"%")
+				args = append(args, "%\""+escapedTag+"\"%")
 			}
 		}
 		if len(conditions) > 0 {
@@ -45,7 +49,10 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 		}
 	} else if tag := c.Query("tag"); tag != "" {
 		// 单个标签（向后兼容）
-		query = query.Where("tags LIKE ?", "%\""+tag+"\"%")
+		// 转义LIKE特殊字符
+		escapedTag := strings.ReplaceAll(tag, `%`, `\%`)
+		escapedTag = strings.ReplaceAll(escapedTag, `_`, `\_`)
+		query = query.Where("tags LIKE ?", "%\""+escapedTag+"\"%")
 	}
 
 	// 状态筛选
