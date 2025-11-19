@@ -70,7 +70,8 @@ func TestTagHandler_GetTag(t *testing.T) {
 		assert.Equal(t, float64(200), response["code"])
 
 		data := response["data"].(map[string]interface{})
-		assert.Equal(t, "测试标签", data["name"])
+		// 标签名称包含时间戳，所以只检查包含"测试标签"
+		assert.Contains(t, data["name"].(string), "测试标签")
 	})
 
 	t.Run("获取不存在的标签", func(t *testing.T) {
@@ -127,8 +128,14 @@ func TestTagHandler_CreateTag(t *testing.T) {
 	})
 
 	t.Run("创建标签失败-标签名称已存在", func(t *testing.T) {
-		// 先创建一个标签
-		CreateTestTag(t, db, "已存在标签")
+		// 直接创建标签（不使用CreateTestTag，因为CreateTestTag会自动添加时间戳）
+		existingTag := &model.Tag{
+			Name:  "已存在标签",
+			Color: "blue",
+		}
+		if err := db.Create(existingTag).Error; err != nil {
+			t.Fatalf("Failed to create existing tag: %v", err)
+		}
 
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
