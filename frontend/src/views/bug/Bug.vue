@@ -265,7 +265,7 @@
                         状态 <DownOutlined />
                       </a-button>
                       <template #overlay>
-                        <a-menu @click="(e: any) => handleOpenStatusModal(record, e.key as string)">
+                        <a-menu @click="(e: any) => handleStatusChange(record, e.key as string)">
                           <a-menu-item key="open">待处理</a-menu-item>
                           <a-menu-item key="assigned">已分配</a-menu-item>
                           <a-menu-item key="in_progress">处理中</a-menu-item>
@@ -867,7 +867,28 @@ const handleDelete = async (id: number) => {
 }
 
 // 状态变更
-// 打开状态更新对话框
+const handleStatusChange = (record: Bug, status: string) => {
+  // 只有"已解决"状态才弹出对话框
+  if (status === 'resolved') {
+    handleOpenStatusModal(record, status)
+  } else {
+    // 其他状态直接更新
+    handleStatusUpdate(record.id, status)
+  }
+}
+
+// 直接更新状态（不弹对话框）
+const handleStatusUpdate = async (id: number, status: string) => {
+  try {
+    await updateBugStatus(id, { status: status as any })
+    message.success('状态更新成功')
+    loadBugs()
+  } catch (error: any) {
+    message.error(error.message || '状态更新失败')
+  }
+}
+
+// 打开状态更新对话框（仅用于"已解决"状态）
 const handleOpenStatusModal = (record: Bug, status: string) => {
   statusFormData.bug_id = record.id
   statusFormData.status = status
