@@ -20,7 +20,7 @@ func NewVersionHandler(db *gorm.DB) *VersionHandler {
 // GetVersions 获取版本列表
 func (h *VersionHandler) GetVersions(c *gin.Context) {
 	var versions []model.Version
-	query := h.db.Preload("Project")
+	query := h.db.Preload("Project").Preload("Requirements").Preload("Bugs")
 
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
@@ -203,20 +203,33 @@ func (h *VersionHandler) UpdateVersion(c *gin.Context) {
 		return
 	}
 
-	// 更新关联需求和Bug
+	// 更新关联需求和Bug（如果提供了这些字段）
+	// 注意：空数组 [] 不是 nil，所以会执行更新（清空关联）
 	if req.RequirementIDs != nil {
 		var requirements []model.Requirement
 		if len(req.RequirementIDs) > 0 {
-			h.db.Where("id IN ?", req.RequirementIDs).Find(&requirements)
+			if err := h.db.Where("id IN ?", req.RequirementIDs).Find(&requirements).Error; err != nil {
+				utils.Error(c, utils.CodeError, "查询关联需求失败")
+				return
+			}
 		}
-		h.db.Model(&version).Association("Requirements").Replace(requirements)
+		if err := h.db.Model(&version).Association("Requirements").Replace(requirements); err != nil {
+			utils.Error(c, utils.CodeError, "更新关联需求失败")
+			return
+		}
 	}
 	if req.BugIDs != nil {
 		var bugs []model.Bug
 		if len(req.BugIDs) > 0 {
-			h.db.Where("id IN ?", req.BugIDs).Find(&bugs)
+			if err := h.db.Where("id IN ?", req.BugIDs).Find(&bugs).Error; err != nil {
+				utils.Error(c, utils.CodeError, "查询关联Bug失败")
+				return
+			}
 		}
-		h.db.Model(&version).Association("Bugs").Replace(bugs)
+		if err := h.db.Model(&version).Association("Bugs").Replace(bugs); err != nil {
+			utils.Error(c, utils.CodeError, "更新关联Bug失败")
+			return
+		}
 	}
 
 	// 重新加载关联数据

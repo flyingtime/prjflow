@@ -250,7 +250,8 @@ import {
   updateVersionStatus,
   releaseVersion,
   type Version,
-  type CreateVersionRequest
+  type CreateVersionRequest,
+  type UpdateVersionRequest
 } from '@/api/version'
 import { getProjects, type Project } from '@/api/project'
 import { getRequirements, type Requirement } from '@/api/requirement'
@@ -412,21 +413,31 @@ const handleEdit = async (record: Version) => {
 const handleSubmit = async () => {
   try {
     await formRef.value.validate()
-    const data: CreateVersionRequest = {
-      version_number: formData.version_number,
-      release_notes: formData.release_notes,
-      status: formData.status,
-      project_id: formData.project_id,
-      release_date: formData.release_date && formData.release_date.isValid() ? formData.release_date.format('YYYY-MM-DD') : undefined,
-      requirement_ids: formData.requirement_ids,
-      bug_ids: formData.bug_ids
-    }
-
+    
     if (formData.id) {
-      await updateVersion(formData.id, data)
+      // 更新版本
+      const updateData: UpdateVersionRequest = {
+        version_number: formData.version_number,
+        release_notes: formData.release_notes,
+        status: formData.status,
+        release_date: formData.release_date && formData.release_date.isValid() ? formData.release_date.format('YYYY-MM-DD') : undefined,
+        requirement_ids: formData.requirement_ids || [],
+        bug_ids: formData.bug_ids || []
+      }
+      await updateVersion(formData.id, updateData)
       message.success('更新成功')
     } else {
-      await createVersion(data)
+      // 创建版本
+      const createData: CreateVersionRequest = {
+        version_number: formData.version_number,
+        release_notes: formData.release_notes,
+        status: formData.status,
+        project_id: formData.project_id,
+        release_date: formData.release_date && formData.release_date.isValid() ? formData.release_date.format('YYYY-MM-DD') : undefined,
+        requirement_ids: formData.requirement_ids || [],
+        bug_ids: formData.bug_ids || []
+      }
+      await createVersion(createData)
       message.success('创建成功')
     }
     modalVisible.value = false
