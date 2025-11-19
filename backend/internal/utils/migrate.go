@@ -41,103 +41,11 @@ func AutoMigrate(db *gorm.DB) error {
 			db.Exec("DROP TABLE IF EXISTS builds")
 		}
 		
-		// 修复 versions 表的外键约束格式，避免 GORM 检测到差异
-		// 如果表存在但外键约束格式不匹配，GORM 可能会尝试重建表
-		// 我们通过删除并重新创建外键约束来修复这个问题
-		var versionsTableExists int64
-		if err := db.Raw(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='versions'`).Scan(&versionsTableExists).Error; err == nil && versionsTableExists > 0 {
-			// 检查是否有外键约束，如果有，删除它并让 GORM 重新创建
-			// 这样可以确保外键约束的格式与 GORM 期望的一致
-			var fkCount int64
-			db.Raw(`
-				SELECT COUNT(*) FROM sqlite_master 
-				WHERE type='table' AND name='versions' 
-				AND sql LIKE '%CONSTRAINT%fk_versions_project%'
-			`).Scan(&fkCount)
-			
-			if fkCount > 0 {
-				// 外键约束存在，但格式可能与 GORM 期望的不同
-				// 由于 SQLite 不支持直接删除外键约束，我们需要重建表
-				// 但为了安全，我们只在 build_id 不存在时才这样做
-				// 如果 build_id 还存在，migrateVersionProjectID 会处理它
-				var buildIDExists int64
-				db.Raw(`SELECT COUNT(*) FROM pragma_table_info('versions') WHERE name = 'build_id'`).Scan(&buildIDExists)
-				
-				if buildIDExists == 0 {
-					// build_id 不存在，表结构应该已经正确
-					// 但外键约束格式可能不匹配，我们需要重建表来修复它
-					// 注意：这会删除并重新创建表，但会保留所有数据
-					db.Exec("PRAGMA foreign_keys = OFF")
-					defer db.Exec("PRAGMA foreign_keys = ON")
-					
-					// 删除关联表（如果存在）
-					db.Exec("DROP TABLE IF EXISTS version_requirements")
-					db.Exec("DROP TABLE IF EXISTS version_bugs")
-					
-					// 创建新表（不包含外键约束）
-					db.Exec(`
-						CREATE TABLE versions_temp (
-							id INTEGER PRIMARY KEY AUTOINCREMENT,
-							created_at DATETIME,
-							updated_at DATETIME,
-							deleted_at DATETIME,
-							version_number TEXT NOT NULL,
-							release_notes TEXT,
-							status TEXT DEFAULT 'draft',
-							project_id INTEGER NOT NULL,
-							release_date DATETIME
-						)
-					`)
-					
-					// 复制所有数据（只复制 project_id 不为 NULL 的记录）
-					if err := db.Exec(`
-						INSERT INTO versions_temp (id, created_at, updated_at, deleted_at, version_number, release_notes, status, project_id, release_date)
-						SELECT id, created_at, updated_at, deleted_at, version_number, release_notes, status, project_id, release_date
-						FROM versions
-						WHERE project_id IS NOT NULL
-					`).Error; err != nil {
-						// 如果复制失败，删除临时表并返回错误
-						db.Exec("DROP TABLE IF EXISTS versions_temp")
-						return err
-					}
-					
-					// 删除旧表
-					db.Exec("DROP TABLE versions")
-					
-					// 重命名新表
-					db.Exec("ALTER TABLE versions_temp RENAME TO versions")
-					
-					// 重新创建索引
-					db.Exec("CREATE INDEX IF NOT EXISTS idx_versions_deleted_at ON versions(deleted_at)")
-					db.Exec("CREATE INDEX IF NOT EXISTS idx_versions_project_id ON versions(project_id)")
-					
-					// 手动创建外键约束，确保格式与 GORM 期望的一致
-					// 注意：SQLite 不支持在 ALTER TABLE 中添加外键约束
-					// 我们需要再次重建表来添加外键约束
-					// 但为了简化，我们让 GORM 的 AutoMigrate 来处理外键约束
-					// 如果 GORM 仍然尝试重建表，我们需要确保它复制所有字段
-					// 实际上，最好的方法是：在重建表后，确保表结构与 GORM 期望的完全一致
-					// 但由于 SQLite 的限制，我们无法直接修改外键约束
-					// 所以我们需要让 GORM 的 AutoMigrate 来处理它
-					// 但我们需要确保 GORM 在重建表时复制所有字段
-					
-					// 为了确保 GORM 不会再次重建表，我们需要确保表结构与模型完全匹配
-					// 但由于外键约束的格式可能不匹配，GORM 可能仍然会尝试重建表
-					// 在这种情况下，我们需要确保 GORM 在重建表时复制所有字段
-					// 但 GORM 的 AutoMigrate 不提供这个选项
-					// 所以我们需要在 GORM 的 AutoMigrate 之前，手动创建外键约束
-					// 但由于 SQLite 的限制，我们无法在 ALTER TABLE 中添加外键约束
-					// 所以我们需要再次重建表来添加外键约束
-					// 但这样会导致无限循环
-					// 实际上，最好的方法是：在重建表后，不创建外键约束，让 GORM 的 AutoMigrate 来处理它
-					// 但如果 GORM 检测到外键约束不存在，它可能会尝试重建表
-					// 所以我们需要确保 GORM 在重建表时复制所有字段
-					// 但 GORM 的 AutoMigrate 不提供这个选项
-					// 所以我们需要使用 GORM 的 Migrator 接口来更精确地控制迁移
-					// 或者，我们需要确保表结构与 GORM 期望的完全一致，这样 GORM 就不会再尝试重建表了
-				}
-			}
-		}
+		// 注意：由于 Version 表不在 AutoMigrate 中，GORM 不应该处理它
+		// 但如果 GORM 仍然检测到差异（比如外键约束），可能会尝试重建表
+		// 为了避免这个问题，我们需要确保表结构与模型完全匹配
+		// 但由于 Version 表不在 AutoMigrate 中，GORM 不应该处理它
+		// 如果仍然出现问题，可能是其他原因导致的
 	}
 	
 	// 手动处理 Version 表的迁移，避免 GORM 重建表时只复制部分字段
