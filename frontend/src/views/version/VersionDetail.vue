@@ -11,7 +11,7 @@
             <template #extra>
               <a-space>
                 <a-button @click="handleEdit">编辑</a-button>
-                <a-button v-if="version?.status === 'draft' && version?.build?.status === 'success'" type="primary" @click="handleRelease">
+                <a-button v-if="version?.status === 'draft'" type="primary" @click="handleRelease">
                   发布
                 </a-button>
                 <a-dropdown>
@@ -46,28 +46,11 @@
                     {{ getStatusText(version?.status || '') }}
                   </a-tag>
                 </a-descriptions-item>
-                <a-descriptions-item label="构建">
-                  <a-button v-if="version?.build" type="link" @click="router.push('/build')">
-                    {{ version.build.build_number }}
+                <a-descriptions-item label="项目">
+                  <a-button v-if="version?.project" type="link" @click="router.push(`/project/${version.project.id}`)">
+                    {{ version.project.name }}
                   </a-button>
                   <span v-else>-</span>
-                </a-descriptions-item>
-                <a-descriptions-item label="构建状态">
-                  <a-tag :color="getBuildStatusColor(version?.build?.status || '')">
-                    {{ getBuildStatusText(version?.build?.status || '') }}
-                  </a-tag>
-                </a-descriptions-item>
-                <a-descriptions-item label="项目">
-                  {{ version?.build?.project?.name || '-' }}
-                </a-descriptions-item>
-                <a-descriptions-item label="分支">
-                  {{ version?.build?.branch || '-' }}
-                </a-descriptions-item>
-                <a-descriptions-item label="提交">
-                  <span style="font-family: monospace">{{ version?.build?.commit || '-' }}</span>
-                </a-descriptions-item>
-                <a-descriptions-item label="构建时间">
-                  {{ formatDateTime(version?.build?.build_time) }}
                 </a-descriptions-item>
                 <a-descriptions-item label="发布日期">
                   {{ formatDateTime(version?.release_date) }}
@@ -265,26 +248,6 @@ const getStatusText = (status: string) => {
     draft: '草稿',
     released: '已发布',
     archived: '已归档'
-  }
-  return texts[status] || status
-}
-
-const getBuildStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    pending: 'default',
-    building: 'processing',
-    success: 'success',
-    failed: 'error'
-  }
-  return colors[status] || 'default'
-}
-
-const getBuildStatusText = (status: string) => {
-  const texts: Record<string, string> = {
-    pending: '待构建',
-    building: '构建中',
-    success: '成功',
-    failed: '失败'
   }
   return texts[status] || status
 }

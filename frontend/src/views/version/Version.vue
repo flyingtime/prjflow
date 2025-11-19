@@ -102,6 +102,9 @@
                 </template>
                 <template v-else-if="column.key === 'action'">
                   <a-space>
+                    <a-button type="link" size="small" @click="() => router.push(`/version/${record.id}`)">
+                      详情
+                    </a-button>
                     <a-button type="link" size="small" @click="handleEdit(record)">
                       编辑
                     </a-button>
