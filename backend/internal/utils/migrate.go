@@ -99,10 +99,79 @@ func AutoMigrate(db *gorm.DB) error {
 					db.Exec("CREATE INDEX IF NOT EXISTS idx_versions_deleted_at ON versions(deleted_at)")
 					db.Exec("CREATE INDEX IF NOT EXISTS idx_versions_project_id ON versions(project_id)")
 					
-					// 外键约束将由 GORM 的 AutoMigrate 重新创建
+					// 手动创建外键约束，确保格式与 GORM 期望的一致
+					// 注意：SQLite 不支持在 ALTER TABLE 中添加外键约束
+					// 我们需要再次重建表来添加外键约束
+					// 但为了简化，我们让 GORM 的 AutoMigrate 来处理外键约束
+					// 如果 GORM 仍然尝试重建表，我们需要确保它复制所有字段
+					// 实际上，最好的方法是：在重建表后，确保表结构与 GORM 期望的完全一致
+					// 但由于 SQLite 的限制，我们无法直接修改外键约束
+					// 所以我们需要让 GORM 的 AutoMigrate 来处理它
+					// 但我们需要确保 GORM 在重建表时复制所有字段
+					
+					// 为了确保 GORM 不会再次重建表，我们需要确保表结构与模型完全匹配
+					// 但由于外键约束的格式可能不匹配，GORM 可能仍然会尝试重建表
+					// 在这种情况下，我们需要确保 GORM 在重建表时复制所有字段
+					// 但 GORM 的 AutoMigrate 不提供这个选项
+					// 所以我们需要在 GORM 的 AutoMigrate 之前，手动创建外键约束
+					// 但由于 SQLite 的限制，我们无法在 ALTER TABLE 中添加外键约束
+					// 所以我们需要再次重建表来添加外键约束
+					// 但这样会导致无限循环
+					// 实际上，最好的方法是：在重建表后，不创建外键约束，让 GORM 的 AutoMigrate 来处理它
+					// 但如果 GORM 检测到外键约束不存在，它可能会尝试重建表
+					// 所以我们需要确保 GORM 在重建表时复制所有字段
+					// 但 GORM 的 AutoMigrate 不提供这个选项
+					// 所以我们需要使用 GORM 的 Migrator 接口来更精确地控制迁移
+					// 或者，我们需要确保表结构与 GORM 期望的完全一致，这样 GORM 就不会再尝试重建表了
 				}
 			}
 		}
+	}
+	
+	// 手动处理 Version 表的迁移，避免 GORM 重建表时只复制部分字段
+	// 使用 GORM 的 Migrator 来更精确地控制迁移
+	migrator := db.Migrator()
+	
+	// 检查 versions 表是否存在
+	if !migrator.HasTable(&model.Version{}) {
+		// 表不存在，创建表
+		if err := migrator.CreateTable(&model.Version{}); err != nil {
+			return err
+		}
+	} else {
+		// 表存在，只迁移字段（不重建表）
+		// 检查并添加缺失的字段
+		if !migrator.HasColumn(&model.Version{}, "version_number") {
+			if err := migrator.AddColumn(&model.Version{}, "version_number"); err != nil {
+				return err
+			}
+		}
+		if !migrator.HasColumn(&model.Version{}, "release_notes") {
+			if err := migrator.AddColumn(&model.Version{}, "release_notes"); err != nil {
+				return err
+			}
+		}
+		if !migrator.HasColumn(&model.Version{}, "status") {
+			if err := migrator.AddColumn(&model.Version{}, "status"); err != nil {
+				return err
+			}
+		}
+		if !migrator.HasColumn(&model.Version{}, "project_id") {
+			if err := migrator.AddColumn(&model.Version{}, "project_id"); err != nil {
+				return err
+			}
+		}
+		if !migrator.HasColumn(&model.Version{}, "release_date") {
+			if err := migrator.AddColumn(&model.Version{}, "release_date"); err != nil {
+				return err
+			}
+		}
+		
+		// 创建索引（如果不存在）
+		// 注意：Migrator 的 HasIndex 方法可能不存在，我们直接尝试创建索引
+		// 如果索引已存在，CreateIndex 会返回错误，我们忽略它
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_versions_deleted_at ON versions(deleted_at)")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_versions_project_id ON versions(project_id)")
 	}
 
 	return db.AutoMigrate(
@@ -131,8 +200,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.Plan{},
 		&model.PlanExecution{},
 
-		// 版本
-		&model.Version{},
+		// 版本 - 手动处理，避免 GORM 重建表时只复制部分字段
+		// &model.Version{},
 
 		// 测试
 		&model.TestCase{},
