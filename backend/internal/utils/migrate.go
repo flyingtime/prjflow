@@ -165,7 +165,44 @@ func migrateVersionProjectID(db *gorm.DB) error {
 		if err := db.Exec("DELETE FROM `versions` WHERE `project_id` IS NULL").Error; err != nil {
 			return err
 		}
-		// 如果 build_id 还存在，GORM 会在 AutoMigrate 时处理
+		// 如果 build_id 还存在，需要删除它（通过重建表）
+		if buildIDExists > 0 {
+			// SQLite 不支持直接删除列，需要重建表
+			// 1. 创建新表（不包含 build_id）
+			if err := db.Exec(`
+				CREATE TABLE versions_new (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					created_at DATETIME,
+					updated_at DATETIME,
+					deleted_at DATETIME,
+					version_number TEXT NOT NULL,
+					release_notes TEXT,
+					status TEXT DEFAULT 'draft',
+					project_id INTEGER NOT NULL,
+					release_date DATETIME
+				)
+			`).Error; err != nil {
+				return err
+			}
+			// 2. 复制数据（只复制有 project_id 的记录）
+			if err := db.Exec(`
+				INSERT INTO versions_new (id, created_at, updated_at, deleted_at, version_number, release_notes, status, project_id, release_date)
+				SELECT id, created_at, updated_at, deleted_at, version_number, release_notes, status, project_id, release_date
+				FROM versions
+				WHERE project_id IS NOT NULL
+			`).Error; err != nil {
+				return err
+			}
+			// 3. 删除旧表
+			if err := db.Exec("DROP TABLE versions").Error; err != nil {
+				return err
+			}
+			// 4. 重命名新表
+			if err := db.Exec("ALTER TABLE versions_new RENAME TO versions").Error; err != nil {
+				return err
+			}
+			// 5. 重新创建索引和外键（GORM 会在 AutoMigrate 时处理）
+		}
 		return nil
 	}
 
