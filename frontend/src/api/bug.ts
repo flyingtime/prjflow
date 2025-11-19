@@ -49,6 +49,9 @@ export interface UpdateBugStatusRequest {
   status: 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed'
   solution?: string
   solution_note?: string
+  estimated_hours?: number
+  actual_hours?: number
+  work_date?: string
   resolved_version_id?: number
   version_number?: string
   create_version?: boolean

@@ -427,12 +427,15 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 	}
 
 	var req struct {
-		Status            string  `json:"status" binding:"required"`
-		Solution          *string `json:"solution"`           // 解决方案
-		SolutionNote      *string `json:"solution_note"`      // 解决方案备注
-		ResolvedVersionID *uint   `json:"resolved_version_id"` // 解决版本ID
-		VersionNumber     *string `json:"version_number"`     // 版本号（如果创建新版本）
-		CreateVersion     *bool   `json:"create_version"`     // 是否创建新版本
+		Status            string   `json:"status" binding:"required"`
+		Solution          *string  `json:"solution"`           // 解决方案
+		SolutionNote      *string  `json:"solution_note"`      // 解决方案备注
+		EstimatedHours   *float64 `json:"estimated_hours"`    // 预估工时
+		ActualHours       *float64 `json:"actual_hours"`      // 实际工时
+		WorkDate          *string  `json:"work_date"`          // 工作日期（YYYY-MM-DD），用于资源分配
+		ResolvedVersionID *uint    `json:"resolved_version_id"` // 解决版本ID
+		VersionNumber     *string  `json:"version_number"`     // 版本号（如果创建新版本）
+		CreateVersion     *bool    `json:"create_version"`     // 是否创建新版本
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -513,6 +516,53 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 
 	if resolvedVersionID != nil {
 		bug.ResolvedVersionID = resolvedVersionID
+	}
+
+	// 更新预估工时
+	if req.EstimatedHours != nil {
+		if *req.EstimatedHours < 0 {
+			utils.Error(c, 400, "预估工时不能为负数")
+			return
+		}
+		bug.EstimatedHours = req.EstimatedHours
+	}
+
+	// 更新实际工时（如果提供了）
+	if req.ActualHours != nil {
+		if *req.ActualHours < 0 {
+			utils.Error(c, 400, "实际工时不能为负数")
+			return
+		}
+		// 先加载分配人信息
+		h.db.Preload("Assignees").First(&bug, bug.ID)
+		
+		// 如果有分配人，创建或更新资源分配
+		if len(bug.Assignees) > 0 {
+			// 确定工作日期
+			var workDate time.Time
+			if req.WorkDate != nil && *req.WorkDate != "" {
+				if t, err := time.Parse("2006-01-02", *req.WorkDate); err == nil {
+					workDate = t
+				} else {
+					utils.Error(c, 400, "工作日期格式错误，应为 YYYY-MM-DD")
+					return
+				}
+			} else {
+				workDate = time.Now()
+			}
+			workDate = time.Date(workDate.Year(), workDate.Month(), workDate.Day(), 0, 0, 0, 0, workDate.Location())
+			
+			// 为第一个分配人同步到资源分配
+			if err := h.syncBugActualHours(&bug, *req.ActualHours, workDate, bug.Assignees[0].ID); err != nil {
+				utils.Error(c, utils.CodeError, "同步资源分配失败: "+err.Error())
+				return
+			}
+			// 从资源分配中汇总实际工时（确保actual_hours正确）
+			h.calculateAndUpdateActualHours(&bug)
+		} else {
+			// 如果没有分配人，直接设置actual_hours，但不创建资源分配
+			bug.ActualHours = req.ActualHours
+		}
 	}
 
 	bug.Status = req.Status

@@ -503,6 +503,34 @@
             :rows="4"
           />
         </a-form-item>
+        <a-form-item label="预估工时" name="estimated_hours">
+          <a-input-number
+            v-model:value="statusFormData.estimated_hours"
+            placeholder="预估工时（小时）"
+            :min="0"
+            :precision="2"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="实际工时" name="actual_hours">
+          <a-input-number
+            v-model:value="statusFormData.actual_hours"
+            placeholder="实际工时（小时）"
+            :min="0"
+            :precision="2"
+            style="width: 100%"
+          />
+          <span style="margin-left: 8px; color: #999">更新实际工时会自动创建资源分配</span>
+        </a-form-item>
+        <a-form-item label="工作日期" name="work_date" v-if="statusFormData.actual_hours">
+          <a-date-picker
+            v-model:value="statusFormData.work_date"
+            placeholder="选择工作日期（可选）"
+            style="width: 100%"
+            format="YYYY-MM-DD"
+          />
+          <span style="margin-left: 8px; color: #999">不填则使用今天</span>
+        </a-form-item>
         <a-form-item label="解决版本" name="resolved_version_id">
           <a-space direction="vertical" style="width: 100%">
             <a-select
@@ -640,6 +668,9 @@ const statusFormData = reactive({
   status: 'open' as string,
   solution: undefined as string | undefined,
   solution_note: undefined as string | undefined,
+  estimated_hours: undefined as number | undefined,
+  actual_hours: undefined as number | undefined,
+  work_date: undefined as Dayjs | undefined,
   resolved_version_id: undefined as number | undefined,
   version_number: undefined as string | undefined,
   create_version: false
@@ -894,6 +925,9 @@ const handleOpenStatusModal = (record: Bug, status: string) => {
   statusFormData.status = status
   statusFormData.solution = record.solution
   statusFormData.solution_note = record.solution_note
+  statusFormData.estimated_hours = record.estimated_hours
+  statusFormData.actual_hours = record.actual_hours
+  statusFormData.work_date = undefined
   statusFormData.resolved_version_id = record.resolved_version_id
   statusFormData.version_number = undefined
   statusFormData.create_version = false
@@ -938,6 +972,15 @@ const handleStatusSubmit = async () => {
     if (statusFormData.solution_note) {
       data.solution_note = statusFormData.solution_note
     }
+    if (statusFormData.estimated_hours !== undefined) {
+      data.estimated_hours = statusFormData.estimated_hours
+    }
+    if (statusFormData.actual_hours !== undefined) {
+      data.actual_hours = statusFormData.actual_hours
+      if (statusFormData.work_date && statusFormData.work_date.isValid()) {
+        data.work_date = statusFormData.work_date.format('YYYY-MM-DD')
+      }
+    }
     if (statusFormData.create_version && statusFormData.version_number) {
       data.create_version = true
       data.version_number = statusFormData.version_number
@@ -960,6 +1003,9 @@ const handleStatusCancel = () => {
   statusFormData.status = 'open'
   statusFormData.solution = undefined
   statusFormData.solution_note = undefined
+  statusFormData.estimated_hours = undefined
+  statusFormData.actual_hours = undefined
+  statusFormData.work_date = undefined
   statusFormData.resolved_version_id = undefined
   statusFormData.version_number = undefined
   statusFormData.create_version = false
