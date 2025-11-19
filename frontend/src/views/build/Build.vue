@@ -86,6 +86,12 @@
                   </a-button>
                   <span v-else>-</span>
                 </template>
+                <template v-else-if="column.key === 'build_time'">
+                  {{ formatDateTime(record.build_time) }}
+                </template>
+                <template v-else-if="column.key === 'created_at'">
+                  {{ formatDateTime(record.created_at) }}
+                </template>
                 <template v-else-if="column.key === 'action'">
                   <a-space>
                     <a-button type="link" size="small" @click="handleEdit(record)">
@@ -187,6 +193,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import dayjs, { type Dayjs } from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import {
   getBuilds,

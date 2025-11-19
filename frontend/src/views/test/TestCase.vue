@@ -236,6 +236,9 @@
                   </a-tag>
                   <span v-if="!record.bugs || record.bugs.length === 0">-</span>
                 </template>
+                <template v-else-if="column.key === 'created_at'">
+                  {{ formatDateTime(record.created_at) }}
+                </template>
                 <template v-else-if="column.key === 'action'">
                   <a-space>
                     <a-button type="link" size="small" @click="handleEdit(record)">
@@ -363,6 +366,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {

@@ -246,6 +246,9 @@
                     <span v-if="!record.estimated_hours && !record.actual_hours">-</span>
                   </div>
                 </template>
+                <template v-else-if="column.key === 'created_at'">
+                  {{ formatDateTime(record.created_at) }}
+                </template>
                 <template v-else-if="column.key === 'action'">
                   <a-space>
                     <a-button type="link" size="small" @click="handleView(record)">
@@ -462,6 +465,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { FormInstance } from 'ant-design-vue'
 import dayjs, { type Dayjs } from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'

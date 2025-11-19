@@ -80,10 +80,10 @@
                   {{ bug?.creator ? `${bug.creator.username}${bug.creator.nickname ? `(${bug.creator.nickname})` : ''}` : '-' }}
                 </a-descriptions-item>
                 <a-descriptions-item label="创建时间">
-                  {{ bug?.created_at ? new Date(bug.created_at).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(bug?.created_at) }}
                 </a-descriptions-item>
                 <a-descriptions-item label="更新时间">
-                  {{ bug?.updated_at ? new Date(bug.updated_at).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(bug?.updated_at) }}
                 </a-descriptions-item>
               </a-descriptions>
             </a-card>
@@ -144,6 +144,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
+import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {

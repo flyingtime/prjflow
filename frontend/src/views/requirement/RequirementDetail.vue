@@ -62,10 +62,10 @@
                   {{ requirement?.creator ? `${requirement.creator.username}${requirement.creator.nickname ? `(${requirement.creator.nickname})` : ''}` : '-' }}
                 </a-descriptions-item>
                 <a-descriptions-item label="创建时间">
-                  {{ requirement?.created_at ? new Date(requirement.created_at).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(requirement?.created_at) }}
                 </a-descriptions-item>
                 <a-descriptions-item label="更新时间">
-                  {{ requirement?.updated_at ? new Date(requirement.updated_at).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(requirement?.updated_at) }}
                 </a-descriptions-item>
               </a-descriptions>
             </a-card>

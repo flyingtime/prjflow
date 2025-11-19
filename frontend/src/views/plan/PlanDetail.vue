@@ -44,7 +44,7 @@
                 {{ plan.creator ? `${plan.creator.username}${plan.creator.nickname ? `(${plan.creator.nickname})` : ''}` : '-' }}
               </a-descriptions-item>
               <a-descriptions-item label="创建时间">
-                {{ plan.created_at ? dayjs(plan.created_at).format('YYYY-MM-DD HH:mm:ss') : '-' }}
+                {{ formatDateTime(plan.created_at) }}
               </a-descriptions-item>
               <a-descriptions-item label="开始日期" v-if="plan.start_date">
                 {{ dayjs(plan.start_date).format('YYYY-MM-DD') }}
@@ -100,6 +100,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { marked } from 'marked'
+import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import { getPlan, type Plan } from '@/api/plan'
 

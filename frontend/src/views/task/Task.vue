@@ -110,12 +110,15 @@
                 </template>
                 <template v-else-if="column.key === 'dates'">
                   <div>
-                    <div v-if="record.start_date">开始: {{ record.start_date }}</div>
-                    <div v-if="record.end_date">结束: {{ record.end_date }}</div>
+                    <div v-if="record.start_date">开始: {{ formatDate(record.start_date) }}</div>
+                    <div v-if="record.end_date">结束: {{ formatDate(record.end_date) }}</div>
                     <div v-if="record.due_date" :style="{ color: isOverdue(record.due_date, record.status) ? 'red' : '' }">
-                      截止: {{ record.due_date }}
+                      截止: {{ formatDate(record.due_date) }}
                     </div>
                   </div>
+                </template>
+                <template v-else-if="column.key === 'created_at'">
+                  {{ formatDateTime(record.created_at) }}
                 </template>
                 <template v-else-if="column.key === 'action'">
                   <a-space>
@@ -377,6 +380,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import dayjs, { type Dayjs } from 'dayjs'
+import { formatDateTime, formatDate } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {

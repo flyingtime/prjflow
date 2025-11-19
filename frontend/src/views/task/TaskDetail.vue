@@ -74,10 +74,10 @@
                   {{ task?.creator ? `${task.creator.username}${task.creator.nickname ? `(${task.creator.nickname})` : ''}` : '-' }}
                 </a-descriptions-item>
                 <a-descriptions-item label="创建时间">
-                  {{ task?.created_at ? new Date(task.created_at).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(task?.created_at) }}
                 </a-descriptions-item>
                 <a-descriptions-item label="更新时间">
-                  {{ task?.updated_at ? new Date(task.updated_at).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(task?.updated_at) }}
                 </a-descriptions-item>
               </a-descriptions>
             </a-card>
@@ -183,6 +183,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
 import dayjs, { type Dayjs } from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {

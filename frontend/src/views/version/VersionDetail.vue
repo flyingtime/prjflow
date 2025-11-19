@@ -67,16 +67,16 @@
                   <span style="font-family: monospace">{{ version?.build?.commit || '-' }}</span>
                 </a-descriptions-item>
                 <a-descriptions-item label="构建时间">
-                  {{ version?.build?.build_time ? new Date(version.build.build_time).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(version?.build?.build_time) }}
                 </a-descriptions-item>
                 <a-descriptions-item label="发布日期">
-                  {{ version?.release_date ? new Date(version.release_date).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(version?.release_date) }}
                 </a-descriptions-item>
                 <a-descriptions-item label="创建时间">
-                  {{ version?.created_at ? new Date(version.created_at).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(version?.created_at) }}
                 </a-descriptions-item>
                 <a-descriptions-item label="更新时间">
-                  {{ version?.updated_at ? new Date(version.updated_at).toLocaleString('zh-CN') : '-' }}
+                  {{ formatDateTime(version?.updated_at) }}
                 </a-descriptions-item>
               </a-descriptions>
             </a-card>
@@ -170,6 +170,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
+import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {
