@@ -366,7 +366,7 @@ const loadRequirements = async () => {
   try {
     const params: any = {
       page: pagination.current,
-      page_size: pagination.pageSize
+      size: pagination.pageSize
     }
     if (searchForm.keyword) {
       params.keyword = searchForm.keyword

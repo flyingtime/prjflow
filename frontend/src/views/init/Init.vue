@@ -46,20 +46,48 @@
         </a-form>
       </div>
 
-      <!-- 第二步：扫码登录创建管理员 -->
+      <!-- 第二步：登录创建管理员 -->
       <div v-else-if="step === 2">
-        <div class="qr-section">
-          <a-divider orientation="left">管理员登录</a-divider>
-          <p class="hint">请使用微信扫码，扫码后会在微信内打开授权页面，确认后系统将自动创建管理员账号</p>
-          
-          <WeChatQRCode
-            :fetchQRCode="getInitQRCode"
-            initial-status-text="请使用微信扫码"
-            hint="扫码后会在微信内打开授权页面"
-            :show-auth-url="true"
-            @success="handleInitSuccess"
-          />
-        </div>
+        <a-tabs v-model:activeKey="loginType" centered>
+          <a-tab-pane key="wechat" tab="微信登录">
+            <div class="qr-section">
+              <p class="hint">请使用微信扫码，扫码后会在微信内打开授权页面，确认后系统将自动创建管理员账号</p>
+              
+              <WeChatQRCode
+                :fetchQRCode="getInitQRCode"
+                initial-status-text="请使用微信扫码"
+                hint="扫码后会在微信内打开授权页面"
+                :show-auth-url="true"
+                @success="handleInitSuccess"
+              />
+            </div>
+          </a-tab-pane>
+          <a-tab-pane key="password" tab="账号登录">
+            <a-form
+              :model="initForm"
+              :rules="initRules"
+              @finish="handlePasswordInit"
+              layout="vertical"
+            >
+              <p class="hint">请输入管理员账号信息，系统将自动创建管理员账号</p>
+              
+              <a-form-item name="username" label="用户名">
+                <a-input v-model:value="initForm.username" placeholder="请输入用户名" size="large" />
+              </a-form-item>
+              <a-form-item name="password" label="密码">
+                <a-input-password v-model:value="initForm.password" placeholder="请输入密码" size="large" />
+              </a-form-item>
+              <a-form-item name="nickname" label="昵称">
+                <a-input v-model:value="initForm.nickname" placeholder="请输入昵称" size="large" />
+              </a-form-item>
+              <a-form-item>
+                <a-button type="primary" html-type="submit" block size="large" :loading="loading">
+                  创建管理员并登录
+                </a-button>
+              </a-form-item>
+            </a-form>
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </a-card>
   </div>
@@ -73,6 +101,7 @@ import {
   checkInitStatus, 
   saveWeChatConfig, 
   getInitQRCode, 
+  initSystemWithPassword,
   type WeChatConfigRequest 
 } from '@/api/init'
 import { useAuthStore } from '@/stores/auth'
@@ -81,12 +110,19 @@ import WeChatQRCode from '@/components/WeChatQRCode.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 
-const step = ref(1) // 1: 配置微信, 2: 扫码登录
+const step = ref(1) // 1: 配置微信, 2: 登录创建管理员
 const loading = ref(false)
+const loginType = ref('wechat') // 默认微信登录
 
 const wechatConfig = ref<WeChatConfigRequest>({
   wechat_app_id: '',
   wechat_app_secret: ''
+})
+
+const initForm = ref({
+  username: '',
+  password: '',
+  nickname: ''
 })
 
 const wechatRules = {
@@ -96,6 +132,12 @@ const wechatRules = {
   wechat_app_secret: [
     { required: true, message: '请输入微信AppSecret', trigger: 'blur' }
   ]
+}
+
+const initRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }]
 }
 
 // 保存微信配置
@@ -112,7 +154,7 @@ const handleSaveWeChatConfig = async () => {
   }
 }
 
-// 处理初始化成功
+// 处理初始化成功（微信登录）
 const handleInitSuccess = (data: any) => {
   if (data.token && data.user) {
     // 保存token和用户信息
@@ -125,6 +167,35 @@ const handleInitSuccess = (data: any) => {
     setTimeout(() => {
       router.push('/dashboard')
     }, 1000)
+  }
+}
+
+// 处理密码登录初始化
+const handlePasswordInit = async () => {
+  loading.value = true
+  try {
+    const response = await initSystemWithPassword({
+      username: initForm.value.username,
+      password: initForm.value.password,
+      nickname: initForm.value.nickname
+    })
+    
+    if (response.token && response.user) {
+      // 保存token和用户信息
+      authStore.setToken(response.token)
+      authStore.setUser(response.user)
+      
+      message.success('系统初始化成功！')
+      
+      // 跳转到工作台
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 1000)
+    }
+  } catch (error: any) {
+    message.error(error.message || '初始化失败')
+  } finally {
+    loading.value = false
   }
 }
 

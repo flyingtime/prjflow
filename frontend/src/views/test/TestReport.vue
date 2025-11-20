@@ -210,7 +210,7 @@ import {
 } from '@/api/testReport'
 import { getTestCases, type TestCase } from '@/api/testCase'
 
-const router = useRouter()
+// const router = useRouter()
 const loading = ref(false)
 const testReports = ref<TestReport[]>([])
 const availableTestCases = ref<TestCase[]>([])
@@ -260,7 +260,7 @@ const loadTestReports = async () => {
   try {
     const params: any = {
       page: pagination.current,
-      page_size: pagination.pageSize
+      size: pagination.pageSize
     }
     if (searchForm.keyword) params.keyword = searchForm.keyword
     if (searchForm.result) params.result = searchForm.result
@@ -290,7 +290,7 @@ const loadStatistics = async () => {
 // 加载可用测试单列表
 const loadAvailableTestCases = async () => {
   try {
-    const res = await getTestCases({ page: 1, page_size: 1000 })
+    const res = await getTestCases({ page: 1, size: 1000 })
     availableTestCases.value = res.list
   } catch (error: any) {
     message.error(error.response?.data?.message || '加载测试单失败')

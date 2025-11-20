@@ -99,10 +99,10 @@ import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import AppHeader from '@/components/AppHeader.vue'
-import { getResourceCalendar, type ResourceCalendar } from '@/api/resource'
+import { getResourceCalendar } from '@/api/resource'
 import { getUsers } from '@/api/user'
 import { getProjects } from '@/api/project'
-import type { User } from '@/types/user'
+import type { User } from '@/api/user'
 import type { Project } from '@/api/project'
 
 const loading = ref(false)
@@ -127,7 +127,7 @@ const filterUserOption = (input: string, option: any) => {
 
 const loadUsers = async () => {
   try {
-    const res = await getUsers({ page_size: 1000 })
+    const res = await getUsers({ size: 1000 })
     users.value = res.list || []
   } catch (error: any) {
     message.error('加载用户列表失败: ' + (error.response?.data?.message || error.message))
@@ -136,7 +136,7 @@ const loadUsers = async () => {
 
 const loadProjects = async () => {
   try {
-    const res = await getProjects({ page_size: 1000 })
+    const res = await getProjects({ size: 1000 })
     projects.value = res.list || []
   } catch (error: any) {
     message.error('加载项目列表失败: ' + (error.response?.data?.message || error.message))

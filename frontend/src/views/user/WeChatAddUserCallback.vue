@@ -14,7 +14,7 @@ import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { addUserByWeChat } from '@/api/user'
 
-const route = useRoute()
+// const route = useRoute()
 
 const loading = ref(true)
 const messageText = ref('正在处理微信授权...')
@@ -31,7 +31,7 @@ onMounted(async () => {
   }
 
   try {
-    const response = await addUserByWeChat({ code, state })
+    await addUserByWeChat({ code, state })
     
     message.success('用户添加成功！')
     messageText.value = '用户添加成功，请返回用户管理页面查看'

@@ -570,8 +570,7 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import type { FormInstance } from 'ant-design-vue'
-import dayjs, { type Dayjs } from 'dayjs'
+import { type Dayjs } from 'dayjs'
 import { formatDateTime } from '@/utils/date'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -686,7 +685,7 @@ const loadBugs = async () => {
   try {
     const params: any = {
       page: pagination.current,
-      page_size: pagination.pageSize
+      size: pagination.pageSize
     }
     if (searchForm.keyword) {
       params.keyword = searchForm.keyword
@@ -861,7 +860,7 @@ const handleSubmit = async () => {
       assignee_ids: formData.assignee_ids,
       estimated_hours: formData.estimated_hours,
       actual_hours: formData.actual_hours,
-      work_date: formData.work_date && formData.work_date.isValid() ? formData.work_date.format('YYYY-MM-DD') : undefined
+      work_date: formData.work_date && typeof formData.work_date !== 'string' && 'isValid' in formData.work_date && (formData.work_date as Dayjs).isValid() ? (formData.work_date as Dayjs).format('YYYY-MM-DD') : (typeof formData.work_date === 'string' ? formData.work_date : undefined)
     }
     if (formData.id) {
       await updateBug(formData.id, data)
@@ -951,7 +950,7 @@ const loadVersionsForProject = async (projectId?: number) => {
   }
   try {
     versionLoading.value = true
-    const response = await getVersions({ project_id: pid, page_size: 1000 })
+    const response = await getVersions({ project_id: pid, size: 1000 })
     versions.value = response.list || []
   } catch (error: any) {
     console.error('加载版本列表失败:', error)

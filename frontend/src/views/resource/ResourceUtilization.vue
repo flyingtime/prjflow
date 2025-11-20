@@ -98,7 +98,7 @@
                   <a-progress
                     :percent="record.utilization"
                     :status="getUtilizationStatus(record.utilization)"
-                    :format="(percent) => `${percent?.toFixed(2)}%`"
+                    :format="(percent: number) => `${percent?.toFixed(2)}%`"
                   />
                 </template>
                 <template v-else-if="column.key === 'total_hours'">
@@ -117,15 +117,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import type { Dayjs } from 'dayjs'
-import dayjs from 'dayjs'
+// import dayjs from 'dayjs'
 import { DatePicker } from 'ant-design-vue'
 import AppHeader from '@/components/AppHeader.vue'
 
-const { RangePicker } = DatePicker
+// const { RangePicker } = DatePicker
 import { getResourceUtilization, type ResourceUtilization } from '@/api/resource'
 import { getUsers } from '@/api/user'
 import { getProjects } from '@/api/project'
-import type { User } from '@/types/user'
+import type { User } from '@/api/user'
 import type { Project } from '@/api/project'
 
 const loading = ref(false)
@@ -170,7 +170,7 @@ const getUtilizationStatus = (utilization: number) => {
 
 const loadUsers = async () => {
   try {
-    const res = await getUsers({ page_size: 1000 })
+    const res = await getUsers({ size: 1000 })
     users.value = res.list || []
   } catch (error: any) {
     message.error('加载用户列表失败: ' + (error.response?.data?.message || error.message))
@@ -179,7 +179,7 @@ const loadUsers = async () => {
 
 const loadProjects = async () => {
   try {
-    const res = await getProjects({ page_size: 1000 })
+    const res = await getProjects({ size: 1000 })
     projects.value = res.list || []
   } catch (error: any) {
     message.error('加载项目列表失败: ' + (error.response?.data?.message || error.message))

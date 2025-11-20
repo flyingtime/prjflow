@@ -71,7 +71,7 @@ export const getBugs = async (params?: {
   requirement_id?: number
   creator_id?: number
   page?: number
-  page_size?: number
+  size?: number
 }): Promise<BugListResponse> => {
   return request.get('/bugs', { params })
 }

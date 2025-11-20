@@ -45,7 +45,7 @@ export const getRequirements = async (params?: {
   assignee_id?: number
   creator_id?: number
   page?: number
-  page_size?: number
+  size?: number
 }): Promise<RequirementListResponse> => {
   return request.get('/requirements', { params })
 }

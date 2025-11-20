@@ -57,3 +57,14 @@ export const initSystem = async (data: InitRequest): Promise<InitResponse> => {
   return request.post('/init', data)
 }
 
+// 密码登录初始化
+export interface PasswordInitRequest {
+  username: string
+  password: string
+  nickname: string
+}
+
+export const initSystemWithPassword = async (data: PasswordInitRequest): Promise<InitResponse> => {
+  return request.post('/init/password', data)
+}
+

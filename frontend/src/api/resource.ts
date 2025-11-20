@@ -149,7 +149,7 @@ export const getResources = (params?: {
   project_id?: number
   role?: string
   page?: number
-  page_size?: number
+  size?: number
 }) => {
   return request.get<ResourceListResponse>('/resources', { params })
 }
@@ -203,7 +203,7 @@ export const getResourceAllocations = (params?: {
   start_date?: string
   end_date?: string
   page?: number
-  page_size?: number
+  size?: number
 }) => {
   return request.get<ResourceAllocationListResponse>('/resource-allocations', { params })
 }

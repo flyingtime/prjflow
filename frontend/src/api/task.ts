@@ -70,7 +70,7 @@ export const getTasks = async (params?: {
   assignee_id?: number
   creator_id?: number
   page?: number
-  page_size?: number
+  size?: number
 }): Promise<TaskListResponse> => {
   return request.get('/tasks', { params })
 }

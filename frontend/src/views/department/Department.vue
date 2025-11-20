@@ -164,7 +164,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+// import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -180,8 +180,8 @@ import {
 } from '@/api/department'
 import { getUsers, type User } from '@/api/user'
 
-const route = useRoute()
-const router = useRouter()
+// const route = useRoute()
+// const router = useRouter()
 
 const loading = ref(false)
 const submitting = ref(false)

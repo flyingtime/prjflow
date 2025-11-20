@@ -1,6 +1,9 @@
 import request from '../utils/request'
 import type { Role, Permission } from './user'
 
+// 重新导出类型
+export type { Role, Permission }
+
 // 角色相关API
 export const getRoles = async (): Promise<Role[]> => {
   return request.get('/permissions/roles')

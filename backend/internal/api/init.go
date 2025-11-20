@@ -303,3 +303,122 @@ func (h *InitHandler) GetInitQRCode(c *gin.Context) {
 		"expire_seconds": qrCode.ExpireSeconds,
 	})
 }
+
+// InitSystemWithPassword 通过密码登录完成初始化（第二步：创建管理员）
+func (h *InitHandler) InitSystemWithPassword(c *gin.Context) {
+	// 检查是否已经初始化
+	var existingConfig model.SystemConfig
+	result := h.db.Where("key = ?", "initialized").First(&existingConfig)
+	if result.Error == nil && existingConfig.Value == "true" {
+		utils.Error(c, 400, "系统已经初始化，无法重复初始化")
+		return
+	}
+
+	var req struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+		Nickname string `json:"nickname" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, 400, "参数错误: "+err.Error())
+		return
+	}
+
+	// 检查用户名是否已存在
+	var existingUser model.User
+	if err := h.db.Where("username = ?", req.Username).First(&existingUser).Error; err == nil {
+		utils.Error(c, 400, "用户名已存在")
+		return
+	}
+
+	// 开始事务
+	tx := h.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1. 创建管理员角色
+	var adminRole model.Role
+	if err := tx.Where("code = ?", "admin").First(&adminRole).Error; err == gorm.ErrRecordNotFound {
+		adminRole = model.Role{
+			Name:        "管理员",
+			Code:        "admin",
+			Description: "系统管理员，拥有所有权限",
+			Status:      1,
+		}
+		if err := tx.Create(&adminRole).Error; err != nil {
+			tx.Rollback()
+			utils.Error(c, utils.CodeError, "创建管理员角色失败")
+			return
+		}
+	}
+
+	// 2. 加密密码
+	hashedPassword, err := utils.HashPassword(req.Password)
+	if err != nil {
+		tx.Rollback()
+		utils.Error(c, utils.CodeError, "加密密码失败")
+		return
+	}
+
+	// 3. 创建管理员用户
+	adminUser := model.User{
+		Username: req.Username,
+		Nickname: req.Nickname,
+		Password: hashedPassword,
+		Status:   1,
+	}
+	if err := tx.Create(&adminUser).Error; err != nil {
+		tx.Rollback()
+		utils.Error(c, utils.CodeError, "创建管理员用户失败")
+		return
+	}
+
+	// 4. 分配管理员角色
+	if err := tx.Model(&adminUser).Association("Roles").Append(&adminRole); err != nil {
+		tx.Rollback()
+		utils.Error(c, utils.CodeError, "分配管理员角色失败")
+		return
+	}
+
+	// 5. 标记系统已初始化
+	initConfig := model.SystemConfig{
+		Key:   "initialized",
+		Value: "true",
+		Type:  "boolean",
+	}
+	if err := tx.Where("key = ?", "initialized").Assign(model.SystemConfig{Value: "true", Type: "boolean"}).FirstOrCreate(&initConfig).Error; err != nil {
+		tx.Rollback()
+		utils.Error(c, utils.CodeError, "保存初始化状态失败")
+		return
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		utils.Error(c, utils.CodeError, "初始化失败")
+		return
+	}
+
+	// 生成管理员Token
+	roleNames := []string{"admin"}
+	token, err := auth.GenerateToken(adminUser.ID, adminUser.Username, roleNames)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "生成Token失败")
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"message": "系统初始化成功",
+		"token":   token,
+		"user": gin.H{
+			"id":       adminUser.ID,
+			"username": adminUser.Username,
+			"nickname": adminUser.Nickname,
+			"avatar":   adminUser.Avatar,
+			"roles":    roleNames,
+		},
+	})
+}

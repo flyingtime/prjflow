@@ -465,7 +465,7 @@ const columns = [
 const modalVisible = ref(false)
 const modalTitle = ref('新增任务')
 const formRef = ref()
-const formData = reactive<CreateTaskRequest & { id?: number; start_date?: Dayjs; end_date?: Dayjs; due_date?: Dayjs; actual_hours?: number; work_date?: Dayjs }>({
+const formData = reactive<CreateTaskRequest & { id?: number; start_date?: Dayjs | undefined; end_date?: Dayjs | undefined; due_date?: Dayjs | undefined; actual_hours?: number; work_date?: Dayjs | undefined }>({
   title: '',
   description: '',
   status: 'todo',
@@ -532,7 +532,7 @@ const loadTasks = async () => {
   try {
     const params: any = {
       page: pagination.current,
-      page_size: pagination.pageSize
+      size: pagination.pageSize
     }
     if (searchForm.keyword) {
       params.keyword = searchForm.keyword
@@ -615,7 +615,7 @@ const loadRequirementsForProject = async () => {
   }
   try {
     taskLoading.value = true
-    const response = await getRequirements({ project_id: formData.project_id, page_size: 1000 })
+    const response = await getRequirements({ project_id: formData.project_id, size: 1000 })
     requirements.value = response.list || []
   } catch (error: any) {
     console.error('加载需求列表失败:', error)
@@ -693,19 +693,19 @@ const handleEdit = (record: Task) => {
   // 解析日期，确保日期有效
   if (record.start_date) {
     const startDate = dayjs(record.start_date)
-    formData.start_date = startDate.isValid() ? startDate : undefined
+    formData.start_date = startDate.isValid() ? (startDate as Dayjs) : undefined
   } else {
     formData.start_date = undefined
   }
   if (record.end_date) {
     const endDate = dayjs(record.end_date)
-    formData.end_date = endDate.isValid() ? endDate : undefined
+    formData.end_date = endDate.isValid() ? (endDate as Dayjs) : undefined
   } else {
     formData.end_date = undefined
   }
   if (record.due_date) {
     const dueDate = dayjs(record.due_date)
-    formData.due_date = dueDate.isValid() ? dueDate : undefined
+    formData.due_date = dueDate.isValid() ? (dueDate as Dayjs) : undefined
   } else {
     formData.due_date = undefined
   }

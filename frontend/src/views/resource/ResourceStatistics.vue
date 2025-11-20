@@ -217,7 +217,7 @@
                     <a-progress
                       :percent="record.utilization"
                       :stroke-color="record.utilization >= 80 ? '#52c41a' : record.utilization >= 60 ? '#faad14' : '#ff4d4f'"
-                      :format="(percent) => `${percent?.toFixed(2)}%`"
+                      :format="(percent: number) => `${percent?.toFixed(2)}%`"
                     />
                   </template>
                 </template>
@@ -234,15 +234,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import type { Dayjs } from 'dayjs'
-import dayjs from 'dayjs'
-import { DatePicker } from 'ant-design-vue'
+// import dayjs from 'dayjs'
+// import { DatePicker } from 'ant-design-vue'
 import AppHeader from '@/components/AppHeader.vue'
 
-const { RangePicker } = DatePicker
+// const { RangePicker } = DatePicker
 import { getResourceStatistics, getResourceUtilization, checkResourceConflict, type ResourceStatistics, type ResourceUtilization, type ResourceConflict } from '@/api/resource'
 import { getUsers } from '@/api/user'
 import { getProjects } from '@/api/project'
-import type { User } from '@/types/user'
+import type { User } from '@/api/user'
 import type { Project } from '@/api/project'
 
 const loading = ref(false)
@@ -310,7 +310,7 @@ const filterUserOption = (input: string, option: any) => {
 
 const loadUsers = async () => {
   try {
-    const res = await getUsers({ page_size: 1000 })
+    const res = await getUsers({ size: 1000 })
     users.value = res.list || []
   } catch (error: any) {
     message.error('加载用户列表失败: ' + (error.response?.data?.message || error.message))
@@ -319,7 +319,7 @@ const loadUsers = async () => {
 
 const loadProjects = async () => {
   try {
-    const res = await getProjects({ page_size: 1000 })
+    const res = await getProjects({ size: 1000 })
     projects.value = res.list || []
   } catch (error: any) {
     message.error('加载项目列表失败: ' + (error.response?.data?.message || error.message))

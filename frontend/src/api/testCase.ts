@@ -81,7 +81,7 @@ export const getTestCases = (params?: {
   type?: string
   creator_id?: number
   page?: number
-  page_size?: number
+  size?: number
 }) => {
   return request.get<TestCaseListResponse>('/test-cases', { params })
 }

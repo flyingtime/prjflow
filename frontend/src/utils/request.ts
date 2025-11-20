@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosRequestConfig } from 'axios'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '../stores/auth'
 import router from '../router'
@@ -7,7 +7,7 @@ import router from '../router'
 // 使用相对路径，通过 Vite 代理转发到后端
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
 
-const request: AxiosInstance = axios.create({
+const axiosInstance: AxiosInstance = axios.create({
   baseURL,
   timeout: 30000,
   headers: {
@@ -19,7 +19,7 @@ const request: AxiosInstance = axios.create({
 })
 
 // 请求拦截器
-request.interceptors.request.use(
+axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const authStore = useAuthStore()
     if (authStore.token && config.headers) {
@@ -33,7 +33,7 @@ request.interceptors.request.use(
 )
 
 // 响应拦截器
-request.interceptors.response.use(
+axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
     
@@ -79,6 +79,25 @@ request.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// 创建包装的 request 对象，确保类型正确
+const request = {
+  get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
+    return axiosInstance.get(url, config).then(res => res as unknown as T)
+  },
+  post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
+    return axiosInstance.post(url, data, config).then(res => res as unknown as T)
+  },
+  put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
+    return axiosInstance.put(url, data, config).then(res => res as unknown as T)
+  },
+  delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
+    return axiosInstance.delete(url, config).then(res => res as unknown as T)
+  },
+  patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
+    return axiosInstance.patch(url, data, config).then(res => res as unknown as T)
+  }
+}
 
 export default request
 

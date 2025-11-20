@@ -50,7 +50,7 @@ export const getTestReports = (params?: {
   creator_id?: number
   test_case_id?: number
   page?: number
-  page_size?: number
+  size?: number
 }) => {
   return request.get<TestReportListResponse>('/test-reports', { params })
 }

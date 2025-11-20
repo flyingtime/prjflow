@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -77,6 +78,7 @@ func main() {
 		initGroup.GET("/qrcode", initHandler.GetInitQRCode)            // 获取初始化二维码
 		initGroup.GET("/callback", initCallbackHandler.HandleCallback) // 微信回调处理
 		initGroup.POST("", initHandler.InitSystem)                     // 第二步：通过微信登录完成初始化（保留兼容）
+		initGroup.POST("/password", initHandler.InitSystemWithPassword) // 第二步：通过密码登录完成初始化
 	}
 
 	// 认证相关路由
@@ -285,6 +287,76 @@ func main() {
 		resourceAllocationGroup.POST("", resourceAllocationHandler.CreateResourceAllocation)
 		resourceAllocationGroup.PUT("/:id", resourceAllocationHandler.UpdateResourceAllocation)
 		resourceAllocationGroup.DELETE("/:id", resourceAllocationHandler.DeleteResourceAllocation)
+	}
+
+	// 静态文件服务（前端构建后的文件）
+	// 注意：必须在所有 API 路由之后，但在 catch-all 路由之前
+	// 获取前端 dist 目录路径（支持从项目根目录或 backend 目录运行）
+	var frontendDistPath string
+	// 尝试从项目根目录查找
+	if _, err := os.Stat("./frontend/dist"); err == nil {
+		frontendDistPath = "./frontend/dist"
+	} else if _, err := os.Stat("../frontend/dist"); err == nil {
+		// 从 backend 目录运行时
+		frontendDistPath = "../frontend/dist"
+	} else {
+		// 尝试获取可执行文件所在目录
+		exePath, err := os.Executable()
+		if err == nil {
+			exeDir := filepath.Dir(exePath)
+			// 尝试从可执行文件目录向上查找
+			for _, path := range []string{
+				filepath.Join(exeDir, "frontend", "dist"),
+				filepath.Join(exeDir, "..", "frontend", "dist"),
+				filepath.Join(exeDir, "..", "..", "frontend", "dist"),
+			} {
+				if _, err := os.Stat(path); err == nil {
+					frontendDistPath = path
+					break
+				}
+			}
+		}
+	}
+	
+	// 如果找到了前端 dist 目录，配置静态文件服务
+	if frontendDistPath != "" {
+		log.Printf("前端静态文件目录: %s", frontendDistPath)
+		// 提供静态资源文件（如 JS、CSS、图片等）
+		r.Static("/assets", filepath.Join(frontendDistPath, "assets"))
+		r.StaticFile("/vite.svg", filepath.Join(frontendDistPath, "vite.svg"))
+		
+		// SPA 路由处理：所有非 API 路由都返回 index.html
+		// 这样前端路由（如 /dashboard, /login 等）可以正常工作
+		r.NoRoute(func(c *gin.Context) {
+			// 如果请求的是 API 路径，返回 404
+			path := c.Request.URL.Path
+			if len(path) >= 4 && path[:4] == "/api" {
+				c.JSON(http.StatusNotFound, gin.H{
+					"code":    404,
+					"message": "API endpoint not found",
+				})
+				return
+			}
+			// 否则返回前端 index.html（用于 SPA 路由）
+			c.File(filepath.Join(frontendDistPath, "index.html"))
+		})
+	} else {
+		log.Println("警告: 未找到前端 dist 目录，静态文件服务未启用")
+		// 即使没有前端文件，也要处理 API 404
+		r.NoRoute(func(c *gin.Context) {
+			path := c.Request.URL.Path
+			if len(path) >= 4 && path[:4] == "/api" {
+				c.JSON(http.StatusNotFound, gin.H{
+					"code":    404,
+					"message": "API endpoint not found",
+				})
+			} else {
+				c.JSON(http.StatusNotFound, gin.H{
+					"code":    404,
+					"message": "Not found",
+				})
+			}
+		})
 	}
 
 	// 创建HTTP服务器

@@ -168,7 +168,8 @@ const loadProject = async () => {
   }
   projectId.value = id
   try {
-    project.value = await getProject(id)
+    const response = await getProject(id)
+    project.value = response.project
   } catch (error: any) {
     message.error(error.message || '加载项目信息失败')
   }

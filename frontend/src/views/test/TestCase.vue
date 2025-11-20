@@ -135,7 +135,7 @@
                   <a-progress
                     :percent="statistics.pass_rate || 0"
                     :stroke-color="statistics.pass_rate >= 80 ? '#52c41a' : statistics.pass_rate >= 60 ? '#faad14' : '#ff4d4f'"
-                    :format="(percent) => `${percent?.toFixed(2)}%`"
+                    :format="(percent: number) => `${percent?.toFixed(2)}%`"
                   />
                 </div>
               </a-card>
@@ -152,7 +152,7 @@
                   <a-progress
                     :percent="statistics.fail_rate || 0"
                     stroke-color="#ff4d4f"
-                    :format="(percent) => `${percent?.toFixed(2)}%`"
+                    :format="(percent: number) => `${percent?.toFixed(2)}%`"
                   />
                 </div>
               </a-card>
@@ -383,7 +383,7 @@ import {
 import { getProjects, type Project } from '@/api/project'
 import { getBugs, type Bug } from '@/api/bug'
 
-const router = useRouter()
+// const router = useRouter()
 const loading = ref(false)
 const testCases = ref<TestCase[]>([])
 const projects = ref<Project[]>([])
@@ -457,7 +457,7 @@ const loadTestCases = async () => {
   try {
     const params: any = {
       page: pagination.current,
-      page_size: pagination.pageSize
+      size: pagination.pageSize
     }
     if (searchForm.keyword) params.keyword = searchForm.keyword
     if (searchForm.project_id) params.project_id = searchForm.project_id
@@ -490,7 +490,7 @@ const loadStatistics = async () => {
 // 加载项目列表
 const loadProjects = async () => {
   try {
-    const res = await getProjects({ page: 1, page_size: 1000 })
+    const res = await getProjects({ page: 1, size: 1000 })
     projects.value = res.list
   } catch (error: any) {
     message.error(error.response?.data?.message || '加载项目失败')
@@ -500,7 +500,7 @@ const loadProjects = async () => {
 // 加载可用Bug列表
 const loadAvailableBugs = async () => {
   try {
-    const res = await getBugs({ page: 1, page_size: 1000 })
+    const res = await getBugs({ page: 1, size: 1000 })
     availableBugs.value = res.list
   } catch (error: any) {
     message.error(error.response?.data?.message || '加载Bug失败')

@@ -255,8 +255,8 @@ import { getDepartments, type Department } from '@/api/department'
 import { getRoles, assignUserRoles, type Role } from '@/api/permission'
 import request from '@/utils/request'
 
-const route = useRoute()
-const router = useRouter()
+// const route = useRoute()
+// const router = useRouter()
 
 const loading = ref(false)
 const submitting = ref(false)

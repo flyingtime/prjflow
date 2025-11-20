@@ -242,7 +242,7 @@ const columns = [
 const modalVisible = ref(false)
 const modalTitle = ref('新增构建')
 const formRef = ref()
-const formData = reactive<CreateBuildRequest & { id?: number; build_time?: Dayjs }>({
+const formData = reactive<CreateBuildRequest & { id?: number; build_time?: Dayjs | undefined }>({
   build_number: '',
   status: 'pending',
   branch: '',
@@ -262,7 +262,7 @@ const loadBuilds = async () => {
   try {
     const params: any = {
       page: pagination.current,
-      page_size: pagination.pageSize
+      size: pagination.pageSize
     }
     if (searchForm.keyword) params.keyword = searchForm.keyword
     if (searchForm.project_id) params.project_id = searchForm.project_id
@@ -281,7 +281,7 @@ const loadBuilds = async () => {
 // 加载项目列表
 const loadProjects = async () => {
   try {
-    const res = await getProjects({ page: 1, page_size: 1000 })
+    const res = await getProjects({ page: 1, size: 1000 })
     projects.value = res.list
   } catch (error: any) {
     message.error(error.response?.data?.message || '加载项目失败')
@@ -332,7 +332,7 @@ const handleEdit = (record: Build) => {
   formData.commit = record.commit || ''
   formData.project_id = record.project_id
   if (record.build_time) {
-    formData.build_time = dayjs(record.build_time)
+    formData.build_time = dayjs(record.build_time) as Dayjs | undefined
   } else {
     formData.build_time = undefined
   }

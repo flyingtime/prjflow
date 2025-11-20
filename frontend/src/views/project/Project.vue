@@ -226,7 +226,7 @@
             <template v-else-if="column.key === 'role'">
               <a-select
                 :value="record.role"
-                @change="(value) => handleUpdateMemberRole(record.id, value)"
+                @change="(value: any) => handleUpdateMemberRole(record.id, value)"
                 style="width: 120px"
               >
                 <a-select-option value="owner">负责人</a-select-option>
@@ -286,7 +286,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -308,7 +308,6 @@ import {
 import { getUsers, type User } from '@/api/user'
 import { getTags, createTag, type Tag } from '@/api/tag'
 
-const route = useRoute()
 const router = useRouter()
 
 const projectLoading = ref(false)
@@ -360,7 +359,7 @@ const memberColumns = [
 const projectModalVisible = ref(false)
 const projectModalTitle = ref('新增项目')
 const projectFormRef = ref()
-const projectFormData = reactive<CreateProjectRequest & { id?: number; start_date?: Dayjs; end_date?: Dayjs }>({
+const projectFormData = reactive<CreateProjectRequest & { id?: number; start_date?: Dayjs | undefined; end_date?: Dayjs | undefined }>({
   name: '',
   code: '',
   description: '',
@@ -513,10 +512,10 @@ const handleEditProject = (record: Project) => {
     tag_ids: record.tags ? record.tags.map(tag => tag.id) : []
   })
   if (record.start_date) {
-    projectFormData.start_date = dayjs(record.start_date)
+    projectFormData.start_date = dayjs(record.start_date) as Dayjs | undefined
   }
   if (record.end_date) {
-    projectFormData.end_date = dayjs(record.end_date)
+    projectFormData.end_date = dayjs(record.end_date) as Dayjs | undefined
   }
   projectModalVisible.value = true
 }

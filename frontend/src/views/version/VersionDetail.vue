@@ -164,8 +164,8 @@ import {
   type Version
 } from '@/api/version'
 
-const route = useRoute()
-const router = useRouter()
+// const route = useRoute()
+// const router = useRouter()
 const loading = ref(false)
 const version = ref<Version | null>(null)
 

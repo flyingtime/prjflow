@@ -48,7 +48,7 @@ export const getBuilds = (params?: {
   branch?: string
   creator_id?: number
   page?: number
-  page_size?: number
+  size?: number
 }) => {
   return request.get<BuildListResponse>('/builds', { params })
 }

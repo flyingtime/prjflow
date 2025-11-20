@@ -105,7 +105,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message, Modal } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 import { LogoutOutlined, LockOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { changePassword } from '@/api/auth'

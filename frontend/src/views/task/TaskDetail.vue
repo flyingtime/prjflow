@@ -178,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
@@ -191,7 +191,8 @@ import {
   updateTaskStatus,
   deleteTask,
   updateTaskProgress,
-  type Task
+  type Task,
+  type UpdateTaskProgressRequest
 } from '@/api/task'
 
 const route = useRoute()

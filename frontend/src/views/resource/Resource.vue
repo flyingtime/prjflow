@@ -328,7 +328,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { FormInstance } from 'ant-design-vue'
@@ -355,7 +355,7 @@ import { getUsers } from '@/api/user'
 import { getProjects } from '@/api/project'
 import { getTasks } from '@/api/task'
 import { getBugs } from '@/api/bug'
-import type { User } from '@/types/user'
+import type { User } from '@/api/user'
 import type { Project } from '@/api/project'
 import type { Task } from '@/api/task'
 import type { Bug } from '@/api/bug'
@@ -438,9 +438,9 @@ const allocationColumns = [
 const allocationFormVisible = ref(false)
 const allocationModalTitle = ref('新增分配')
 const allocationFormRef = ref<FormInstance>()
-const allocationFormData = reactive<CreateResourceAllocationRequest & { id?: number; date?: Dayjs }>({
+const allocationFormData = reactive<CreateResourceAllocationRequest & { id?: number; date?: Dayjs | undefined }>({
   resource_id: 0,
-  date: undefined as Dayjs | undefined,
+  date: undefined,
   hours: 0,
   task_id: undefined,
   bug_id: undefined,
@@ -484,7 +484,7 @@ const disabledDate = (current: Dayjs) => {
 
 const loadUsers = async () => {
   try {
-    const res = await getUsers({ page_size: 1000 })
+    const res = await getUsers({ size: 1000 })
     users.value = res.list || []
   } catch (error: any) {
     message.error('加载用户列表失败: ' + (error.response?.data?.message || error.message))
@@ -493,7 +493,7 @@ const loadUsers = async () => {
 
 const loadProjects = async () => {
   try {
-    const res = await getProjects({ page_size: 1000 })
+    const res = await getProjects({ size: 1000 })
     projects.value = res.list || []
   } catch (error: any) {
     message.error('加载项目列表失败: ' + (error.response?.data?.message || error.message))
@@ -504,7 +504,7 @@ const loadTasksForProject = async (projectId?: number) => {
   if (!projectId) return
   tasksLoading.value = true
   try {
-    const res = await getTasks({ project_id: projectId, page_size: 1000 })
+    const res = await getTasks({ project_id: projectId, size: 1000 })
     tasks.value = res.list || []
   } catch (error: any) {
     message.error('加载任务列表失败: ' + (error.response?.data?.message || error.message))
@@ -517,7 +517,7 @@ const loadBugsForProject = async (projectId?: number) => {
   if (!projectId) return
   bugsLoading.value = true
   try {
-    const res = await getBugs({ project_id: projectId, page_size: 1000 })
+    const res = await getBugs({ project_id: projectId, size: 1000 })
     bugs.value = res.list || []
   } catch (error: any) {
     message.error('加载Bug列表失败: ' + (error.response?.data?.message || error.message))
@@ -541,7 +541,7 @@ const loadResources = async () => {
   try {
     const params: any = {
       page: pagination.current,
-      page_size: pagination.pageSize
+      size: pagination.pageSize
     }
     if (searchForm.user_id) params.user_id = searchForm.user_id
     if (searchForm.project_id) params.project_id = searchForm.project_id
@@ -564,7 +564,7 @@ const loadAllocations = async () => {
     const params: any = {
       resource_id: currentResource.value.id,
       page: allocationPagination.current,
-      page_size: allocationPagination.pageSize
+      size: allocationPagination.pageSize
     }
     const res = await getResourceAllocations(params)
     allocations.value = res.list || []
@@ -694,7 +694,7 @@ const handleCreateAllocation = () => {
   allocationModalTitle.value = '新增分配'
   allocationFormData.id = undefined
   allocationFormData.resource_id = currentResource.value.id
-  allocationFormData.date = undefined
+  allocationFormData.date = undefined as Dayjs | undefined
   allocationFormData.hours = 0
   allocationFormData.task_id = undefined
   allocationFormData.bug_id = undefined
@@ -712,9 +712,9 @@ const handleEditAllocation = (record: ResourceAllocation) => {
   allocationFormData.id = record.id
   allocationFormData.resource_id = record.resource_id
   if (record.date) {
-    allocationFormData.date = dayjs(record.date)
+    allocationFormData.date = dayjs(record.date) as Dayjs | undefined
   } else {
-    allocationFormData.date = undefined
+    allocationFormData.date = undefined as Dayjs | undefined
   }
   allocationFormData.hours = record.hours
   allocationFormData.task_id = record.task_id
@@ -732,14 +732,14 @@ const handleAllocationSubmit = async () => {
   try {
     await allocationFormRef.value?.validate()
 
-    if (!allocationFormData.date || !allocationFormData.date.isValid()) {
+    if (!allocationFormData.date || !(allocationFormData.date as Dayjs).isValid()) {
       message.error('请选择有效的日期')
       return
     }
 
     if (allocationFormData.id) {
       const updateData: UpdateResourceAllocationRequest = {
-        date: allocationFormData.date.format('YYYY-MM-DD'),
+        date: (allocationFormData.date as Dayjs).format('YYYY-MM-DD'),
         hours: allocationFormData.hours,
         task_id: allocationFormData.task_id,
         bug_id: allocationFormData.bug_id,
@@ -751,7 +751,7 @@ const handleAllocationSubmit = async () => {
     } else {
       const createData: CreateResourceAllocationRequest = {
         resource_id: allocationFormData.resource_id,
-        date: allocationFormData.date.format('YYYY-MM-DD'),
+        date: (allocationFormData.date as Dayjs).format('YYYY-MM-DD'),
         hours: allocationFormData.hours,
         task_id: allocationFormData.task_id,
         bug_id: allocationFormData.bug_id,

@@ -206,13 +206,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getDashboard, type DashboardData } from '@/api/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'
 
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 

@@ -26,8 +26,8 @@
               <a-descriptions :column="2" bordered>
                 <a-descriptions-item label="项目名称">{{ project?.name }}</a-descriptions-item>
                 <a-descriptions-item label="项目编码">{{ project?.code }}</a-descriptions-item>
-                <a-descriptions-item label="项目集">{{ project?.project_group?.name || '-' }}</a-descriptions-item>
-                <a-descriptions-item label="关联产品">{{ project?.product?.name || '-' }}</a-descriptions-item>
+                <!-- <a-descriptions-item label="项目集">{{ project?.project_group?.name || '-' }}</a-descriptions-item> -->
+                <!-- <a-descriptions-item label="关联产品">{{ project?.product?.name || '-' }}</a-descriptions-item> -->
                 <a-descriptions-item label="开始日期">{{ project?.start_date || '-' }}</a-descriptions-item>
                 <a-descriptions-item label="结束日期">{{ project?.end_date || '-' }}</a-descriptions-item>
                 <a-descriptions-item label="状态">

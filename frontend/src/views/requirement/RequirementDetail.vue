@@ -50,7 +50,7 @@
                   </a-tag>
                 </a-descriptions-item>
                 <a-descriptions-item label="产品">
-                  {{ requirement?.product?.name || '-' }}
+                  <!-- {{ requirement?.product?.name || '-' }} -->
                 </a-descriptions-item>
                 <a-descriptions-item label="项目">
                   {{ requirement?.project?.name || '-' }}
@@ -92,6 +92,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
+import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {

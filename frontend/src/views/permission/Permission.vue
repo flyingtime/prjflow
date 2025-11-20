@@ -198,7 +198,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+// import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -214,8 +214,8 @@ import {
   type Permission
 } from '@/api/permission'
 
-const route = useRoute()
-const router = useRouter()
+// const route = useRoute()
+// const router = useRouter()
 const activeTab = ref('roles')
 
 const roleLoading = ref(false)
@@ -342,7 +342,12 @@ const handleRoleSubmit = async () => {
       await updateRole(roleFormData.id, roleFormData)
       message.success('更新成功')
     } else {
-      await createRole(roleFormData)
+      await createRole({
+        name: roleFormData.name || '',
+        code: roleFormData.code || '',
+        description: roleFormData.description,
+        status: roleFormData.status
+      })
       message.success('创建成功')
     }
     
@@ -378,7 +383,7 @@ const handleDeleteRole = async (id: number) => {
 // 分配权限
 const handleAssignPermissions = (record: Role) => {
   currentRoleId.value = record.id
-  selectedPermissionIds.value = record.permissions?.map(p => p.id) || []
+  selectedPermissionIds.value = record.permissions?.map((p: any) => p.id) || []
   assignModalVisible.value = true
 }
 
@@ -439,7 +444,14 @@ const handlePermissionSubmit = async () => {
       // 更新权限（如果后端支持）
       message.warning('更新权限功能待实现')
     } else {
-      await createPermission(permissionFormData)
+      await createPermission({
+        code: permissionFormData.code || '',
+        name: permissionFormData.name || '',
+        resource: permissionFormData.resource,
+        action: permissionFormData.action,
+        description: permissionFormData.description,
+        status: permissionFormData.status
+      })
       message.success('创建成功')
     }
     

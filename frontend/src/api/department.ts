@@ -1,6 +1,9 @@
 import request from '../utils/request'
 import type { Department } from './user'
 
+// 重新导出类型
+export type { Department }
+
 // 获取部门列表（树形结构）
 export const getDepartments = async (): Promise<Department[]> => {
   return request.get('/departments')

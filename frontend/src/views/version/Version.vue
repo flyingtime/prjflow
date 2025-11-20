@@ -250,7 +250,6 @@ import {
   createVersion,
   updateVersion,
   deleteVersion,
-  updateVersionStatus,
   releaseVersion,
   type Version,
   type CreateVersionRequest,
@@ -260,7 +259,7 @@ import { getProjects, type Project } from '@/api/project'
 import { getRequirements, type Requirement } from '@/api/requirement'
 import { getBugs, type Bug } from '@/api/bug'
 
-const router = useRouter()
+// const router = useRouter()
 const loading = ref(false)
 const versions = ref<Version[]>([])
 const projects = ref<Project[]>([])
@@ -296,7 +295,7 @@ const columns = [
 const modalVisible = ref(false)
 const modalTitle = ref('新增版本')
 const formRef = ref()
-const formData = reactive<CreateVersionRequest & { id?: number; release_date?: Dayjs }>({
+const formData = reactive<CreateVersionRequest & { id?: number; release_date?: Dayjs | undefined }>({
   version_number: '',
   release_notes: '',
   status: 'draft',
@@ -317,7 +316,7 @@ const loadVersions = async () => {
   try {
     const params: any = {
       page: pagination.current,
-      page_size: pagination.pageSize
+      size: pagination.pageSize
     }
     if (searchForm.keyword) params.keyword = searchForm.keyword
     if (searchForm.project_id) params.project_id = searchForm.project_id
@@ -336,7 +335,7 @@ const loadVersions = async () => {
 // 加载项目列表
 const loadProjects = async () => {
   try {
-    const res = await getProjects({ page: 1, page_size: 1000 })
+    const res = await getProjects({ page: 1, size: 1000 })
     projects.value = res.list
   } catch (error: any) {
     message.error(error.response?.data?.message || '加载项目失败')
@@ -347,8 +346,8 @@ const loadProjects = async () => {
 const loadAvailableRequirementsAndBugs = async () => {
   try {
     const [reqRes, bugRes] = await Promise.all([
-      getRequirements({ page: 1, page_size: 1000 }),
-      getBugs({ page: 1, page_size: 1000 })
+      getRequirements({ page: 1, size: 1000 }),
+      getBugs({ page: 1, size: 1000 })
     ])
     availableRequirements.value = reqRes.list
     availableBugs.value = bugRes.list

@@ -46,7 +46,7 @@ export const getVersions = (params?: {
   project_id?: number
   status?: string
   page?: number
-  page_size?: number
+  size?: number
 }) => {
   return request.get<VersionListResponse>('/versions', { params })
 }
