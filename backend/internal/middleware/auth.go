@@ -4,8 +4,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"project-management/internal/utils"
 	"project-management/pkg/auth"
+	"project-management/pkg/permission"
 )
 
 func Auth() gin.HandlerFunc {
@@ -36,6 +38,57 @@ func Auth() gin.HandlerFunc {
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("roles", claims.Roles)
+
+		// 从上下文获取数据库连接（如果存在）
+		if db, exists := c.Get("db"); exists {
+			if dbConn, ok := db.(*gorm.DB); ok {
+				// 加载用户权限到上下文（提高性能）
+				permCodes, err := permission.GetRolePermissions(dbConn, claims.Roles)
+				if err == nil {
+					c.Set("permissions", permCodes)
+				}
+			}
+		}
+
+		c.Next()
+	}
+}
+
+// AuthWithDB 带数据库连接的认证中间件（用于加载用户权限）
+func AuthWithDB(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			utils.Error(c, 401, "未授权，请先登录")
+			c.Abort()
+			return
+		}
+
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			utils.Error(c, 401, "无效的授权头")
+			c.Abort()
+			return
+		}
+
+		token := parts[1]
+		claims, err := auth.ParseToken(token)
+		if err != nil {
+			utils.Error(c, 401, "无效的Token")
+			c.Abort()
+			return
+		}
+
+		// 将用户信息存储到上下文
+		c.Set("user_id", claims.UserID)
+		c.Set("username", claims.Username)
+		c.Set("roles", claims.Roles)
+
+		// 加载用户权限到上下文
+		permCodes, err := permission.GetRolePermissions(db, claims.Roles)
+		if err == nil {
+			c.Set("permissions", permCodes)
+		}
 
 		c.Next()
 	}

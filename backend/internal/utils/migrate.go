@@ -80,7 +80,105 @@ func AutoMigrate(db *gorm.DB) error {
 		cleanupTemporaryTables(db)
 	}
 	
+	// 初始化默认权限和角色
+	if err := initDefaultPermissionsAndRoles(db); err != nil {
+		return err
+	}
+	
 	return err
+}
+
+// initDefaultPermissionsAndRoles 初始化默认权限和角色
+func initDefaultPermissionsAndRoles(db *gorm.DB) error {
+	// 定义默认权限
+	defaultPermissions := []model.Permission{
+		// 项目管理权限
+		{Code: "project:create", Name: "创建项目", Resource: "project", Action: "create", Description: "创建新项目", Status: 1},
+		{Code: "project:read", Name: "查看项目", Resource: "project", Action: "read", Description: "查看项目信息", Status: 1},
+		{Code: "project:update", Name: "更新项目", Resource: "project", Action: "update", Description: "更新项目信息", Status: 1},
+		{Code: "project:delete", Name: "删除项目", Resource: "project", Action: "delete", Description: "删除项目", Status: 1},
+		{Code: "project:manage", Name: "管理项目", Resource: "project", Action: "manage", Description: "管理项目成员和设置", Status: 1},
+		
+		// 需求管理权限
+		{Code: "requirement:create", Name: "创建需求", Resource: "requirement", Action: "create", Description: "创建新需求", Status: 1},
+		{Code: "requirement:read", Name: "查看需求", Resource: "requirement", Action: "read", Description: "查看需求信息", Status: 1},
+		{Code: "requirement:update", Name: "更新需求", Resource: "requirement", Action: "update", Description: "更新需求信息", Status: 1},
+		{Code: "requirement:delete", Name: "删除需求", Resource: "requirement", Action: "delete", Description: "删除需求", Status: 1},
+		
+		// Bug管理权限
+		{Code: "bug:create", Name: "创建Bug", Resource: "bug", Action: "create", Description: "创建新Bug", Status: 1},
+		{Code: "bug:read", Name: "查看Bug", Resource: "bug", Action: "read", Description: "查看Bug信息", Status: 1},
+		{Code: "bug:update", Name: "更新Bug", Resource: "bug", Action: "update", Description: "更新Bug信息", Status: 1},
+		{Code: "bug:delete", Name: "删除Bug", Resource: "bug", Action: "delete", Description: "删除Bug", Status: 1},
+		{Code: "bug:assign", Name: "分配Bug", Resource: "bug", Action: "assign", Description: "分配Bug给处理人", Status: 1},
+		
+		// 任务管理权限
+		{Code: "task:create", Name: "创建任务", Resource: "task", Action: "create", Description: "创建新任务", Status: 1},
+		{Code: "task:read", Name: "查看任务", Resource: "task", Action: "read", Description: "查看任务信息", Status: 1},
+		{Code: "task:update", Name: "更新任务", Resource: "task", Action: "update", Description: "更新任务信息", Status: 1},
+		{Code: "task:delete", Name: "删除任务", Resource: "task", Action: "delete", Description: "删除任务", Status: 1},
+		
+		// 用户管理权限
+		{Code: "user:create", Name: "创建用户", Resource: "user", Action: "create", Description: "创建新用户", Status: 1},
+		{Code: "user:read", Name: "查看用户", Resource: "user", Action: "read", Description: "查看用户信息", Status: 1},
+		{Code: "user:update", Name: "更新用户", Resource: "user", Action: "update", Description: "更新用户信息", Status: 1},
+		{Code: "user:delete", Name: "删除用户", Resource: "user", Action: "delete", Description: "删除用户", Status: 1},
+		
+		// 权限管理权限
+		{Code: "permission:manage", Name: "管理权限", Resource: "permission", Action: "manage", Description: "管理角色和权限", Status: 1},
+		
+		// 部门管理权限
+		{Code: "department:create", Name: "创建部门", Resource: "department", Action: "create", Description: "创建新部门", Status: 1},
+		{Code: "department:read", Name: "查看部门", Resource: "department", Action: "read", Description: "查看部门信息", Status: 1},
+		{Code: "department:update", Name: "更新部门", Resource: "department", Action: "update", Description: "更新部门信息", Status: 1},
+		{Code: "department:delete", Name: "删除部门", Resource: "department", Action: "delete", Description: "删除部门", Status: 1},
+		
+		// 资源管理权限
+		{Code: "resource:read", Name: "查看资源", Resource: "resource", Action: "read", Description: "查看资源统计", Status: 1},
+		{Code: "resource:manage", Name: "管理资源", Resource: "resource", Action: "manage", Description: "管理资源分配", Status: 1},
+	}
+
+	// 创建或更新权限
+	for _, perm := range defaultPermissions {
+		var existingPerm model.Permission
+		if err := db.Where("code = ?", perm.Code).First(&existingPerm).Error; err != nil {
+			// 权限不存在，创建
+			if err := db.Create(&perm).Error; err != nil {
+				return err
+			}
+		} else {
+			// 权限已存在，更新（保留现有ID）
+			perm.ID = existingPerm.ID
+			if err := db.Save(&perm).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	// 创建管理员角色（如果不存在）
+	var adminRole model.Role
+	if err := db.Where("code = ?", "admin").First(&adminRole).Error; err != nil {
+		adminRole = model.Role{
+			Name:        "管理员",
+			Code:        "admin",
+			Description: "系统管理员，拥有所有权限",
+			Status:      1,
+		}
+		if err := db.Create(&adminRole).Error; err != nil {
+			return err
+		}
+	}
+
+	// 为管理员角色分配所有权限
+	var allPermissions []model.Permission
+	if err := db.Find(&allPermissions).Error; err != nil {
+		return err
+	}
+	if err := db.Model(&adminRole).Association("Permissions").Replace(allPermissions); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // cleanupTemporaryTables 清理所有 GORM 重建表失败时留下的临时表

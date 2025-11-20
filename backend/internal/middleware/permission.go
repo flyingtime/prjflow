@@ -5,11 +5,29 @@ import (
 	"project-management/pkg/permission"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // RequirePermission 要求特定权限
-func RequirePermission(permCode string) gin.HandlerFunc {
+func RequirePermission(db *gorm.DB, permCode string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 优先从上下文获取权限列表（如果已加载）
+		if perms, exists := c.Get("permissions"); exists {
+			if permList, ok := perms.([]string); ok {
+				// 检查权限列表中是否包含所需权限
+				for _, perm := range permList {
+					if perm == permCode {
+						c.Next()
+						return
+					}
+				}
+				utils.Error(c, 403, "没有权限")
+				c.Abort()
+				return
+			}
+		}
+
+		// 如果上下文没有权限列表，从角色查询
 		roles, exists := c.Get("roles")
 		if !exists {
 			utils.Error(c, 403, "没有权限")
@@ -25,7 +43,13 @@ func RequirePermission(permCode string) gin.HandlerFunc {
 		}
 
 		// 检查用户是否有权限
-		hasPermission := permission.CheckPermission(roleList, permCode)
+		hasPermission, err := permission.CheckPermissionWithDB(db, roleList, permCode)
+		if err != nil {
+			utils.Error(c, utils.CodeError, "权限检查失败")
+			c.Abort()
+			return
+		}
+
 		if !hasPermission {
 			utils.Error(c, 403, "没有权限")
 			c.Abort()

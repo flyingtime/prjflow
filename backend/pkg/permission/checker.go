@@ -5,10 +5,11 @@ import (
 	"project-management/internal/model"
 )
 
-// CheckPermission 检查用户角色是否有权限
+// CheckPermission 检查用户角色是否有权限（需要传入db）
+// 注意：这个函数已被废弃，请使用 CheckPermissionWithDB
 func CheckPermission(roles []string, permCode string) bool {
-	// 这里应该从数据库查询角色权限
-	// 为了简化，这里先返回true，实际实现需要查询数据库
+	// 为了向后兼容，暂时返回 true
+	// 实际应该使用 CheckPermissionWithDB
 	return true
 }
 

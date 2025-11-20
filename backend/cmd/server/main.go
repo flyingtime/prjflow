@@ -47,6 +47,12 @@ func main() {
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
+	
+	// 将数据库连接存储到上下文（供中间件使用）
+	r.Use(func(c *gin.Context) {
+		c.Set("db", db)
+		c.Next()
+	})
 
 	// 健康检查接口
 	r.GET("/health", func(c *gin.Context) {
@@ -100,25 +106,39 @@ func main() {
 	permHandler := api.NewPermissionHandler(db)
 	permGroup := r.Group("/api/permissions", middleware.Auth())
 	{
+		// 角色管理
 		permGroup.GET("/roles", permHandler.GetRoles)
+		permGroup.GET("/roles/:id", permHandler.GetRole)
 		permGroup.POST("/roles", permHandler.CreateRole)
 		permGroup.PUT("/roles/:id", permHandler.UpdateRole)
 		permGroup.DELETE("/roles/:id", permHandler.DeleteRole)
-		permGroup.GET("/permissions", permHandler.GetPermissions)
-		permGroup.POST("/permissions", permHandler.CreatePermission)
+		permGroup.GET("/roles/:id/permissions", permHandler.GetRolePermissions)
 		permGroup.POST("/roles/:id/permissions", permHandler.AssignRolePermissions)
+		
+		// 权限管理
+		permGroup.GET("/permissions", permHandler.GetPermissions)
+		permGroup.GET("/permissions/:id", permHandler.GetPermission)
+		permGroup.POST("/permissions", permHandler.CreatePermission)
+		permGroup.PUT("/permissions/:id", permHandler.UpdatePermission)
+		permGroup.DELETE("/permissions/:id", permHandler.DeletePermission)
+		
+		// 用户角色管理
+		permGroup.GET("/users/:id/roles", permHandler.GetUserRoles)
 		permGroup.POST("/users/:id/roles", permHandler.AssignUserRoles)
+		
+		// 当前用户权限
+		permGroup.GET("/me", permHandler.GetUserPermissions)
 	}
 
 	// 用户管理路由
 	userGroup := r.Group("/api/users", middleware.Auth())
 	{
-		userGroup.GET("", userHandler.GetUsers)
-		userGroup.GET("/:id", userHandler.GetUser)
-		userGroup.POST("", userHandler.CreateUser)
-		userGroup.PUT("/:id", userHandler.UpdateUser)
-		userGroup.DELETE("/:id", userHandler.DeleteUser)
-		userGroup.POST("/wechat/add", userHandler.AddUserByWeChat) // 扫码添加用户
+		userGroup.GET("", userHandler.GetUsers) // 查看用户列表
+		userGroup.GET("/:id", userHandler.GetUser) // 查看用户详情
+		userGroup.POST("", middleware.RequirePermission(db, "user:create"), userHandler.CreateUser) // 创建用户需要权限
+		userGroup.PUT("/:id", middleware.RequirePermission(db, "user:update"), userHandler.UpdateUser) // 更新用户需要权限
+		userGroup.DELETE("/:id", middleware.RequirePermission(db, "user:delete"), userHandler.DeleteUser) // 删除用户需要权限
+		userGroup.POST("/wechat/add", middleware.RequirePermission(db, "user:create"), userHandler.AddUserByWeChat) // 扫码添加用户需要权限
 	}
 
 	// 部门管理路由
