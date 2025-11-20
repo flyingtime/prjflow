@@ -3,11 +3,12 @@ package middleware
 import (
 	"strings"
 
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 	"project-management/internal/utils"
 	"project-management/pkg/auth"
 	"project-management/pkg/permission"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func Auth() gin.HandlerFunc {
@@ -111,4 +112,3 @@ func AuthWithDB(db *gorm.DB) gin.HandlerFunc {
 		c.Next()
 	}
 }
-
