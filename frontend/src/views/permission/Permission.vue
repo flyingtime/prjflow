@@ -184,14 +184,16 @@
       @ok="handleAssignSubmit"
       @cancel="assignModalVisible = false"
       :confirm-loading="assignSubmitting"
+      :width="600"
     >
-      <a-checkbox-group v-model:value="selectedPermissionIds" style="width: 100%">
-        <a-row>
-          <a-col :span="12" v-for="perm in permissions" :key="perm.id">
-            <a-checkbox :value="perm.id">{{ perm.name }}</a-checkbox>
-          </a-col>
-        </a-row>
-      </a-checkbox-group>
+      <a-tree
+        v-model:checkedKeys="selectedPermissionIds"
+        checkable
+        :tree-data="permissionTreeData"
+        :field-names="{ children: 'children', title: 'title', key: 'key' }"
+        :default-expand-all="true"
+        :check-strictly="false"
+      />
     </a-modal>
   </div>
 </template>
@@ -208,7 +210,10 @@ import {
   updateRole,
   deleteRole,
   getPermissions,
+  getRolePermissions,
   createPermission,
+  updatePermission,
+  deletePermission,
   assignRolePermissions,
   type Role,
   type Permission
@@ -279,8 +284,75 @@ const permissionFormRules = {
 }
 
 const assignModalVisible = ref(false)
-const selectedPermissionIds = ref<number[]>([])
+const selectedPermissionIds = ref<(number | string)[]>([])
 const currentRoleId = ref<number>()
+
+// 权限树数据
+interface PermissionTreeNode {
+  key: number | string
+  title: string
+  children?: PermissionTreeNode[]
+}
+
+const permissionTreeData = ref<PermissionTreeNode[]>([])
+
+// 将权限列表转换为树形结构
+const buildPermissionTree = (perms: Permission[]): PermissionTreeNode[] => {
+  // 按资源分组
+  const resourceMap = new Map<string, Permission[]>()
+  
+  perms.forEach(perm => {
+    const resource = perm.resource || '其他'
+    if (!resourceMap.has(resource)) {
+      resourceMap.set(resource, [])
+    }
+    resourceMap.get(resource)!.push(perm)
+  })
+  
+  // 构建树形结构
+  const tree: PermissionTreeNode[] = []
+  resourceMap.forEach((perms, resource) => {
+    const children: PermissionTreeNode[] = perms.map(perm => ({
+      key: perm.id,
+      title: `${perm.name} (${perm.action || perm.code})`
+    }))
+    
+    tree.push({
+      key: `resource-${resource}`,
+      title: getResourceName(resource),
+      children
+    })
+  })
+  
+  // 按资源名称排序
+  tree.sort((a, b) => a.title.localeCompare(b.title))
+  
+  return tree
+}
+
+// 获取资源的中文名称
+const getResourceName = (resource: string): string => {
+  const resourceNames: Record<string, string> = {
+    project: '项目',
+    requirement: '需求',
+    bug: 'Bug',
+    task: '任务',
+    user: '用户',
+    permission: '权限',
+    department: '部门',
+    resource: '资源',
+    module: '模块',
+    version: '版本',
+    testcase: '测试用例',
+    testreport: '测试报告',
+    dailyreport: '日报',
+    weeklyreport: '周报',
+    plugin: '插件',
+    entityrelation: '实体关系',
+    systemconfig: '系统配置'
+  }
+  return resourceNames[resource] || resource
+}
 
 // 加载角色列表
 const loadRoles = async () => {
@@ -299,6 +371,8 @@ const loadPermissions = async () => {
   permissionLoading.value = true
   try {
     permissions.value = await getPermissions()
+    // 构建权限树
+    permissionTreeData.value = buildPermissionTree(permissions.value)
   } catch (error: any) {
     message.error(error.message || '加载权限列表失败')
   } finally {
@@ -381,9 +455,16 @@ const handleDeleteRole = async (id: number) => {
 }
 
 // 分配权限
-const handleAssignPermissions = (record: Role) => {
+const handleAssignPermissions = async (record: Role) => {
   currentRoleId.value = record.id
-  selectedPermissionIds.value = record.permissions?.map((p: any) => p.id) || []
+  try {
+    // 获取角色的完整权限列表
+    const rolePermissions = await getRolePermissions(record.id)
+    selectedPermissionIds.value = rolePermissions.map(p => p.id)
+  } catch (error: any) {
+    // 如果获取失败，使用角色对象中的权限列表
+    selectedPermissionIds.value = record.permissions?.map((p: any) => p.id) || []
+  }
   assignModalVisible.value = true
 }
 
@@ -393,7 +474,11 @@ const handleAssignSubmit = async () => {
   
   try {
     assignSubmitting.value = true
-    await assignRolePermissions(currentRoleId.value, selectedPermissionIds.value)
+    // 过滤掉资源节点的 key（字符串类型），只保留权限ID（数字类型）
+    const permissionIds = selectedPermissionIds.value
+      .filter(id => typeof id === 'number')
+      .map(id => id as number)
+    await assignRolePermissions(currentRoleId.value, permissionIds)
     message.success('分配成功')
     assignModalVisible.value = false
     loadRoles()
@@ -441,8 +526,15 @@ const handlePermissionSubmit = async () => {
     permissionSubmitting.value = true
     
     if (permissionFormData.id) {
-      // 更新权限（如果后端支持）
-      message.warning('更新权限功能待实现')
+      await updatePermission(permissionFormData.id, {
+        code: permissionFormData.code,
+        name: permissionFormData.name,
+        resource: permissionFormData.resource,
+        action: permissionFormData.action,
+        description: permissionFormData.description,
+        status: permissionFormData.status
+      })
+      message.success('更新成功')
     } else {
       await createPermission({
         code: permissionFormData.code || '',
@@ -476,11 +568,9 @@ const handlePermissionCancel = () => {
 // 删除权限
 const handleDeletePermission = async (id: number) => {
   try {
-    // 删除权限（如果后端支持）
-    message.warning('删除权限功能待实现')
-    // await deletePermission(id)
-    // message.success('删除成功')
-    // loadPermissions()
+    await deletePermission(id)
+    message.success('删除成功')
+    loadPermissions()
   } catch (error: any) {
     message.error(error.message || '删除失败')
   }

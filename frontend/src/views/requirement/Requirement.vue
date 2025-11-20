@@ -330,7 +330,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import { formatDateTime } from '@/utils/date'
-import dayjs, { type Dayjs } from 'dayjs'
+import { type Dayjs } from 'dayjs'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {

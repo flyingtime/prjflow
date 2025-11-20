@@ -36,6 +36,10 @@ export const getPermissions = async (): Promise<Permission[]> => {
   return request.get('/permissions/permissions')
 }
 
+export const getPermission = async (id: number): Promise<Permission> => {
+  return request.get(`/permissions/permissions/${id}`)
+}
+
 export const createPermission = async (data: {
   code: string
   name: string
@@ -45,6 +49,26 @@ export const createPermission = async (data: {
   status?: number
 }): Promise<Permission> => {
   return request.post('/permissions/permissions', data)
+}
+
+export const updatePermission = async (id: number, data: Partial<{
+  code: string
+  name: string
+  resource?: string
+  action?: string
+  description?: string
+  status?: number
+}>): Promise<Permission> => {
+  return request.put(`/permissions/permissions/${id}`, data)
+}
+
+export const deletePermission = async (id: number): Promise<void> => {
+  return request.delete(`/permissions/permissions/${id}`)
+}
+
+// 获取角色权限
+export const getRolePermissions = async (roleId: number): Promise<Permission[]> => {
+  return request.get(`/permissions/roles/${roleId}/permissions`)
 }
 
 // 分配角色权限
