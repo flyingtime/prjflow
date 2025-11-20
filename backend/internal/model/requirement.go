@@ -26,6 +26,9 @@ type Requirement struct {
 
 	AssigneeID *uint `gorm:"index" json:"assignee_id"`
 	Assignee   *User `gorm:"foreignKey:AssigneeID" json:"assignee,omitempty"`
+
+	EstimatedHours *float64 `gorm:"default:0" json:"estimated_hours"` // 预估工时（小时）
+	ActualHours    *float64 `gorm:"default:0" json:"actual_hours"`    // 实际工时（小时），从资源分配自动计算
 }
 
 // Bug Bug表

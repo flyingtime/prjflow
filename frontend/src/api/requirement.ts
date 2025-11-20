@@ -12,6 +12,8 @@ export interface Requirement {
   creator?: any
   assignee_id?: number
   assignee?: any
+  estimated_hours?: number
+  actual_hours?: number
   created_at?: string
   updated_at?: string
 }
@@ -30,6 +32,7 @@ export interface CreateRequirementRequest {
   priority?: 'low' | 'medium' | 'high' | 'urgent'
   project_id?: number
   assignee_id?: number
+  estimated_hours?: number
 }
 
 export interface UpdateRequirementStatusRequest {

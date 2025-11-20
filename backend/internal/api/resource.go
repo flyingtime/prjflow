@@ -165,10 +165,9 @@ func (h *ResourceHandler) DeleteResource(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "删除成功"})
 }
 
-// GetResourceStatistics 获取资源统计（从任务和Bug的工时统计）
+// GetResourceStatistics 获取资源统计（从ResourceAllocation表统计实际工时）
 func (h *ResourceHandler) GetResourceStatistics(c *gin.Context) {
-	// 从任务和Bug的actual_hours统计，而不是从ResourceAllocation表
-	// 这样可以反映实际的工作情况
+	// 从ResourceAllocation表统计，这样可以准确反映实际工时情况
 
 	// 用户筛选
 	userID := c.Query("user_id")
@@ -176,116 +175,73 @@ func (h *ResourceHandler) GetResourceStatistics(c *gin.Context) {
 	// 项目筛选
 	projectID := c.Query("project_id")
 
-	// 日期范围筛选（这里暂时不使用，因为任务和Bug没有日期字段用于筛选工时）
-	// 如果需要按日期筛选，需要从ResourceAllocation表查询
-
-	// 统计任务工时
-	taskQuery := h.db.Model(&model.Task{}).Where("actual_hours > 0")
+	// 统计任务工时（从ResourceAllocation表）
+	taskAllocationQuery := h.db.Model(&model.ResourceAllocation{}).
+		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
+		Where("resource_allocations.task_id IS NOT NULL")
 	if userID != "" {
-		taskQuery = taskQuery.Where("assignee_id = ?", userID)
+		taskAllocationQuery = taskAllocationQuery.Where("resources.user_id = ?", userID)
 	}
 	if projectID != "" {
-		taskQuery = taskQuery.Where("project_id = ?", projectID)
+		taskAllocationQuery = taskAllocationQuery.Where("resource_allocations.project_id = ?", projectID)
 	}
 
 	var taskHours float64
-	taskQuery.Select("COALESCE(SUM(actual_hours), 0)").Scan(&taskHours)
+	taskAllocationQuery.Select("COALESCE(SUM(resource_allocations.hours), 0)").Scan(&taskHours)
 
-	// 统计Bug工时
-	bugQuery := h.db.Model(&model.Bug{}).Where("actual_hours > 0")
-	if projectID != "" {
-		bugQuery = bugQuery.Where("project_id = ?", projectID)
-	}
-	// Bug的分配人是多对多关系，需要特殊处理
+	// 统计Bug工时（从ResourceAllocation表）
+	bugAllocationQuery := h.db.Model(&model.ResourceAllocation{}).
+		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
+		Where("resource_allocations.bug_id IS NOT NULL")
 	if userID != "" {
-		bugQuery = bugQuery.Joins("JOIN bug_assignees ON bugs.id = bug_assignees.bug_id").
-			Where("bug_assignees.user_id = ?", userID)
+		bugAllocationQuery = bugAllocationQuery.Where("resources.user_id = ?", userID)
+	}
+	if projectID != "" {
+		bugAllocationQuery = bugAllocationQuery.Where("resource_allocations.project_id = ?", projectID)
 	}
 
 	var bugHours float64
-	bugQuery.Select("COALESCE(SUM(actual_hours), 0)").Scan(&bugHours)
+	bugAllocationQuery.Select("COALESCE(SUM(resource_allocations.hours), 0)").Scan(&bugHours)
+
+	// 统计需求工时（从ResourceAllocation表）
+	requirementAllocationQuery := h.db.Model(&model.ResourceAllocation{}).
+		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
+		Where("resource_allocations.requirement_id IS NOT NULL")
+	if userID != "" {
+		requirementAllocationQuery = requirementAllocationQuery.Where("resources.user_id = ?", userID)
+	}
+	if projectID != "" {
+		requirementAllocationQuery = requirementAllocationQuery.Where("resource_allocations.project_id = ?", projectID)
+	}
+
+	var requirementHours float64
+	requirementAllocationQuery.Select("COALESCE(SUM(resource_allocations.hours), 0)").Scan(&requirementHours)
 
 	// 总工时
-	totalHours := taskHours + bugHours
+	totalHours := taskHours + bugHours + requirementHours
 
-	// 按项目统计（从任务和Bug）
+	// 按项目统计（从ResourceAllocation表）
 	var projectStats []struct {
 		ProjectID   uint    `json:"project_id"`
 		ProjectName string  `json:"project_name"`
 		TotalHours  float64 `json:"total_hours"`
 	}
 	
-	// 任务按项目统计
-	var taskProjectStats []struct {
-		ProjectID   uint    `json:"project_id"`
-		ProjectName string  `json:"project_name"`
-		TotalHours  float64 `json:"total_hours"`
-	}
-	taskProjectQuery := h.db.Model(&model.Task{}).
-		Select("tasks.project_id, projects.name as project_name, COALESCE(SUM(tasks.actual_hours), 0) as total_hours").
-		Joins("LEFT JOIN projects ON tasks.project_id = projects.id").
-		Where("tasks.actual_hours > 0")
+	projectStatsQuery := h.db.Model(&model.ResourceAllocation{}).
+		Select("resource_allocations.project_id, projects.name as project_name, COALESCE(SUM(resource_allocations.hours), 0) as total_hours").
+		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
+		Joins("LEFT JOIN projects ON resource_allocations.project_id = projects.id").
+		Where("resource_allocations.project_id IS NOT NULL")
 	if userID != "" {
-		taskProjectQuery = taskProjectQuery.Where("tasks.assignee_id = ?", userID)
+		projectStatsQuery = projectStatsQuery.Where("resources.user_id = ?", userID)
 	}
 	if projectID != "" {
-		taskProjectQuery = taskProjectQuery.Where("tasks.project_id = ?", projectID)
+		projectStatsQuery = projectStatsQuery.Where("resource_allocations.project_id = ?", projectID)
 	}
-	taskProjectQuery.Group("tasks.project_id, projects.name").Scan(&taskProjectStats)
+	projectStatsQuery.Group("resource_allocations.project_id, projects.name").Scan(&projectStats)
 	
-	// Bug按项目统计
-	var bugProjectStats []struct {
-		ProjectID   uint    `json:"project_id"`
-		ProjectName string  `json:"project_name"`
-		TotalHours  float64 `json:"total_hours"`
-	}
-	bugProjectQuery := h.db.Model(&model.Bug{}).
-		Select("bugs.project_id, projects.name as project_name, COALESCE(SUM(bugs.actual_hours), 0) as total_hours").
-		Joins("LEFT JOIN projects ON bugs.project_id = projects.id").
-		Where("bugs.actual_hours > 0")
-	if userID != "" {
-		bugProjectQuery = bugProjectQuery.Joins("JOIN bug_assignees ON bugs.id = bug_assignees.bug_id").
-			Where("bug_assignees.user_id = ?", userID)
-	}
-	if projectID != "" {
-		bugProjectQuery = bugProjectQuery.Where("bugs.project_id = ?", projectID)
-	}
-	bugProjectQuery.Group("bugs.project_id, projects.name").Scan(&bugProjectStats)
-	
-	// 合并任务和Bug的项目统计
-	projectMap := make(map[uint]struct {
-		ProjectID   uint
-		ProjectName string
-		TotalHours  float64
-	})
-	for _, stat := range taskProjectStats {
-		projectMap[stat.ProjectID] = struct {
-			ProjectID   uint
-			ProjectName string
-			TotalHours  float64
-		}{stat.ProjectID, stat.ProjectName, stat.TotalHours}
-	}
-	for _, stat := range bugProjectStats {
-		if existing, ok := projectMap[stat.ProjectID]; ok {
-			existing.TotalHours += stat.TotalHours
-			projectMap[stat.ProjectID] = existing
-		} else {
-			projectMap[stat.ProjectID] = struct {
-				ProjectID   uint
-				ProjectName string
-				TotalHours  float64
-			}{stat.ProjectID, stat.ProjectName, stat.TotalHours}
-		}
-	}
-	for _, stat := range projectMap {
-		projectStats = append(projectStats, struct {
-			ProjectID   uint    `json:"project_id"`
-			ProjectName string  `json:"project_name"`
-			TotalHours  float64 `json:"total_hours"`
-		}{stat.ProjectID, stat.ProjectName, stat.TotalHours})
-	}
 
-	// 按人员统计（从任务和Bug）
+	// 按人员统计（从ResourceAllocation表）
 	var userStats []struct {
 		UserID     uint    `json:"user_id"`
 		Username   string  `json:"username"`
@@ -293,81 +249,17 @@ func (h *ResourceHandler) GetResourceStatistics(c *gin.Context) {
 		TotalHours float64 `json:"total_hours"`
 	}
 	
-	// 任务按人员统计
-	var taskUserStats []struct {
-		UserID     uint    `json:"user_id"`
-		Username   string  `json:"username"`
-		Nickname   string  `json:"nickname"`
-		TotalHours float64 `json:"total_hours"`
-	}
-	taskUserQuery := h.db.Model(&model.Task{}).
-		Select("tasks.assignee_id as user_id, users.username, users.nickname, COALESCE(SUM(tasks.actual_hours), 0) as total_hours").
-		Joins("LEFT JOIN users ON tasks.assignee_id = users.id").
-		Where("tasks.actual_hours > 0 AND tasks.assignee_id IS NOT NULL")
+	userStatsQuery := h.db.Model(&model.ResourceAllocation{}).
+		Select("resources.user_id, users.username, users.nickname, COALESCE(SUM(resource_allocations.hours), 0) as total_hours").
+		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
+		Joins("LEFT JOIN users ON resources.user_id = users.id")
 	if userID != "" {
-		taskUserQuery = taskUserQuery.Where("tasks.assignee_id = ?", userID)
+		userStatsQuery = userStatsQuery.Where("resources.user_id = ?", userID)
 	}
 	if projectID != "" {
-		taskUserQuery = taskUserQuery.Where("tasks.project_id = ?", projectID)
+		userStatsQuery = userStatsQuery.Where("resource_allocations.project_id = ?", projectID)
 	}
-	taskUserQuery.Group("tasks.assignee_id, users.username, users.nickname").Scan(&taskUserStats)
-	
-	// Bug按人员统计
-	var bugUserStats []struct {
-		UserID     uint    `json:"user_id"`
-		Username   string  `json:"username"`
-		Nickname   string  `json:"nickname"`
-		TotalHours float64 `json:"total_hours"`
-	}
-	bugUserQuery := h.db.Model(&model.Bug{}).
-		Select("bug_assignees.user_id, users.username, users.nickname, COALESCE(SUM(bugs.actual_hours), 0) as total_hours").
-		Joins("JOIN bug_assignees ON bugs.id = bug_assignees.bug_id").
-		Joins("LEFT JOIN users ON bug_assignees.user_id = users.id").
-		Where("bugs.actual_hours > 0")
-	if userID != "" {
-		bugUserQuery = bugUserQuery.Where("bug_assignees.user_id = ?", userID)
-	}
-	if projectID != "" {
-		bugUserQuery = bugUserQuery.Where("bugs.project_id = ?", projectID)
-	}
-	bugUserQuery.Group("bug_assignees.user_id, users.username, users.nickname").Scan(&bugUserStats)
-	
-	// 合并任务和Bug的人员统计
-	userMap := make(map[uint]struct {
-		UserID     uint
-		Username   string
-		Nickname   string
-		TotalHours float64
-	})
-	for _, stat := range taskUserStats {
-		userMap[stat.UserID] = struct {
-			UserID     uint
-			Username   string
-			Nickname   string
-			TotalHours float64
-		}{stat.UserID, stat.Username, stat.Nickname, stat.TotalHours}
-	}
-	for _, stat := range bugUserStats {
-		if existing, ok := userMap[stat.UserID]; ok {
-			existing.TotalHours += stat.TotalHours
-			userMap[stat.UserID] = existing
-		} else {
-			userMap[stat.UserID] = struct {
-				UserID     uint
-				Username   string
-				Nickname   string
-				TotalHours float64
-			}{stat.UserID, stat.Username, stat.Nickname, stat.TotalHours}
-		}
-	}
-	for _, stat := range userMap {
-		userStats = append(userStats, struct {
-			UserID     uint    `json:"user_id"`
-			Username   string  `json:"username"`
-			Nickname   string  `json:"nickname"`
-			TotalHours float64 `json:"total_hours"`
-		}{stat.UserID, stat.Username, stat.Nickname, stat.TotalHours})
-	}
+	userStatsQuery.Group("resources.user_id, users.username, users.nickname").Scan(&userStats)
 
 	utils.Success(c, gin.H{
 		"total_hours":   totalHours,

@@ -40,6 +40,8 @@ type ResourceAllocation struct {
 	Task     *Task     `gorm:"foreignKey:TaskID" json:"task,omitempty"`
 	BugID    *uint     `gorm:"index" json:"bug_id"`                // 可选关联Bug
 	Bug      *Bug      `gorm:"foreignKey:BugID" json:"bug,omitempty"`
+	RequirementID *uint     `gorm:"index" json:"requirement_id"`   // 可选关联需求
+	Requirement   *Requirement `gorm:"foreignKey:RequirementID" json:"requirement,omitempty"`
 	ProjectID *uint    `gorm:"index" json:"project_id"`           // 可选关联项目
 	Project   *Project `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
 

@@ -1,6 +1,9 @@
 package api
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"project-management/internal/model"
@@ -86,12 +89,13 @@ func (h *RequirementHandler) GetRequirement(c *gin.Context) {
 // CreateRequirement 创建需求
 func (h *RequirementHandler) CreateRequirement(c *gin.Context) {
 	var req struct {
-		Title       string `json:"title" binding:"required"`
-		Description string `json:"description"`
-		Status      string `json:"status"`
-		Priority    string `json:"priority"`
-		ProjectID  *uint  `json:"project_id"`
-		AssigneeID *uint  `json:"assignee_id"`
+		Title          string   `json:"title" binding:"required"`
+		Description    string   `json:"description"`
+		Status         string   `json:"status"`
+		Priority       string   `json:"priority"`
+		ProjectID      *uint    `json:"project_id"`
+		AssigneeID     *uint    `json:"assignee_id"`
+		EstimatedHours *float64 `json:"estimated_hours"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -136,7 +140,6 @@ func (h *RequirementHandler) CreateRequirement(c *gin.Context) {
 		return
 	}
 
-
 	// 如果指定了项目，验证项目是否存在
 	if req.ProjectID != nil {
 		var project model.Project
@@ -155,14 +158,21 @@ func (h *RequirementHandler) CreateRequirement(c *gin.Context) {
 		}
 	}
 
+	// 验证预估工时
+	if req.EstimatedHours != nil && *req.EstimatedHours < 0 {
+		utils.Error(c, 400, "预估工时不能为负数")
+		return
+	}
+
 	requirement := model.Requirement{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
-		Priority:    req.Priority,
-		ProjectID:  req.ProjectID,
-		CreatorID:  userID.(uint),
-		AssigneeID: req.AssigneeID,
+		Title:          req.Title,
+		Description:    req.Description,
+		Status:         req.Status,
+		Priority:       req.Priority,
+		ProjectID:      req.ProjectID,
+		CreatorID:      userID.(uint),
+		AssigneeID:     req.AssigneeID,
+		EstimatedHours: req.EstimatedHours,
 	}
 
 	if err := h.db.Create(&requirement).Error; err != nil {
@@ -186,12 +196,15 @@ func (h *RequirementHandler) UpdateRequirement(c *gin.Context) {
 	}
 
 	var req struct {
-		Title       *string `json:"title"`
-		Description *string `json:"description"`
-		Status      *string `json:"status"`
-		Priority    *string `json:"priority"`
-		ProjectID  *uint   `json:"project_id"`
-		AssigneeID *uint   `json:"assignee_id"`
+		Title          *string  `json:"title"`
+		Description    *string  `json:"description"`
+		Status         *string  `json:"status"`
+		Priority       *string  `json:"priority"`
+		ProjectID      *uint    `json:"project_id"`
+		AssigneeID     *uint    `json:"assignee_id"`
+		EstimatedHours *float64 `json:"estimated_hours"`
+		ActualHours    *float64 `json:"actual_hours"` // 实际工时，会自动创建资源分配
+		WorkDate       *string  `json:"work_date"`    // 工作日期（YYYY-MM-DD），用于资源分配
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -259,6 +272,52 @@ func (h *RequirementHandler) UpdateRequirement(c *gin.Context) {
 		} else {
 			requirement.AssigneeID = nil
 		}
+	}
+	if req.EstimatedHours != nil {
+		if *req.EstimatedHours < 0 {
+			utils.Error(c, 400, "预估工时不能为负数")
+			return
+		}
+		requirement.EstimatedHours = req.EstimatedHours
+	}
+
+	// 如果更新了实际工时，自动创建或更新资源分配
+	if req.ActualHours != nil {
+		if *req.ActualHours < 0 {
+			utils.Error(c, 400, "实际工时不能为负数")
+			return
+		}
+		// 需求必须有项目ID和负责人才能创建资源分配
+		if requirement.ProjectID == nil {
+			utils.Error(c, 400, "需求必须关联项目才能记录工时")
+			return
+		}
+		if requirement.AssigneeID == nil {
+			utils.Error(c, 400, "需求必须有负责人才能记录工时")
+			return
+		}
+		// 确定工作日期
+		var workDate time.Time
+		if req.WorkDate != nil && *req.WorkDate != "" {
+			if t, err := time.Parse("2006-01-02", *req.WorkDate); err == nil {
+				workDate = t
+			} else {
+				utils.Error(c, 400, "工作日期格式错误，应为 YYYY-MM-DD")
+				return
+			}
+		} else {
+			// 默认使用今天
+			workDate = time.Now()
+		}
+		workDate = time.Date(workDate.Year(), workDate.Month(), workDate.Day(), 0, 0, 0, 0, workDate.Location())
+		
+		// 同步到资源分配
+		if err := h.syncRequirementActualHours(&requirement, *req.ActualHours, workDate); err != nil {
+			utils.Error(c, utils.CodeError, "同步资源分配失败: "+err.Error())
+			return
+		}
+		// 从资源分配中汇总实际工时（确保actual_hours正确）
+		h.calculateAndUpdateActualHours(&requirement)
 	}
 
 	if err := h.db.Save(&requirement).Error; err != nil {
@@ -382,3 +441,84 @@ func (h *RequirementHandler) UpdateRequirementStatus(c *gin.Context) {
 	utils.Success(c, requirement)
 }
 
+// syncRequirementActualHours 同步需求实际工时到资源分配
+func (h *RequirementHandler) syncRequirementActualHours(requirement *model.Requirement, actualHours float64, workDate time.Time) error {
+	if requirement.ProjectID == nil || requirement.AssigneeID == nil {
+		return nil // 没有项目或负责人时，不创建资源分配，但不报错
+	}
+
+	// 查找或创建资源
+	var resource model.Resource
+	err := h.db.Where("user_id = ? AND project_id = ?", *requirement.AssigneeID, *requirement.ProjectID).First(&resource).Error
+	if err != nil {
+		// 资源不存在，创建资源
+		resource = model.Resource{
+			UserID:    *requirement.AssigneeID,
+			ProjectID: *requirement.ProjectID,
+		}
+		if err := h.db.Create(&resource).Error; err != nil {
+			return err
+		}
+	}
+
+	// 查找是否已存在该需求和日期的资源分配
+	// 先删除可能存在的重复记录（确保同一天只有一条记录）
+	h.db.Where("resource_id = ? AND requirement_id = ? AND date = ?", resource.ID, requirement.ID, workDate).
+		Delete(&model.ResourceAllocation{})
+	
+	// 创建新的资源分配记录
+	allocation := model.ResourceAllocation{
+		ResourceID:    resource.ID,
+		RequirementID: &requirement.ID,
+		ProjectID:     requirement.ProjectID,
+		Date:          workDate,
+		Hours:         actualHours,
+		Description:   fmt.Sprintf("需求: %s", requirement.Title),
+	}
+	if err := h.db.Create(&allocation).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// calculateAndUpdateActualHours 计算并更新需求的实际工时（从资源分配中汇总）
+func (h *RequirementHandler) calculateAndUpdateActualHours(requirement *model.Requirement) {
+	// 先清理重复记录：对于同一个需求、同一个资源、同一天，只保留一条记录（保留最新的）
+	var duplicateAllocations []model.ResourceAllocation
+	h.db.Model(&model.ResourceAllocation{}).
+		Where("requirement_id = ?", requirement.ID).
+		Order("created_at DESC").
+		Find(&duplicateAllocations)
+	
+	// 使用 map 记录已处理的 (resource_id, date) 组合
+	seen := make(map[string]bool)
+	var toDelete []uint
+	for _, alloc := range duplicateAllocations {
+		if alloc.RequirementID == nil {
+			continue
+		}
+		key := fmt.Sprintf("%d_%s", alloc.ResourceID, alloc.Date.Format("2006-01-02"))
+		if seen[key] {
+			// 重复记录，标记为删除
+			toDelete = append(toDelete, alloc.ID)
+		} else {
+			seen[key] = true
+		}
+	}
+	
+	// 删除重复记录
+	if len(toDelete) > 0 {
+		h.db.Where("id IN ?", toDelete).Delete(&model.ResourceAllocation{})
+	}
+	
+	// 重新计算总工时
+	var totalHours float64
+	h.db.Model(&model.ResourceAllocation{}).
+		Where("requirement_id = ?", requirement.ID).
+		Select("COALESCE(SUM(hours), 0)").
+		Scan(&totalHours)
+
+	requirement.ActualHours = &totalHours
+	h.db.Model(requirement).Update("actual_hours", totalHours)
+}

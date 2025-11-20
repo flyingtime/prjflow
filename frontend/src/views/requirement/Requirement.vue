@@ -172,6 +172,13 @@
                 <template v-else-if="column.key === 'assignee'">
                   {{ record.assignee ? `${record.assignee.username}${record.assignee.nickname ? `(${record.assignee.nickname})` : ''}` : '-' }}
                 </template>
+                <template v-else-if="column.key === 'hours'">
+                  <div>
+                    <div v-if="record.estimated_hours">预估: {{ record.estimated_hours.toFixed(2) }}h</div>
+                    <div v-if="record.actual_hours">实际: {{ record.actual_hours.toFixed(2) }}h</div>
+                    <span v-if="!record.estimated_hours && !record.actual_hours">-</span>
+                  </div>
+                </template>
                 <template v-else-if="column.key === 'created_at'">
                   {{ formatDateTime(record.created_at) }}
                 </template>
@@ -284,6 +291,34 @@
             </a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="预估工时" name="estimated_hours">
+          <a-input-number
+            v-model:value="formData.estimated_hours"
+            placeholder="预估工时（小时）"
+            :min="0"
+            :precision="2"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="实际工时" name="actual_hours">
+          <a-input-number
+            v-model:value="formData.actual_hours"
+            placeholder="实际工时（小时）"
+            :min="0"
+            :precision="2"
+            style="width: 100%"
+          />
+          <span style="margin-left: 8px; color: #999">更新实际工时会自动创建资源分配</span>
+        </a-form-item>
+        <a-form-item label="工作日期" name="work_date" v-if="formData.actual_hours">
+          <a-date-picker
+            v-model:value="formData.work_date"
+            placeholder="选择工作日期（可选）"
+            style="width: 100%"
+            format="YYYY-MM-DD"
+          />
+          <span style="margin-left: 8px; color: #999">不填则使用今天</span>
+        </a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -295,6 +330,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import { formatDateTime } from '@/utils/date'
+import dayjs, { type Dayjs } from 'dayjs'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {
@@ -340,6 +376,7 @@ const columns = [
   { title: '状态', key: 'status', width: 100 },
   { title: '优先级', key: 'priority', width: 100 },
   { title: '负责人', key: 'assignee', width: 150 },
+  { title: '工时', key: 'hours', width: 120 },
   { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
   { title: '操作', key: 'action', width: 250, fixed: 'right' as const }
 ]
@@ -347,13 +384,16 @@ const columns = [
 const modalVisible = ref(false)
 const modalTitle = ref('新增需求')
 const formRef = ref()
-const formData = reactive<CreateRequirementRequest & { id?: number }>({
+const formData = reactive<CreateRequirementRequest & { id?: number; actual_hours?: number; work_date?: Dayjs }>({
   title: '',
   description: '',
   status: 'pending',
   priority: 'medium',
   project_id: undefined,
-  assignee_id: undefined
+  assignee_id: undefined,
+  estimated_hours: undefined,
+  actual_hours: undefined,
+  work_date: undefined
 })
 
 const formRules = {
@@ -461,6 +501,9 @@ const handleCreate = () => {
   formData.priority = 'medium'
   formData.project_id = undefined
   formData.assignee_id = undefined
+  formData.estimated_hours = undefined
+  formData.actual_hours = undefined
+  formData.work_date = undefined
   modalVisible.value = true
 }
 
@@ -474,6 +517,9 @@ const handleEdit = (record: Requirement) => {
   formData.priority = record.priority
   formData.project_id = record.project_id
   formData.assignee_id = record.assignee_id
+  formData.estimated_hours = record.estimated_hours
+  formData.actual_hours = record.actual_hours
+  formData.work_date = undefined
   modalVisible.value = true
 }
 
@@ -486,13 +532,16 @@ const handleView = (record: Requirement) => {
 const handleSubmit = async () => {
   try {
     await formRef.value.validate()
-    const data: CreateRequirementRequest = {
+    const data: any = {
       title: formData.title,
       description: formData.description,
       status: formData.status,
       priority: formData.priority,
       project_id: formData.project_id,
-      assignee_id: formData.assignee_id
+      assignee_id: formData.assignee_id,
+      estimated_hours: formData.estimated_hours,
+      actual_hours: formData.actual_hours,
+      work_date: formData.work_date ? formData.work_date.format('YYYY-MM-DD') : undefined
     }
     if (formData.id) {
       await updateRequirement(formData.id, data)
