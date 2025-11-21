@@ -260,7 +260,7 @@ const loadDashboard = async () => {
 // 跳转到任务列表
 const goToTasks = (status: string) => {
   router.push({
-    path: '/tasks',
+    path: '/task',
     query: { status, assignee: 'me' }
   })
 }
@@ -268,7 +268,7 @@ const goToTasks = (status: string) => {
 // 跳转到Bug列表
 const goToBugs = (status: string) => {
   router.push({
-    path: '/bugs',
+    path: '/bug',
     query: { status, assignee: 'me' }
   })
 }
@@ -276,7 +276,7 @@ const goToBugs = (status: string) => {
 // 跳转到需求列表
 const goToRequirements = (status: string) => {
   router.push({
-    path: '/requirements',
+    path: '/requirement',
     query: { status, assignee: 'me' }
   })
 }
@@ -284,7 +284,7 @@ const goToRequirements = (status: string) => {
 // 跳转到项目详情
 const goToProject = (projectId: number) => {
   router.push({
-    path: `/projects/${projectId}`
+    path: `/project/${projectId}`
   })
 }
 
@@ -339,6 +339,16 @@ onMounted(() => {
 .stat-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
+}
+
+:deep(.ant-list-item) {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+:deep(.ant-list-item):hover {
+  background-color: #f5f5f5;
+  transform: translateX(4px);
 }
 
 .todo-card:hover {

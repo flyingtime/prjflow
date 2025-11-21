@@ -74,6 +74,7 @@ export const getBugs = async (params?: {
   requirement_id?: number
   module_id?: number
   creator_id?: number
+  assignee_id?: number
   page?: number
   size?: number
 }): Promise<BugListResponse> => {

@@ -324,6 +324,27 @@ func main() {
 		resourceAllocationGroup.DELETE("/:id", middleware.RequirePermission(db, "resource:manage"), resourceAllocationHandler.DeleteResourceAllocation)
 	}
 
+	// 工作报告路由（日报和周报）
+	reportHandler := api.NewReportHandler(db)
+	dailyReportGroup := r.Group("/api/daily-reports", middleware.Auth())
+	{
+		dailyReportGroup.GET("", reportHandler.GetDailyReports)
+		dailyReportGroup.GET("/:id", reportHandler.GetDailyReport)
+		dailyReportGroup.POST("", reportHandler.CreateDailyReport)
+		dailyReportGroup.PUT("/:id", reportHandler.UpdateDailyReport)
+		dailyReportGroup.DELETE("/:id", reportHandler.DeleteDailyReport)
+		dailyReportGroup.PATCH("/:id/status", reportHandler.UpdateDailyReportStatus)
+	}
+	weeklyReportGroup := r.Group("/api/weekly-reports", middleware.Auth())
+	{
+		weeklyReportGroup.GET("", reportHandler.GetWeeklyReports)
+		weeklyReportGroup.GET("/:id", reportHandler.GetWeeklyReport)
+		weeklyReportGroup.POST("", reportHandler.CreateWeeklyReport)
+		weeklyReportGroup.PUT("/:id", reportHandler.UpdateWeeklyReport)
+		weeklyReportGroup.DELETE("/:id", reportHandler.DeleteWeeklyReport)
+		weeklyReportGroup.PATCH("/:id/status", reportHandler.UpdateWeeklyReportStatus)
+	}
+
 	// 静态文件服务（前端构建后的文件）
 	// 注意：必须在所有 API 路由之后，但在 catch-all 路由之前
 	// 获取前端 dist 目录路径（支持从项目根目录或 backend 目录运行）

@@ -590,13 +590,14 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
 import { saveLastSelected, getLastSelected } from '@/utils/storage'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { type Dayjs } from 'dayjs'
 import { formatDateTime } from '@/utils/date'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   getBugs,
   createBug,
@@ -615,7 +616,9 @@ import { getRequirements, type Requirement } from '@/api/requirement'
 import { getModules, type Module } from '@/api/module'
 import { getVersions, type Version } from '@/api/version'
 
+const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const bugs = ref<Bug[]>([])
 const projects = ref<Project[]>([])
@@ -633,7 +636,8 @@ const searchForm = reactive({
   project_id: undefined as number | undefined,
   status: undefined as string | undefined,
   priority: undefined as string | undefined,
-  severity: undefined as string | undefined
+  severity: undefined as string | undefined,
+  assignee_id: undefined as number | undefined
 })
 
 const pagination = reactive({
@@ -727,6 +731,9 @@ const loadBugs = async () => {
     }
     if (searchForm.severity) {
       params.severity = searchForm.severity
+    }
+    if (searchForm.assignee_id) {
+      params.assignee_id = searchForm.assignee_id
     }
     const response = await getBugs(params)
     bugs.value = response.list
@@ -839,6 +846,7 @@ const handleReset = () => {
   searchForm.status = undefined
   searchForm.priority = undefined
   searchForm.severity = undefined
+  searchForm.assignee_id = undefined
   pagination.current = 1
   // 清除保存的搜索项目选择
   saveLastSelected('last_selected_bug_project_search', undefined)
@@ -1214,6 +1222,15 @@ onMounted(() => {
   if (lastSearchProjectId) {
     searchForm.project_id = lastSearchProjectId
   }
+  
+  // 读取路由查询参数
+  if (route.query.status) {
+    searchForm.status = route.query.status as string
+  }
+  if (route.query.assignee === 'me' && authStore.user) {
+    searchForm.assignee_id = authStore.user.id
+  }
+  
   loadBugs()
   loadProjects()
   loadUsers()

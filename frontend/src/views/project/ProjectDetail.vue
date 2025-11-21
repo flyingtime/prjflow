@@ -289,20 +289,29 @@ const handleManageModules = () => {
 
 // 跳转到任务列表
 const goToTasks = (status: string) => {
-  // TODO: 实现任务列表页面后跳转
-  message.info('任务管理功能开发中')
+  if (!project.value) return
+  router.push({
+    path: '/task',
+    query: { status, project_id: project.value.id }
+  })
 }
 
 // 跳转到Bug列表
 const goToBugs = (status: string) => {
-  // TODO: 实现Bug列表页面后跳转
-  message.info('Bug管理功能开发中')
+  if (!project.value) return
+  router.push({
+    path: '/bug',
+    query: { status, project_id: project.value.id }
+  })
 }
 
 // 跳转到需求列表
 const goToRequirements = (status: string) => {
-  // TODO: 实现需求列表页面后跳转
-  message.info('需求管理功能开发中')
+  if (!project.value) return
+  router.push({
+    path: '/requirement',
+    query: { status, project_id: project.value.id }
+  })
 }
 
 onMounted(() => {

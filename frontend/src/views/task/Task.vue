@@ -423,9 +423,11 @@ import {
 import { getProjects, type Project } from '@/api/project'
 import { getRequirements, type Requirement } from '@/api/requirement'
 import { getUsers, type User } from '@/api/user'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const tasks = ref<Task[]>([])
 const projects = ref<Project[]>([])
@@ -438,7 +440,8 @@ const searchForm = reactive({
   keyword: '',
   project_id: undefined as number | undefined,
   status: undefined as string | undefined,
-  priority: undefined as string | undefined
+  priority: undefined as string | undefined,
+  assignee_id: undefined as number | undefined
 })
 
 const pagination = reactive({
@@ -547,6 +550,9 @@ const loadTasks = async () => {
     }
     if (searchForm.priority) {
       params.priority = searchForm.priority
+    }
+    if (searchForm.assignee_id) {
+      params.assignee_id = searchForm.assignee_id
     }
     const response = await getTasks(params)
     tasks.value = response.list
@@ -657,6 +663,7 @@ const handleReset = () => {
   searchForm.project_id = undefined
   searchForm.status = undefined
   searchForm.priority = undefined
+  searchForm.assignee_id = undefined
   pagination.current = 1
   // 清除保存的搜索项目选择
   saveLastSelected('last_selected_task_project_search', undefined)
@@ -954,6 +961,14 @@ onMounted(() => {
     if (lastSearchProjectId) {
       searchForm.project_id = lastSearchProjectId
     }
+  }
+  
+  // 读取路由查询参数
+  if (route.query.status) {
+    searchForm.status = route.query.status as string
+  }
+  if (route.query.assignee === 'me' && authStore.user) {
+    searchForm.assignee_id = authStore.user.id
   }
   
   loadTasks()

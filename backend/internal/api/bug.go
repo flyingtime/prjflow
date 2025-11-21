@@ -66,6 +66,13 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 		query = query.Where("creator_id = ?", creatorID)
 	}
 
+	// 分配人筛选（通过关联表）
+	if assigneeID := c.Query("assignee_id"); assigneeID != "" {
+		query = query.Joins("JOIN bug_assignees ON bug_assignees.bug_id = bugs.id").
+			Where("bug_assignees.user_id = ?", assigneeID).
+			Group("bugs.id")
+	}
+
 	// 分页
 	page := utils.GetPage(c)
 	pageSize := utils.GetPageSize(c)
