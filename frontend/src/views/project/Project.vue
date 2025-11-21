@@ -23,6 +23,7 @@
                       placeholder="项目名称/编码"
                       allow-clear
                       style="width: 200px"
+                      @change="handleSearchKeywordChange"
                     />
                   </a-form-item>
                   <a-form-item label="标签">
@@ -33,6 +34,7 @@
                       allow-clear
                       style="width: 300px"
                       :options="tagOptions"
+                      @change="handleSearchTagsChange"
                     >
                     </a-select>
                   </a-form-item>
@@ -131,6 +133,7 @@
               :show-search="true"
               @search="handleTagSearch"
               @dropdown-visible-change="handleTagDropdownVisibleChange"
+              @change="handleFormTagsChange"
             >
               <template #notFoundContent>
                 <div style="padding: 8px; text-align: center;">
@@ -300,6 +303,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
@@ -439,6 +443,22 @@ const loadUsers = async () => {
   }
 }
 
+// 搜索表单关键词改变
+const handleSearchKeywordChange = (e: Event) => {
+  const value = (e.target as HTMLInputElement).value
+  saveLastSelected('last_selected_project_keyword_search', value)
+}
+
+// 搜索表单标签选择改变
+const handleSearchTagsChange = (value: number[]) => {
+  saveLastSelected('last_selected_project_tags_search', value)
+}
+
+// 编辑表单标签选择改变
+const handleFormTagsChange = (value: number[]) => {
+  saveLastSelected('last_selected_project_tags_form', value || [])
+}
+
 // 加载标签列表
 const loadTags = async () => {
   try {
@@ -463,6 +483,8 @@ const loadProjectMembers = async (projectId: number) => {
 
 // 项目搜索
 const handleSearchProject = () => {
+  // 保存搜索关键词
+  saveLastSelected('last_selected_project_keyword_search', projectSearchForm.keyword)
   projectPagination.current = 1
   loadProjects()
 }
@@ -471,6 +493,9 @@ const handleSearchProject = () => {
 const handleResetProject = () => {
   projectSearchForm.keyword = ''
   projectSearchForm.tags = [] as number[]
+  // 清除保存的搜索条件
+  saveLastSelected('last_selected_project_keyword_search', '')
+  saveLastSelected('last_selected_project_tags_search', [])
   handleSearchProject()
 }
 
@@ -491,7 +516,9 @@ const handleCreateProject = () => {
     projectFormData.code = ''
     projectFormData.description = ''
     projectFormData.status = 1
-    projectFormData.tag_ids = []
+    // 从 localStorage 恢复最后选择的标签
+    const lastTagIds = getLastSelected<number[]>('last_selected_project_tags_form')
+    projectFormData.tag_ids = lastTagIds || []
     if (projectFormData.id) {
       delete projectFormData.id
     }
@@ -745,6 +772,15 @@ const handleTagManageSubmit = async () => {
 }
 
 onMounted(() => {
+  // 从 localStorage 恢复最后选择的搜索条件
+  const lastSearchKeyword = getLastSelected<string>('last_selected_project_keyword_search')
+  if (lastSearchKeyword) {
+    projectSearchForm.keyword = lastSearchKeyword
+  }
+  const lastSearchTagIds = getLastSelected<number[]>('last_selected_project_tags_search')
+  if (lastSearchTagIds && lastSearchTagIds.length > 0) {
+    projectSearchForm.tags = lastSearchTagIds
+  }
   loadProjects()
   loadUsers()
   loadTags()

@@ -29,6 +29,7 @@
                   placeholder="选择项目"
                   allow-clear
                   style="width: 150px"
+                  @change="handleSearchProjectChange"
                 >
                   <a-select-option
                     v-for="project in projects"
@@ -163,6 +164,7 @@
             show-search
             :filter-option="filterProjectOption"
             :disabled="!!formData.id"
+            @change="handleFormProjectChange"
           >
             <a-select-option
               v-for="project in projects"
@@ -238,6 +240,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick } from 'vue'
+import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -361,11 +364,23 @@ const handleSearch = () => {
   loadVersions()
 }
 
+// 搜索表单项目选择改变
+const handleSearchProjectChange = (value: number | undefined) => {
+  saveLastSelected('last_selected_version_project_search', value)
+}
+
+// 编辑表单项目选择改变
+const handleFormProjectChange = (value: number | undefined) => {
+  saveLastSelected('last_selected_version_project_form', value || 0)
+}
+
 // 重置
 const handleReset = () => {
   searchForm.keyword = ''
   searchForm.project_id = undefined
   searchForm.status = undefined
+  // 清除保存的搜索项目选择
+  saveLastSelected('last_selected_version_project_search', undefined)
   handleSearch()
 }
 
@@ -383,7 +398,9 @@ const handleCreate = () => {
   formData.version_number = ''
   formData.release_notes = ''
   formData.status = 'draft'
-  formData.project_id = 0
+  // 从 localStorage 恢复最后选择的项目
+  const lastProjectId = getLastSelected<number>('last_selected_version_project_form')
+  formData.project_id = lastProjectId || 0
   formData.release_date = undefined
   formData.requirement_ids = []
   formData.bug_ids = []
@@ -527,6 +544,11 @@ const filterBugOption = (input: string, option: any) => {
 }
 
 onMounted(() => {
+  // 从 localStorage 恢复最后选择的搜索项目
+  const lastSearchProjectId = getLastSelected<number>('last_selected_version_project_search')
+  if (lastSearchProjectId) {
+    searchForm.project_id = lastSearchProjectId
+  }
   loadProjects()
   loadVersions()
 })

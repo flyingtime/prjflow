@@ -42,6 +42,7 @@
                   placeholder="选择项目"
                   allow-clear
                   style="width: 150px"
+                  @change="handleSearchProjectChange"
                 >
                   <a-select-option
                     v-for="project in projects"
@@ -51,6 +52,10 @@
                     {{ project.name }}
                   </a-select-option>
                 </a-select>
+              </a-form-item>
+              <a-form-item>
+                <a-button type="primary" @click="handleSearch">查询</a-button>
+                <a-button style="margin-left: 8px" @click="handleReset">重置</a-button>
               </a-form-item>
               <a-form-item>
                 <a-button type="primary" @click="handleSearch">查询</a-button>
@@ -232,6 +237,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { message } from 'ant-design-vue'
 import type { Dayjs } from 'dayjs'
 // import dayjs from 'dayjs'
@@ -346,6 +352,11 @@ const loadStatistics = async () => {
   }
 }
 
+// 搜索表单项目选择改变
+const handleSearchProjectChange = (value: number | undefined) => {
+  saveLastSelected('last_selected_resource_statistics_project_search', value)
+}
+
 const handleSearch = () => {
   loadStatistics()
 }
@@ -354,6 +365,8 @@ const handleReset = () => {
   searchForm.user_id = undefined
   searchForm.project_id = undefined
   dateRange.value = null
+  // 清除保存的搜索项目选择
+  saveLastSelected('last_selected_resource_statistics_project_search', undefined)
   loadStatistics()
 }
 
@@ -397,6 +410,11 @@ const handleLoadUtilization = async () => {
 }
 
 onMounted(() => {
+  // 从 localStorage 恢复最后选择的搜索项目
+  const lastSearchProjectId = getLastSelected<number>('last_selected_resource_statistics_project_search')
+  if (lastSearchProjectId) {
+    searchForm.project_id = lastSearchProjectId
+  }
   loadUsers()
   loadProjects()
   loadStatistics()

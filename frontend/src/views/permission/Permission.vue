@@ -185,8 +185,45 @@
             <a-input v-model:value="permissionFormData.menu_path" placeholder="路由路径，如：/project" />
           </a-form-item>
           <a-form-item label="菜单图标" name="menu_icon">
-            <a-input v-model:value="permissionFormData.menu_icon" placeholder="图标名称，如：ProjectOutlined" />
-            <span style="margin-left: 8px; color: #999">Ant Design Vue 图标组件名称</span>
+            <a-popover
+              v-model:open="iconSelectorVisible"
+              trigger="click"
+              placement="bottomLeft"
+              :overlay-style="{ width: '600px', maxHeight: '400px', overflow: 'auto' }"
+            >
+              <template #content>
+                <div class="icon-selector">
+                  <div class="icon-grid">
+                    <div
+                      v-for="iconName in commonIcons"
+                      :key="iconName"
+                      class="icon-item"
+                      :class="{ 'icon-item-selected': permissionFormData.menu_icon === iconName }"
+                      @click="handleSelectIcon(iconName)"
+                    >
+                      <component :is="getIconComponent(iconName)" style="font-size: 20px;" />
+                      <span class="icon-name">{{ iconName }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <a-input
+                v-model:value="permissionFormData.menu_icon"
+                placeholder="点击选择图标或输入图标名称"
+                readonly
+                style="cursor: pointer"
+                @click="iconSelectorVisible = true"
+              >
+                <template #prefix>
+                  <component
+                    v-if="permissionFormData.menu_icon"
+                    :is="getIconComponent(permissionFormData.menu_icon)"
+                    style="font-size: 16px; color: #1890ff;"
+                  />
+                </template>
+              </a-input>
+            </a-popover>
+            <span style="margin-left: 8px; color: #999">点击输入框选择图标</span>
           </a-form-item>
           <a-form-item label="父菜单" name="parent_menu_id">
             <a-select
@@ -239,9 +276,16 @@
                 :check-strictly="false"
                 @check="handleAssignPermissionCheck"
               >
-                <template #title="{ title, key }">
+                <template #title="{ title, key, icon, isMenu }">
                   <span class="permission-tree-node">
-                    <span>{{ title }}</span>
+                    <a-space>
+                      <component 
+                        v-if="isMenu && icon" 
+                        :is="getIconComponent(icon)" 
+                        style="font-size: 14px; color: #1890ff;"
+                      />
+                      <span>{{ title }}</span>
+                    </a-space>
                     <a-space style="margin-left: 8px">
                       <a-button
                         type="link"
@@ -287,7 +331,8 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 // import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, MenuOutlined } from '@ant-design/icons-vue'
+import * as Icons from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
 import {
   getRoles,
@@ -385,6 +430,8 @@ const currentRoleId = ref<number>()
 interface PermissionTreeNode {
   key: number | string
   title: string
+  icon?: string      // 图标名称
+  isMenu?: boolean   // 是否是菜单
   children?: PermissionTreeNode[]
 }
 
@@ -408,7 +455,9 @@ const buildPermissionTree = (perms: Permission[]): PermissionTreeNode[] => {
   resourceMap.forEach((perms, resource) => {
     const children: PermissionTreeNode[] = perms.map(perm => ({
       key: perm.id,
-      title: `${perm.name} (${perm.action || perm.code})`
+      title: `${perm.name} (${perm.action || perm.code})`,
+      icon: perm.is_menu ? (perm.menu_icon || 'MenuOutlined') : undefined,
+      isMenu: perm.is_menu || false
     }))
     
     tree.push({
@@ -446,6 +495,58 @@ const getResourceName = (resource: string): string => {
     systemconfig: '系统配置'
   }
   return resourceNames[resource] || resource
+}
+
+// 获取图标组件
+const getIconComponent = (iconName?: string) => {
+  if (!iconName) return MenuOutlined
+  // 从 Icons 对象中获取图标组件
+  const IconComponent = (Icons as any)[iconName]
+  return IconComponent || MenuOutlined
+}
+
+// 常用图标列表（用于图标选择器）
+const commonIcons = [
+  'DashboardOutlined', 'ProjectOutlined', 'TeamOutlined', 'SettingOutlined',
+  'UserOutlined', 'FileOutlined', 'FolderOutlined', 'AppstoreOutlined',
+  'DatabaseOutlined', 'BugOutlined', 'CheckCircleOutlined', 'ClockCircleOutlined',
+  'CodeOutlined', 'BuildOutlined', 'ExperimentOutlined', 'BarChartOutlined',
+  'CalendarOutlined', 'MailOutlined', 'BellOutlined', 'HomeOutlined',
+  'SearchOutlined', 'EditOutlined', 'DeleteOutlined', 'SaveOutlined',
+  'ReloadOutlined', 'DownloadOutlined', 'UploadOutlined', 'EyeOutlined',
+  'LockOutlined', 'UnlockOutlined', 'KeyOutlined', 'SafetyOutlined',
+  'SecurityScanOutlined', 'ToolOutlined', 'ApiOutlined', 'CloudOutlined',
+  'DesktopOutlined', 'MobileOutlined', 'TabletOutlined', 'GlobalOutlined',
+  'LinkOutlined', 'ShareAltOutlined', 'HeartOutlined', 'StarOutlined',
+  'MessageOutlined', 'CommentOutlined', 'NotificationOutlined', 'SoundOutlined',
+  'VideoCameraOutlined', 'PictureOutlined', 'FileImageOutlined', 'FilePdfOutlined',
+  'FileWordOutlined', 'FileExcelOutlined', 'FileZipOutlined', 'FileTextOutlined',
+  'FolderOpenOutlined', 'InboxOutlined', 'ShoppingCartOutlined', 'ShoppingOutlined',
+  'GiftOutlined', 'TrophyOutlined', 'CrownOutlined', 'FireOutlined',
+  'ThunderboltOutlined', 'RocketOutlined', 'CarOutlined', 'BankOutlined',
+  'ShopOutlined', 'EnvironmentOutlined', 'CompassOutlined', 'FlagOutlined',
+  'PushpinOutlined', 'TagsOutlined', 'TagOutlined', 'BookOutlined',
+  'ReadOutlined', 'BookmarkOutlined', 'ContactsOutlined', 'IdcardOutlined',
+  'SolutionOutlined', 'UsergroupAddOutlined', 'UserAddOutlined', 'UserDeleteOutlined',
+  'CustomerServiceOutlined', 'QuestionCircleOutlined', 'InfoCircleOutlined',
+  'ExclamationCircleOutlined', 'CloseCircleOutlined', 'CloseOutlined',
+  'PlusCircleOutlined', 'MinusCircleOutlined', 'WarningOutlined',
+  'MenuOutlined', 'MenuFoldOutlined', 'MenuUnfoldOutlined', 'BarsOutlined',
+  'TableOutlined', 'UnorderedListOutlined', 'OrderedListOutlined', 'FilterOutlined',
+  'ZoomInOutlined', 'ZoomOutOutlined', 'ExpandOutlined', 'CompressOutlined',
+  'FullscreenOutlined', 'FullscreenExitOutlined', 'SortAscendingOutlined',
+  'SortDescendingOutlined', 'SortOutlined', 'SyncOutlined', 'LoadingOutlined'
+]
+
+// 图标选择器相关
+const iconSelectorVisible = ref(false)
+const selectedIconName = ref<string>('')
+
+// 选择图标
+const handleSelectIcon = (iconName: string) => {
+  selectedIconName.value = iconName
+  permissionFormData.menu_icon = iconName
+  iconSelectorVisible.value = false
 }
 
 // 加载角色列表
@@ -874,6 +975,47 @@ onMounted(() => {
 
 .permission-tree-node:hover {
   background-color: #f5f5f5;
+}
+
+.icon-selector {
+  padding: 8px;
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.icon-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.icon-item:hover {
+  border-color: #1890ff;
+  background-color: #e6f7ff;
+}
+
+.icon-item-selected {
+  border-color: #1890ff;
+  background-color: #bae7ff;
+}
+
+.icon-name {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+  word-break: break-all;
+  line-height: 1.2;
 }
 </style>
 

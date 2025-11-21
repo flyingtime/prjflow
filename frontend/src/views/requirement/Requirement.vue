@@ -29,6 +29,7 @@
                   placeholder="选择项目"
                   allow-clear
                   style="width: 150px"
+                  @change="handleSearchProjectChange"
                 >
                   <a-select-option
                     v-for="project in projects"
@@ -247,6 +248,7 @@
           <a-select
             v-model:value="formData.project_id"
             placeholder="请选择项目"
+            @change="handleFormProjectChange"
           >
             <a-select-option
               v-for="project in projects"
@@ -324,7 +326,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
@@ -474,6 +477,16 @@ const handleSearch = () => {
   loadRequirements()
 }
 
+// 搜索表单项目选择改变
+const handleSearchProjectChange = (value: number | undefined) => {
+  saveLastSelected('last_selected_requirement_project_search', value)
+}
+
+// 编辑表单项目选择改变
+const handleFormProjectChange = (value: number | undefined) => {
+  saveLastSelected('last_selected_requirement_project_form', value)
+}
+
 // 重置
 const handleReset = () => {
   searchForm.keyword = ''
@@ -481,6 +494,8 @@ const handleReset = () => {
   searchForm.status = undefined
   searchForm.priority = undefined
   pagination.current = 1
+  // 清除保存的搜索项目选择
+  saveLastSelected('last_selected_requirement_project_search', undefined)
   loadRequirements()
 }
 
@@ -499,7 +514,9 @@ const handleCreate = () => {
   formData.description = ''
   formData.status = 'pending'
   formData.priority = 'medium'
-  formData.project_id = undefined
+  // 从 localStorage 恢复最后选择的项目
+  const lastProjectId = getLastSelected<number>('last_selected_requirement_project_form')
+  formData.project_id = lastProjectId
   formData.assignee_id = undefined
   formData.estimated_hours = undefined
   formData.actual_hours = undefined
@@ -648,6 +665,11 @@ const filterUserOption = (input: string, option: any) => {
 }
 
 onMounted(() => {
+  // 从 localStorage 恢复最后选择的搜索项目
+  const lastSearchProjectId = getLastSelected<number>('last_selected_requirement_project_search')
+  if (lastSearchProjectId) {
+    searchForm.project_id = lastSearchProjectId
+  }
   loadRequirements()
   loadProjects()
   loadUsers()

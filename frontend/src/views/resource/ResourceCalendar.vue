@@ -40,6 +40,7 @@
                   placeholder="选择项目"
                   allow-clear
                   style="width: 150px"
+                  @change="handleSearchProjectChange"
                 >
                   <a-select-option
                     v-for="project in projects"
@@ -96,6 +97,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import AppHeader from '@/components/AppHeader.vue'
@@ -164,6 +166,11 @@ const loadCalendar = async () => {
   }
 }
 
+// 搜索表单项目选择改变
+const handleSearchProjectChange = (value: number | undefined) => {
+  saveLastSelected('last_selected_resource_calendar_project_search', value)
+}
+
 const handleSearch = () => {
   loadCalendar()
 }
@@ -199,6 +206,11 @@ const getHoursColor = (hours: number) => {
 }
 
 onMounted(() => {
+  // 从 localStorage 恢复最后选择的搜索项目
+  const lastSearchProjectId = getLastSelected<number>('last_selected_resource_calendar_project_search')
+  if (lastSearchProjectId) {
+    searchForm.project_id = lastSearchProjectId
+  }
   loadUsers()
   loadProjects()
   loadCalendar()

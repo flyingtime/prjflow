@@ -42,6 +42,7 @@
                   placeholder="选择项目"
                   allow-clear
                   style="width: 150px"
+                  @change="handleSearchProjectChange"
                 >
                   <a-select-option
                     v-for="project in projects"
@@ -115,6 +116,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { message } from 'ant-design-vue'
 import type { Dayjs } from 'dayjs'
 // import dayjs from 'dayjs'
@@ -206,6 +208,11 @@ const loadUtilization = async () => {
   }
 }
 
+// 搜索表单项目选择改变
+const handleSearchProjectChange = (value: number | undefined) => {
+  saveLastSelected('last_selected_resource_utilization_project_search', value)
+}
+
 const handleSearch = () => {
   loadUtilization()
 }
@@ -214,6 +221,8 @@ const handleReset = () => {
   searchForm.user_id = undefined
   searchForm.project_id = undefined
   dateRange.value = null
+  // 清除保存的搜索项目选择
+  saveLastSelected('last_selected_resource_utilization_project_search', undefined)
   loadUtilization()
 }
 
@@ -222,6 +231,11 @@ const handleDateRangeChange = () => {
 }
 
 onMounted(() => {
+  // 从 localStorage 恢复最后选择的搜索项目
+  const lastSearchProjectId = getLastSelected<number>('last_selected_resource_utilization_project_search')
+  if (lastSearchProjectId) {
+    searchForm.project_id = lastSearchProjectId
+  }
   loadUsers()
   loadProjects()
   loadUtilization()

@@ -29,6 +29,7 @@
                   placeholder="选择项目"
                   allow-clear
                   style="width: 150px"
+                  @change="handleSearchProjectChange"
                 >
                   <a-select-option
                     v-for="project in projects"
@@ -193,7 +194,7 @@
             placeholder="选择项目"
             show-search
             :filter-option="filterProjectOption"
-            @change="handleProjectChange"
+            @change="handleFormProjectChange"
           >
             <a-select-option
               v-for="project in projects"
@@ -399,6 +400,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch, nextTick, computed } from 'vue'
+import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
@@ -636,6 +638,19 @@ const handleSearch = () => {
   loadTasks()
 }
 
+// 搜索表单项目选择改变
+const handleSearchProjectChange = (value: number | undefined) => {
+  saveLastSelected('last_selected_task_project_search', value)
+}
+
+// 编辑表单项目选择改变
+const handleFormProjectChange = (value: number | undefined) => {
+  saveLastSelected('last_selected_task_project_form', value || 0)
+  // 原有的 handleProjectChange 逻辑
+  formData.requirement_id = undefined
+  loadRequirementsForProject()
+}
+
 // 重置
 const handleReset = () => {
   searchForm.keyword = ''
@@ -643,6 +658,8 @@ const handleReset = () => {
   searchForm.status = undefined
   searchForm.priority = undefined
   pagination.current = 1
+  // 清除保存的搜索项目选择
+  saveLastSelected('last_selected_task_project_search', undefined)
   loadTasks()
 }
 
@@ -661,9 +678,14 @@ const handleCreate = () => {
   formData.description = ''
   formData.status = 'todo'
   formData.priority = 'medium'
-  // 如果有路由查询参数中的 project_id，使用它；否则重置为 0
+  // 如果有路由查询参数中的 project_id，使用它；否则从 localStorage 恢复最后选择的项目
   const projectIdFromQuery = route.query.project_id
-  formData.project_id = projectIdFromQuery ? Number(projectIdFromQuery) : 0
+  if (projectIdFromQuery) {
+    formData.project_id = Number(projectIdFromQuery)
+  } else {
+    const lastProjectId = getLastSelected<number>('last_selected_task_project_form')
+    formData.project_id = lastProjectId || 0
+  }
   formData.requirement_id = undefined
   formData.assignee_id = undefined
   formData.start_date = undefined
@@ -925,12 +947,20 @@ const filterUserOption = (input: string, option: any) => {
 }
 
 onMounted(() => {
+  // 从 localStorage 恢复最后选择的搜索项目（如果没有路由参数）
+  const projectId = route.query.project_id
+  if (!projectId) {
+    const lastSearchProjectId = getLastSelected<number>('last_selected_task_project_search')
+    if (lastSearchProjectId) {
+      searchForm.project_id = lastSearchProjectId
+    }
+  }
+  
   loadTasks()
   loadProjects()
   loadUsers()
   
   // 检查是否有项目ID参数（从看板页面跳转过来）
-  const projectId = route.query.project_id
   if (projectId) {
     formData.project_id = Number(projectId)
     searchForm.project_id = Number(projectId)
