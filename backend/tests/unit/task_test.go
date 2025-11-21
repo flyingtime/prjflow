@@ -3,6 +3,7 @@ package unit
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,6 +22,11 @@ func TestTaskHandler_GetTasks(t *testing.T) {
 
 	project := CreateTestProject(t, db, "任务测试项目")
 	user := CreateTestUser(t, db, "taskuser", "任务用户")
+	adminUser := CreateTestAdminUser(t, db, "admintask", "管理员任务用户")
+	otherUser := CreateTestUser(t, db, "othertask", "其他任务用户")
+
+	// 添加用户到项目
+	AddUserToProject(t, db, user.ID, project.ID, "member")
 
 	// 创建测试任务
 	task1 := &model.Task{
@@ -32,13 +38,72 @@ func TestTaskHandler_GetTasks(t *testing.T) {
 	}
 	db.Create(task1)
 
+	// 创建另一个项目的任务
+	project2 := CreateTestProject(t, db, "任务测试项目2")
+	task2 := &model.Task{
+		Title:     "任务2",
+		ProjectID: project2.ID,
+		CreatorID: otherUser.ID,
+		Status:    "todo",
+		Priority:  "high",
+	}
+	db.Create(task2)
+
 	handler := api.NewTaskHandler(db)
 
-	t.Run("获取所有任务", func(t *testing.T) {
+	t.Run("管理员可以获取所有任务", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodGet, "/api/tasks", nil)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
+
+		handler.GetTasks(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		// 管理员应该能看到所有任务
+		assert.GreaterOrEqual(t, len(list), 2)
+	})
+
+	t.Run("普通用户只能看到自己创建或参与的任务", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/tasks", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetTasks(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		// 用户创建了任务1且是项目成员，应该能看到任务1
+		assert.Equal(t, 1, len(list))
+	})
+
+	t.Run("搜索任务-管理员", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/tasks?keyword=任务1", nil)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
 
 		handler.GetTasks(c)
 
@@ -54,11 +119,13 @@ func TestTaskHandler_GetTasks(t *testing.T) {
 		assert.GreaterOrEqual(t, len(list), 1)
 	})
 
-	t.Run("搜索任务", func(t *testing.T) {
+	t.Run("搜索任务-普通用户", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodGet, "/api/tasks?keyword=任务1", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
 
 		handler.GetTasks(c)
 
@@ -71,7 +138,8 @@ func TestTaskHandler_GetTasks(t *testing.T) {
 
 		data := response["data"].(map[string]interface{})
 		list := data["list"].([]interface{})
-		assert.GreaterOrEqual(t, len(list), 1)
+		// 用户应该能看到自己创建的任务1
+		assert.Equal(t, 1, len(list))
 	})
 
 	_ = project
@@ -84,6 +152,11 @@ func TestTaskHandler_GetTask(t *testing.T) {
 
 	project := CreateTestProject(t, db, "任务详情项目")
 	user := CreateTestUser(t, db, "taskdetail", "任务详情用户")
+	adminUser := CreateTestAdminUser(t, db, "admintask2", "管理员任务用户2")
+	otherUser := CreateTestUser(t, db, "othertask2", "其他任务用户2")
+
+	// 添加用户到项目
+	AddUserToProject(t, db, user.ID, project.ID, "member")
 
 	task := &model.Task{
 		Title:     "测试任务",
@@ -96,12 +169,14 @@ func TestTaskHandler_GetTask(t *testing.T) {
 
 	handler := api.NewTaskHandler(db)
 
-	t.Run("获取存在的任务", func(t *testing.T) {
+	t.Run("管理员可以获取任何任务", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/tasks/1", nil)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/tasks/%d", task.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", task.ID)}}
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
 
 		handler.GetTask(c)
 
@@ -114,6 +189,42 @@ func TestTaskHandler_GetTask(t *testing.T) {
 
 		data := response["data"].(map[string]interface{})
 		assert.Equal(t, "测试任务", data["title"])
+	})
+
+	t.Run("创建者可以获取任务", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/tasks/%d", task.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", task.ID)}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetTask(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+	})
+
+	t.Run("非项目成员不能获取任务", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/tasks/%d", task.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", task.ID)}}
+		c.Set("user_id", otherUser.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetTask(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		// 应该返回403或code不为200
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
 	})
 
 	t.Run("获取不存在的任务", func(t *testing.T) {
@@ -139,13 +250,17 @@ func TestTaskHandler_CreateTask(t *testing.T) {
 	user := CreateTestUser(t, db, "createtask", "创建任务用户")
 	handler := api.NewTaskHandler(db)
 
-	t.Run("创建任务成功", func(t *testing.T) {
+	t.Run("创建任务成功-项目成员", func(t *testing.T) {
+		// 添加用户到项目
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 
 		// 设置user_id（CreateTask需要）
 		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
 
 		reqBody := map[string]interface{}{
 			"title":          "新任务",
@@ -174,6 +289,38 @@ func TestTaskHandler_CreateTask(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "新任务", task.Title)
 		assert.Equal(t, project.ID, task.ProjectID)
+	})
+
+	t.Run("创建任务失败-非项目成员", func(t *testing.T) {
+		otherUser := CreateTestUser(t, db, "othercreatetask", "其他创建任务用户")
+		otherProject := CreateTestProject(t, db, "其他任务项目")
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		// 设置user_id
+		c.Set("user_id", otherUser.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"title":          "新任务",
+			"description":    "这是一个新任务",
+			"status":         "todo",
+			"priority":       "high",
+			"project_id":     otherProject.ID,
+			"estimated_hours": 4.0,
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/tasks", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.CreateTask(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		// 应该返回403或code不为200
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
 	})
 
 	t.Run("创建任务失败-缺少必填字段", func(t *testing.T) {

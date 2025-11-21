@@ -3,6 +3,7 @@ package unit
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,6 +22,11 @@ func TestBugHandler_GetBugs(t *testing.T) {
 
 	project := CreateTestProject(t, db, "Bug测试项目")
 	user := CreateTestUser(t, db, "buguser", "Bug用户")
+	adminUser := CreateTestAdminUser(t, db, "adminbug", "管理员Bug用户")
+	otherUser := CreateTestUser(t, db, "otherbug", "其他Bug用户")
+
+	// 添加用户到项目
+	AddUserToProject(t, db, user.ID, project.ID, "member")
 
 	// 创建测试Bug
 	bug1 := &model.Bug{
@@ -33,13 +39,73 @@ func TestBugHandler_GetBugs(t *testing.T) {
 	}
 	db.Create(bug1)
 
+	// 创建另一个项目的Bug
+	project2 := CreateTestProject(t, db, "Bug测试项目2")
+	bug2 := &model.Bug{
+		Title:     "Bug2",
+		ProjectID: project2.ID,
+		CreatorID: otherUser.ID,
+		Status:    "open",
+		Priority:  "high",
+		Severity:  "critical",
+	}
+	db.Create(bug2)
+
 	handler := api.NewBugHandler(db)
 
-	t.Run("获取所有Bug", func(t *testing.T) {
+	t.Run("管理员可以获取所有Bug", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodGet, "/api/bugs", nil)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
+
+		handler.GetBugs(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		// 管理员应该能看到所有Bug
+		assert.GreaterOrEqual(t, len(list), 2)
+	})
+
+	t.Run("普通用户只能看到自己创建或参与的Bug", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/bugs", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetBugs(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		// 用户创建了Bug1且是项目成员，应该能看到Bug1
+		assert.Equal(t, 1, len(list))
+	})
+
+	t.Run("搜索Bug-管理员", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/bugs?keyword=Bug1", nil)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
 
 		handler.GetBugs(c)
 
@@ -55,11 +121,13 @@ func TestBugHandler_GetBugs(t *testing.T) {
 		assert.GreaterOrEqual(t, len(list), 1)
 	})
 
-	t.Run("搜索Bug", func(t *testing.T) {
+	t.Run("搜索Bug-普通用户", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodGet, "/api/bugs?keyword=Bug1", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
 
 		handler.GetBugs(c)
 
@@ -72,7 +140,8 @@ func TestBugHandler_GetBugs(t *testing.T) {
 
 		data := response["data"].(map[string]interface{})
 		list := data["list"].([]interface{})
-		assert.GreaterOrEqual(t, len(list), 1)
+		// 用户应该能看到自己创建的Bug1
+		assert.Equal(t, 1, len(list))
 	})
 
 	_ = project
@@ -85,6 +154,11 @@ func TestBugHandler_GetBug(t *testing.T) {
 
 	project := CreateTestProject(t, db, "Bug详情项目")
 	user := CreateTestUser(t, db, "bugdetail", "Bug详情用户")
+	adminUser := CreateTestAdminUser(t, db, "adminbug2", "管理员Bug用户2")
+	otherUser := CreateTestUser(t, db, "otherbug2", "其他Bug用户2")
+
+	// 添加用户到项目
+	AddUserToProject(t, db, user.ID, project.ID, "member")
 
 	bug := &model.Bug{
 		Title:     "测试Bug",
@@ -98,12 +172,14 @@ func TestBugHandler_GetBug(t *testing.T) {
 
 	handler := api.NewBugHandler(db)
 
-	t.Run("获取存在的Bug", func(t *testing.T) {
+	t.Run("管理员可以获取任何Bug", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/bugs/1", nil)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/bugs/%d", bug.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", bug.ID)}}
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
 
 		handler.GetBug(c)
 
@@ -116,6 +192,42 @@ func TestBugHandler_GetBug(t *testing.T) {
 
 		data := response["data"].(map[string]interface{})
 		assert.Equal(t, "测试Bug", data["title"])
+	})
+
+	t.Run("创建者可以获取Bug", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/bugs/%d", bug.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", bug.ID)}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetBug(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+	})
+
+	t.Run("非项目成员不能获取Bug", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/bugs/%d", bug.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", bug.ID)}}
+		c.Set("user_id", otherUser.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetBug(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		// 应该返回403或code不为200
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
 	})
 
 	t.Run("获取不存在的Bug", func(t *testing.T) {
@@ -141,13 +253,17 @@ func TestBugHandler_CreateBug(t *testing.T) {
 	user := CreateTestUser(t, db, "createbug", "创建Bug用户")
 	handler := api.NewBugHandler(db)
 
-	t.Run("创建Bug成功", func(t *testing.T) {
+	t.Run("创建Bug成功-项目成员", func(t *testing.T) {
+		// 添加用户到项目
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 
 		// 设置user_id（CreateBug需要）
 		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
 
 		reqBody := map[string]interface{}{
 			"title":          "新Bug",
@@ -177,6 +293,39 @@ func TestBugHandler_CreateBug(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "新Bug", bug.Title)
 		assert.Equal(t, project.ID, bug.ProjectID)
+	})
+
+	t.Run("创建Bug失败-非项目成员", func(t *testing.T) {
+		otherUser := CreateTestUser(t, db, "othercreatebug", "其他创建Bug用户")
+		otherProject := CreateTestProject(t, db, "其他Bug项目")
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		// 设置user_id
+		c.Set("user_id", otherUser.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"title":          "新Bug",
+			"description":    "这是一个新Bug",
+			"status":         "open",
+			"priority":       "high",
+			"severity":       "critical",
+			"project_id":     otherProject.ID,
+			"estimated_hours": 8.0,
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/bugs", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.CreateBug(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		// 应该返回403或code不为200
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
 	})
 
 	t.Run("创建Bug失败-缺少必填字段", func(t *testing.T) {

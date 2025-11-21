@@ -23,6 +23,9 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 	var bugs []model.Bug
 	query := h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module")
 
+	// 权限过滤：普通用户只能看到自己创建或参与的Bug
+	query = utils.FilterBugsByUser(h.db, c, query)
+
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
@@ -69,7 +72,9 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 	offset := (page - 1) * pageSize
 
 	var total int64
-	query.Model(&model.Bug{}).Count(&total)
+	// 权限过滤：普通用户只能看到自己创建或参与的Bug
+	countQuery := utils.FilterBugsByUser(h.db, c, h.db.Model(&model.Bug{}))
+	countQuery.Count(&total)
 
 	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&bugs).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询失败")
@@ -90,6 +95,12 @@ func (h *BugHandler) GetBug(c *gin.Context) {
 	var bug model.Bug
 	if err := h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").First(&bug, id).Error; err != nil {
 		utils.Error(c, 404, "Bug不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能查看自己创建或参与的Bug
+	if !utils.CheckBugAccess(h.db, c, bug.ID) {
+		utils.Error(c, 403, "没有权限访问该Bug")
 		return
 	}
 
@@ -176,6 +187,12 @@ func (h *BugHandler) CreateBug(c *gin.Context) {
 		return
 	}
 
+	// 权限检查：普通用户只能在自己参与的项目中创建Bug
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限在该项目中创建Bug")
+		return
+	}
+
 	// 如果指定了需求，验证需求是否存在
 	if req.RequirementID != nil {
 		var requirement model.Requirement
@@ -248,6 +265,12 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 	var bug model.Bug
 	if err := h.db.First(&bug, id).Error; err != nil {
 		utils.Error(c, 404, "Bug不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能更新自己创建或参与的Bug
+	if !utils.CheckBugAccess(h.db, c, bug.ID) {
+		utils.Error(c, 403, "没有权限更新该Bug")
 		return
 	}
 
@@ -439,6 +462,19 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 func (h *BugHandler) DeleteBug(c *gin.Context) {
 	id := c.Param("id")
 
+	// 验证Bug是否存在
+	var bug model.Bug
+	if err := h.db.First(&bug, id).Error; err != nil {
+		utils.Error(c, 404, "Bug不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能删除自己创建或参与的Bug
+	if !utils.CheckBugAccess(h.db, c, bug.ID) {
+		utils.Error(c, 403, "没有权限删除该Bug")
+		return
+	}
+
 	if err := h.db.Delete(&model.Bug{}, id).Error; err != nil {
 		utils.Error(c, utils.CodeError, "删除失败")
 		return
@@ -453,6 +489,12 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 	var bug model.Bug
 	if err := h.db.First(&bug, id).Error; err != nil {
 		utils.Error(c, 404, "Bug不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能更新自己创建或参与的Bug
+	if !utils.CheckBugAccess(h.db, c, bug.ID) {
+		utils.Error(c, 403, "没有权限更新该Bug")
 		return
 	}
 
@@ -628,6 +670,9 @@ func (h *BugHandler) GetBugStatistics(c *gin.Context) {
 
 	baseQuery := h.db.Model(&model.Bug{})
 
+	// 权限过滤：普通用户只能看到自己创建或参与的Bug
+	baseQuery = utils.FilterBugsByUser(h.db, c, baseQuery)
+
 	// 应用筛选条件（与列表查询保持一致）
 	if keyword := c.Query("keyword"); keyword != "" {
 		baseQuery = baseQuery.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
@@ -673,6 +718,12 @@ func (h *BugHandler) AssignBug(c *gin.Context) {
 	var bug model.Bug
 	if err := h.db.First(&bug, id).Error; err != nil {
 		utils.Error(c, 404, "Bug不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能分配自己创建或参与的Bug
+	if !utils.CheckBugAccess(h.db, c, bug.ID) {
+		utils.Error(c, 403, "没有权限分配该Bug")
 		return
 	}
 

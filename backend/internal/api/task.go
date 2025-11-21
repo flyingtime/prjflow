@@ -23,6 +23,9 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 	var tasks []model.Task
 	query := h.db.Preload("Project").Preload("Requirement").Preload("Creator").Preload("Assignee").Preload("Dependencies")
 
+	// 权限过滤：普通用户只能看到自己创建或参与的任务
+	query = utils.FilterTasksByUser(h.db, c, query)
+
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
@@ -59,7 +62,9 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 	offset := (page - 1) * pageSize
 
 	var total int64
-	query.Model(&model.Task{}).Count(&total)
+	// 权限过滤：普通用户只能看到自己创建或参与的任务
+	countQuery := utils.FilterTasksByUser(h.db, c, h.db.Model(&model.Task{}))
+	countQuery.Count(&total)
 
 	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&tasks).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询失败")
@@ -80,6 +85,12 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 	var task model.Task
 	if err := h.db.Preload("Project").Preload("Requirement").Preload("Creator").Preload("Assignee").Preload("Dependencies").First(&task, id).Error; err != nil {
 		utils.Error(c, 404, "任务不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能查看自己创建或参与的任务
+	if !utils.CheckTaskAccess(h.db, c, task.ID) {
+		utils.Error(c, 403, "没有权限访问该任务")
 		return
 	}
 
@@ -156,6 +167,12 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var project model.Project
 	if err := h.db.First(&project, req.ProjectID).Error; err != nil {
 		utils.Error(c, 400, "项目不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能在自己参与的项目中创建任务
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限在该项目中创建任务")
 		return
 	}
 
@@ -252,6 +269,12 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 	var task model.Task
 	if err := h.db.First(&task, id).Error; err != nil {
 		utils.Error(c, 404, "任务不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能更新自己创建或参与的任务
+	if !utils.CheckTaskAccess(h.db, c, task.ID) {
+		utils.Error(c, 403, "没有权限更新该任务")
 		return
 	}
 
@@ -470,6 +493,19 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	id := c.Param("id")
 
+	// 验证任务是否存在
+	var task model.Task
+	if err := h.db.First(&task, id).Error; err != nil {
+		utils.Error(c, 404, "任务不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能删除自己创建或参与的任务
+	if !utils.CheckTaskAccess(h.db, c, task.ID) {
+		utils.Error(c, 403, "没有权限删除该任务")
+		return
+	}
+
 	// 检查是否有其他任务依赖此任务
 	var count int64
 	h.db.Model(&model.TaskDependency{}).Where("dependency_id = ?", id).Count(&count)
@@ -492,6 +528,12 @@ func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 	var task model.Task
 	if err := h.db.First(&task, id).Error; err != nil {
 		utils.Error(c, 404, "任务不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能更新自己创建或参与的任务
+	if !utils.CheckTaskAccess(h.db, c, task.ID) {
+		utils.Error(c, 403, "没有权限更新该任务")
 		return
 	}
 
@@ -541,6 +583,12 @@ func (h *TaskHandler) UpdateTaskProgress(c *gin.Context) {
 	var task model.Task
 	if err := h.db.First(&task, id).Error; err != nil {
 		utils.Error(c, 404, "任务不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能更新自己创建或参与的任务
+	if !utils.CheckTaskAccess(h.db, c, task.ID) {
+		utils.Error(c, 403, "没有权限更新该任务")
 		return
 	}
 

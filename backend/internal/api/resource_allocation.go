@@ -22,6 +22,22 @@ func (h *ResourceAllocationHandler) GetResourceAllocations(c *gin.Context) {
 	var allocations []model.ResourceAllocation
 	query := h.db.Preload("Resource").Preload("Resource.User").Preload("Resource.Project").Preload("Task").Preload("Bug").Preload("Project")
 
+	// 权限过滤：普通用户只能看到自己参与的项目相关的资源分配
+	if !utils.IsAdmin(c) {
+		userID := utils.GetUserID(c)
+		if userID == 0 {
+			query = query.Where("1 = 0")
+		} else {
+			// 获取用户参与的项目ID列表
+			projectIDs := utils.GetUserProjectIDs(h.db, userID)
+			if len(projectIDs) > 0 {
+				query = query.Where("resource_allocations.project_id IN ?", projectIDs)
+			} else {
+				query = query.Where("1 = 0")
+			}
+		}
+	}
+
 	// 资源筛选
 	if resourceID := c.Query("resource_id"); resourceID != "" {
 		query = query.Where("resource_id = ?", resourceID)
@@ -66,7 +82,22 @@ func (h *ResourceAllocationHandler) GetResourceAllocations(c *gin.Context) {
 	offset := (page - 1) * pageSize
 
 	var total int64
-	query.Model(&model.ResourceAllocation{}).Count(&total)
+	countQuery := h.db.Model(&model.ResourceAllocation{})
+	// 权限过滤：普通用户只能看到自己参与的项目相关的资源分配
+	if !utils.IsAdmin(c) {
+		userID := utils.GetUserID(c)
+		if userID == 0 {
+			countQuery = countQuery.Where("1 = 0")
+		} else {
+			projectIDs := utils.GetUserProjectIDs(h.db, userID)
+			if len(projectIDs) > 0 {
+				countQuery = countQuery.Where("project_id IN ?", projectIDs)
+			} else {
+				countQuery = countQuery.Where("1 = 0")
+			}
+		}
+	}
+	countQuery.Count(&total)
 
 	if err := query.Offset(offset).Limit(pageSize).Order("date DESC, created_at DESC").Find(&allocations).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询失败")
@@ -88,6 +119,14 @@ func (h *ResourceAllocationHandler) GetResourceAllocation(c *gin.Context) {
 	if err := h.db.Preload("Resource").Preload("Resource.User").Preload("Resource.Project").Preload("Task").Preload("Bug").Preload("Project").First(&allocation, id).Error; err != nil {
 		utils.Error(c, 404, "资源分配不存在")
 		return
+	}
+
+	// 权限检查：普通用户只能查看自己参与的项目相关的资源分配
+	if !utils.IsAdmin(c) {
+		if allocation.ProjectID != nil && !utils.CheckProjectAccess(h.db, c, *allocation.ProjectID) {
+			utils.Error(c, 403, "没有权限访问该资源分配")
+			return
+		}
 	}
 
 	utils.Success(c, allocation)

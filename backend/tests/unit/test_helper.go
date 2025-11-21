@@ -169,3 +169,43 @@ func CreateTestProject(t *testing.T, db *gorm.DB, name string) *model.Project {
 	return project
 }
 
+// CreateTestAdminRole 创建管理员角色
+func CreateTestAdminRole(t *testing.T, db *gorm.DB) *model.Role {
+	var adminRole model.Role
+	if err := db.Where("code = ?", "admin").First(&adminRole).Error; err != nil {
+		adminRole = model.Role{
+			Name:        "管理员",
+			Code:        "admin",
+			Description: "系统管理员，拥有所有权限",
+			Status:      1,
+		}
+		if err := db.Create(&adminRole).Error; err != nil {
+			t.Fatalf("Failed to create admin role: %v", err)
+		}
+	}
+	return &adminRole
+}
+
+// CreateTestAdminUser 创建管理员用户
+func CreateTestAdminUser(t *testing.T, db *gorm.DB, username, nickname string) *model.User {
+	user := CreateTestUser(t, db, username, nickname)
+	adminRole := CreateTestAdminRole(t, db)
+	if err := db.Model(user).Association("Roles").Append(adminRole); err != nil {
+		t.Fatalf("Failed to assign admin role: %v", err)
+	}
+	return user
+}
+
+// AddUserToProject 添加用户到项目
+func AddUserToProject(t *testing.T, db *gorm.DB, userID, projectID uint, role string) *model.ProjectMember {
+	member := &model.ProjectMember{
+		ProjectID: projectID,
+		UserID:    userID,
+		Role:      role,
+	}
+	if err := db.Create(member).Error; err != nil {
+		t.Fatalf("Failed to add user to project: %v", err)
+	}
+	return member
+}
+

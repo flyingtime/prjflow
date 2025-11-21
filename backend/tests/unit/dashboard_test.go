@@ -22,10 +22,9 @@ func TestDashboardHandler_GetDashboard(t *testing.T) {
 	user := CreateTestUser(t, db, "dashboarduser", "仪表板用户")
 
 	// 创建一些测试数据
-	projectID := project.ID
 	requirement := &model.Requirement{
 		Title:     "测试需求",
-		ProjectID: &projectID,
+		ProjectID: project.ID,
 		CreatorID: user.ID,
 		Status:    "in_progress",
 	}

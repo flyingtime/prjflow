@@ -22,6 +22,9 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 	var projects []model.Project
 	query := h.db.Preload("Tags")
 
+	// 权限过滤：普通用户只能看到自己参与的项目
+	query = utils.FilterProjectsByUser(h.db, c, query)
+
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("name LIKE ? OR code LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
@@ -54,6 +57,8 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 	var total int64
 	// 计算总数时需要去掉JOIN和GROUP BY的影响
 	countQuery := h.db.Model(&model.Project{})
+	// 权限过滤：普通用户只能看到自己参与的项目
+	countQuery = utils.FilterProjectsByUser(h.db, c, countQuery)
 	if keyword := c.Query("keyword"); keyword != "" {
 		countQuery = countQuery.Where("name LIKE ? OR code LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
 	}
@@ -96,6 +101,12 @@ func (h *ProjectHandler) GetProject(c *gin.Context) {
 		return
 	}
 
+	// 权限检查：普通用户只能查看自己参与的项目
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限访问该项目")
+		return
+	}
+
 	// 获取项目统计信息
 	statistics := h.getProjectStatistics(project.ID)
 
@@ -113,6 +124,12 @@ func (h *ProjectHandler) GetProjectStatistics(c *gin.Context) {
 	var project model.Project
 	if err := h.db.First(&project, id).Error; err != nil {
 		utils.Error(c, 404, "项目不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能查看自己参与的项目
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限访问该项目")
 		return
 	}
 
@@ -240,6 +257,12 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 		return
 	}
 
+	// 权限检查：普通用户只能更新自己参与的项目
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限更新该项目")
+		return
+	}
+
 	var req struct {
 		Name        *string `json:"name"`
 		Code        *string `json:"code"`
@@ -321,6 +344,19 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	id := c.Param("id")
 
+	// 验证项目是否存在
+	var project model.Project
+	if err := h.db.First(&project, id).Error; err != nil {
+		utils.Error(c, 404, "项目不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能删除自己参与的项目
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限删除该项目")
+		return
+	}
+
 	// 检查是否有任务、Bug、需求等关联数据
 	var count int64
 	h.db.Model(&model.Task{}).Where("project_id = ?", id).Count(&count)
@@ -352,6 +388,20 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 // GetProjectMembers 获取项目成员列表
 func (h *ProjectHandler) GetProjectMembers(c *gin.Context) {
 	projectID := c.Param("id")
+	
+	// 验证项目是否存在并检查权限
+	var project model.Project
+	if err := h.db.First(&project, projectID).Error; err != nil {
+		utils.Error(c, 404, "项目不存在")
+		return
+	}
+	
+	// 权限检查：普通用户只能查看自己参与的项目的成员
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限访问该项目")
+		return
+	}
+	
 	var members []model.ProjectMember
 	if err := h.db.Where("project_id = ?", projectID).Preload("User").Preload("User.Department").Find(&members).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询失败")
@@ -369,6 +419,12 @@ func (h *ProjectHandler) GetProjectGantt(c *gin.Context) {
 	var project model.Project
 	if err := h.db.First(&project, projectID).Error; err != nil {
 		utils.Error(c, 404, "项目不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能查看自己参与的项目
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限访问该项目")
 		return
 	}
 
@@ -452,6 +508,12 @@ func (h *ProjectHandler) GetProjectProgress(c *gin.Context) {
 	var project model.Project
 	if err := h.db.First(&project, projectID).Error; err != nil {
 		utils.Error(c, 404, "项目不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能查看自己参与的项目
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限访问该项目")
 		return
 	}
 
@@ -696,6 +758,12 @@ func (h *ProjectHandler) AddProjectMembers(c *gin.Context) {
 		return
 	}
 
+	// 权限检查：普通用户只能为自己参与的项目添加成员
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限管理该项目成员")
+		return
+	}
+
 	var req struct {
 		UserIDs []uint `json:"user_ids" binding:"required"`
 		Role    string `json:"role" binding:"required"`
@@ -758,6 +826,12 @@ func (h *ProjectHandler) UpdateProjectMember(c *gin.Context) {
 		return
 	}
 
+	// 权限检查：普通用户只能为自己参与的项目更新成员
+	if !utils.CheckProjectAccess(h.db, c, member.ProjectID) {
+		utils.Error(c, 403, "没有权限管理该项目成员")
+		return
+	}
+
 	var req struct {
 		Role string `json:"role" binding:"required"`
 	}
@@ -780,6 +854,19 @@ func (h *ProjectHandler) UpdateProjectMember(c *gin.Context) {
 func (h *ProjectHandler) RemoveProjectMember(c *gin.Context) {
 	projectID := c.Param("id")
 	memberID := c.Param("member_id")
+
+	// 先查询成员信息以验证项目
+	var member model.ProjectMember
+	if err := h.db.Where("project_id = ? AND id = ?", projectID, memberID).First(&member).Error; err != nil {
+		utils.Error(c, 404, "项目成员不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能为自己参与的项目移除成员
+	if !utils.CheckProjectAccess(h.db, c, member.ProjectID) {
+		utils.Error(c, 403, "没有权限管理该项目成员")
+		return
+	}
 
 	if err := h.db.Where("project_id = ? AND id = ?", projectID, memberID).Delete(&model.ProjectMember{}).Error; err != nil {
 		utils.Error(c, utils.CodeError, "删除失败")

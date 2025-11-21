@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,6 +22,22 @@ func NewResourceHandler(db *gorm.DB) *ResourceHandler {
 func (h *ResourceHandler) GetResources(c *gin.Context) {
 	var resources []model.Resource
 	query := h.db.Preload("User").Preload("Project")
+
+	// 权限过滤：普通用户只能看到自己参与的项目相关的资源
+	if !utils.IsAdmin(c) {
+		userID := utils.GetUserID(c)
+		if userID == 0 {
+			query = query.Where("1 = 0")
+		} else {
+			// 获取用户参与的项目ID列表
+			projectIDs := utils.GetUserProjectIDs(h.db, userID)
+			if len(projectIDs) > 0 {
+				query = query.Where("project_id IN ?", projectIDs)
+			} else {
+				query = query.Where("1 = 0")
+			}
+		}
+	}
 
 	// 用户筛选
 	if userID := c.Query("user_id"); userID != "" {
@@ -43,7 +60,22 @@ func (h *ResourceHandler) GetResources(c *gin.Context) {
 	offset := (page - 1) * pageSize
 
 	var total int64
-	query.Model(&model.Resource{}).Count(&total)
+	countQuery := h.db.Model(&model.Resource{})
+	// 权限过滤：普通用户只能看到自己参与的项目相关的资源
+	if !utils.IsAdmin(c) {
+		userID := utils.GetUserID(c)
+		if userID == 0 {
+			countQuery = countQuery.Where("1 = 0")
+		} else {
+			projectIDs := utils.GetUserProjectIDs(h.db, userID)
+			if len(projectIDs) > 0 {
+				countQuery = countQuery.Where("project_id IN ?", projectIDs)
+			} else {
+				countQuery = countQuery.Where("1 = 0")
+			}
+		}
+	}
+	countQuery.Count(&total)
 
 	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&resources).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询失败")
@@ -65,6 +97,14 @@ func (h *ResourceHandler) GetResource(c *gin.Context) {
 	if err := h.db.Preload("User").Preload("Project").Preload("Allocations").First(&resource, id).Error; err != nil {
 		utils.Error(c, 404, "资源不存在")
 		return
+	}
+
+	// 权限检查：普通用户只能查看自己参与的项目相关的资源
+	if !utils.IsAdmin(c) {
+		if !utils.CheckProjectAccess(h.db, c, resource.ProjectID) {
+			utils.Error(c, 403, "没有权限访问该资源")
+			return
+		}
 	}
 
 	utils.Success(c, resource)
@@ -169,16 +209,58 @@ func (h *ResourceHandler) DeleteResource(c *gin.Context) {
 func (h *ResourceHandler) GetResourceStatistics(c *gin.Context) {
 	// 从ResourceAllocation表统计，这样可以准确反映实际工时情况
 
+	// 权限过滤：普通用户只能统计自己参与的项目的数据
+	var allowedProjectIDs []uint
+	if !utils.IsAdmin(c) {
+		userID := utils.GetUserID(c)
+		if userID == 0 {
+			utils.Error(c, 401, "未登录")
+			return
+		}
+		allowedProjectIDs = utils.GetUserProjectIDs(h.db, userID)
+		if len(allowedProjectIDs) == 0 {
+			// 用户没有参与任何项目，返回空统计
+			utils.Success(c, gin.H{
+				"total_hours":   0.0,
+				"project_stats": []gin.H{},
+				"user_stats":     []gin.H{},
+			})
+			return
+		}
+	}
+
 	// 用户筛选
 	userID := c.Query("user_id")
 	
 	// 项目筛选
 	projectID := c.Query("project_id")
+	
+	// 如果普通用户指定了项目ID，需要验证是否有权限
+	if !utils.IsAdmin(c) && projectID != "" {
+		var pid uint
+		if _, err := fmt.Sscanf(projectID, "%d", &pid); err == nil {
+			hasAccess := false
+			for _, id := range allowedProjectIDs {
+				if id == pid {
+					hasAccess = true
+					break
+				}
+			}
+			if !hasAccess {
+				utils.Error(c, 403, "没有权限访问该项目")
+				return
+			}
+		}
+	}
 
 	// 统计任务工时（从ResourceAllocation表）
 	taskAllocationQuery := h.db.Model(&model.ResourceAllocation{}).
 		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
 		Where("resource_allocations.task_id IS NOT NULL")
+	// 权限过滤：普通用户只能统计自己参与的项目
+	if !utils.IsAdmin(c) && len(allowedProjectIDs) > 0 {
+		taskAllocationQuery = taskAllocationQuery.Where("resource_allocations.project_id IN ?", allowedProjectIDs)
+	}
 	if userID != "" {
 		taskAllocationQuery = taskAllocationQuery.Where("resources.user_id = ?", userID)
 	}
@@ -193,6 +275,10 @@ func (h *ResourceHandler) GetResourceStatistics(c *gin.Context) {
 	bugAllocationQuery := h.db.Model(&model.ResourceAllocation{}).
 		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
 		Where("resource_allocations.bug_id IS NOT NULL")
+	// 权限过滤：普通用户只能统计自己参与的项目
+	if !utils.IsAdmin(c) && len(allowedProjectIDs) > 0 {
+		bugAllocationQuery = bugAllocationQuery.Where("resource_allocations.project_id IN ?", allowedProjectIDs)
+	}
 	if userID != "" {
 		bugAllocationQuery = bugAllocationQuery.Where("resources.user_id = ?", userID)
 	}
@@ -207,6 +293,10 @@ func (h *ResourceHandler) GetResourceStatistics(c *gin.Context) {
 	requirementAllocationQuery := h.db.Model(&model.ResourceAllocation{}).
 		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
 		Where("resource_allocations.requirement_id IS NOT NULL")
+	// 权限过滤：普通用户只能统计自己参与的项目
+	if !utils.IsAdmin(c) && len(allowedProjectIDs) > 0 {
+		requirementAllocationQuery = requirementAllocationQuery.Where("resource_allocations.project_id IN ?", allowedProjectIDs)
+	}
 	if userID != "" {
 		requirementAllocationQuery = requirementAllocationQuery.Where("resources.user_id = ?", userID)
 	}
@@ -232,6 +322,10 @@ func (h *ResourceHandler) GetResourceStatistics(c *gin.Context) {
 		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
 		Joins("LEFT JOIN projects ON resource_allocations.project_id = projects.id").
 		Where("resource_allocations.project_id IS NOT NULL")
+	// 权限过滤：普通用户只能统计自己参与的项目
+	if !utils.IsAdmin(c) && len(allowedProjectIDs) > 0 {
+		projectStatsQuery = projectStatsQuery.Where("resource_allocations.project_id IN ?", allowedProjectIDs)
+	}
 	if userID != "" {
 		projectStatsQuery = projectStatsQuery.Where("resources.user_id = ?", userID)
 	}
@@ -253,6 +347,10 @@ func (h *ResourceHandler) GetResourceStatistics(c *gin.Context) {
 		Select("resources.user_id, users.username, users.nickname, COALESCE(SUM(resource_allocations.hours), 0) as total_hours").
 		Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
 		Joins("LEFT JOIN users ON resources.user_id = users.id")
+	// 权限过滤：普通用户只能统计自己参与的项目
+	if !utils.IsAdmin(c) && len(allowedProjectIDs) > 0 {
+		userStatsQuery = userStatsQuery.Where("resource_allocations.project_id IN ?", allowedProjectIDs)
+	}
 	if userID != "" {
 		userStatsQuery = userStatsQuery.Where("resources.user_id = ?", userID)
 	}

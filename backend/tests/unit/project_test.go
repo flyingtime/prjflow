@@ -23,10 +23,61 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 	// 创建测试数据
 	project1 := CreateTestProject(t, db, "项目1")
 	project2 := CreateTestProject(t, db, "项目2")
+	user := CreateTestUser(t, db, "projectuser", "项目用户")
+	adminUser := CreateTestAdminUser(t, db, "adminuser", "管理员用户")
+
+	// 添加用户到项目1
+	AddUserToProject(t, db, user.ID, project1.ID, "member")
 
 	handler := api.NewProjectHandler(db)
 
-	t.Run("获取所有项目", func(t *testing.T) {
+	t.Run("管理员可以获取所有项目", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects", nil)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
+
+		handler.GetProjects(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		// 管理员应该能看到所有项目
+		assert.GreaterOrEqual(t, len(list), 2)
+	})
+
+	t.Run("普通用户只能看到自己参与的项目", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetProjects(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		// 普通用户只能看到自己参与的项目1
+		assert.Equal(t, 1, len(list))
+	})
+
+	t.Run("未登录用户看不到任何项目", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -43,14 +94,17 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 
 		data := response["data"].(map[string]interface{})
 		list := data["list"].([]interface{})
-		assert.GreaterOrEqual(t, len(list), 2)
+		// 未登录用户应该看不到任何项目
+		assert.Equal(t, 0, len(list))
 	})
 
-	t.Run("搜索项目", func(t *testing.T) {
+	t.Run("搜索项目-管理员", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects?keyword=项目1", nil)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
 
 		handler.GetProjects(c)
 
@@ -66,11 +120,36 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 		assert.GreaterOrEqual(t, len(list), 1)
 	})
 
-	t.Run("分页查询", func(t *testing.T) {
+	t.Run("搜索项目-普通用户", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects?keyword=项目1", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetProjects(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		// 用户参与项目1，应该能看到
+		assert.Equal(t, 1, len(list))
+	})
+
+	t.Run("分页查询-管理员", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects?page=1&page_size=1", nil)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
 
 		handler.GetProjects(c)
 
@@ -87,6 +166,9 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 	})
 
 	t.Run("按单个标签搜索项目", func(t *testing.T) {
+		// 创建管理员用户
+		adminUser := CreateTestAdminUser(t, db, "admintag", "管理员标签用户")
+
 		// 创建标签
 		tag1 := CreateTestTag(t, db, "前端")
 		tag2 := CreateTestTag(t, db, "重要")
@@ -100,6 +182,8 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		// 使用标签ID进行搜索
 		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/projects?tag=%d", tag1.ID), nil)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
 
 		handler.GetProjects(c)
 
@@ -116,6 +200,9 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 	})
 
 	t.Run("按多个标签搜索项目（OR逻辑）", func(t *testing.T) {
+		// 创建管理员用户
+		adminUser := CreateTestAdminUser(t, db, "admintag2", "管理员标签用户2")
+
 		// 创建标签
 		tag1 := CreateTestTag(t, db, "前端")
 		tag2 := CreateTestTag(t, db, "重要")
@@ -134,6 +221,8 @@ func TestProjectHandler_GetProjects(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		// 使用QueryArray方式传递多个标签ID
 		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/projects?tags=%d&tags=%d", tag1.ID, tag3.ID), nil)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
 
 		handler.GetProjects(c)
 
@@ -159,15 +248,24 @@ func TestProjectHandler_GetProject(t *testing.T) {
 	db := SetupTestDB(t)
 	defer TeardownTestDB(t, db)
 
-	_ = CreateTestProject(t, db, "测试项目")
+	project := CreateTestProject(t, db, "测试项目")
+	user := CreateTestUser(t, db, "getprojectuser", "获取项目用户")
+	adminUser := CreateTestAdminUser(t, db, "adminuser2", "管理员用户2")
+	otherUser := CreateTestUser(t, db, "otheruser", "其他用户")
+
+	// 添加用户到项目
+	AddUserToProject(t, db, user.ID, project.ID, "member")
+
 	handler := api.NewProjectHandler(db)
 
-	t.Run("获取存在的项目", func(t *testing.T) {
+	t.Run("管理员可以获取任何项目", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects/1", nil)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/projects/%d", project.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", project.ID)}}
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
 
 		handler.GetProject(c)
 
@@ -182,6 +280,42 @@ func TestProjectHandler_GetProject(t *testing.T) {
 		projectData := data["project"].(map[string]interface{})
 		assert.Equal(t, "测试项目", projectData["name"])
 		assert.NotNil(t, data["statistics"])
+	})
+
+	t.Run("项目成员可以获取项目", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/projects/%d", project.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", project.ID)}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetProject(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+	})
+
+	t.Run("非项目成员不能获取项目", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/projects/%d", project.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", project.ID)}}
+		c.Set("user_id", otherUser.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetProject(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		// 应该返回403或code不为200
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
 	})
 
 	t.Run("获取不存在的项目", func(t *testing.T) {

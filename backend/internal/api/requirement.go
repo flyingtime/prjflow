@@ -23,6 +23,9 @@ func (h *RequirementHandler) GetRequirements(c *gin.Context) {
 	var requirements []model.Requirement
 	query := h.db.Preload("Project").Preload("Creator").Preload("Assignee")
 
+	// 权限过滤：普通用户只能看到自己创建或参与的需求
+	query = utils.FilterRequirementsByUser(h.db, c, query)
+
 	// 搜索
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
@@ -59,7 +62,9 @@ func (h *RequirementHandler) GetRequirements(c *gin.Context) {
 	offset := (page - 1) * pageSize
 
 	var total int64
-	query.Model(&model.Requirement{}).Count(&total)
+	// 权限过滤：普通用户只能看到自己创建或参与的需求
+	countQuery := utils.FilterRequirementsByUser(h.db, c, h.db.Model(&model.Requirement{}))
+	countQuery.Count(&total)
 
 	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&requirements).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询失败")
@@ -80,6 +85,12 @@ func (h *RequirementHandler) GetRequirement(c *gin.Context) {
 	var requirement model.Requirement
 	if err := h.db.Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, id).Error; err != nil {
 		utils.Error(c, 404, "需求不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能查看自己创建或参与的需求
+	if !utils.CheckRequirementAccess(h.db, c, requirement.ID) {
+		utils.Error(c, 403, "没有权限访问该需求")
 		return
 	}
 
@@ -147,6 +158,12 @@ func (h *RequirementHandler) CreateRequirement(c *gin.Context) {
 		return
 	}
 
+	// 权限检查：普通用户只能在自己参与的项目中创建需求
+	if !utils.CheckProjectAccess(h.db, c, project.ID) {
+		utils.Error(c, 403, "没有权限在该项目中创建需求")
+		return
+	}
+
 	// 如果指定了负责人，验证用户是否存在
 	if req.AssigneeID != nil {
 		var user model.User
@@ -190,6 +207,12 @@ func (h *RequirementHandler) UpdateRequirement(c *gin.Context) {
 	var requirement model.Requirement
 	if err := h.db.First(&requirement, id).Error; err != nil {
 		utils.Error(c, 404, "需求不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能更新自己创建或参与的需求
+	if !utils.CheckRequirementAccess(h.db, c, requirement.ID) {
+		utils.Error(c, 403, "没有权限更新该需求")
 		return
 	}
 
@@ -333,6 +356,19 @@ func (h *RequirementHandler) UpdateRequirement(c *gin.Context) {
 func (h *RequirementHandler) DeleteRequirement(c *gin.Context) {
 	id := c.Param("id")
 
+	// 验证需求是否存在
+	var requirement model.Requirement
+	if err := h.db.First(&requirement, id).Error; err != nil {
+		utils.Error(c, 404, "需求不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能删除自己创建或参与的需求
+	if !utils.CheckRequirementAccess(h.db, c, requirement.ID) {
+		utils.Error(c, 403, "没有权限删除该需求")
+		return
+	}
+
 	// 检查是否有Bug关联
 	var count int64
 	h.db.Model(&model.Bug{}).Where("requirement_id = ?", id).Count(&count)
@@ -364,6 +400,9 @@ func (h *RequirementHandler) GetRequirementStatistics(c *gin.Context) {
 	}
 
 	baseQuery := h.db.Model(&model.Requirement{})
+
+	// 权限过滤：普通用户只能看到自己创建或参与的需求
+	baseQuery = utils.FilterRequirementsByUser(h.db, c, baseQuery)
 
 	// 应用筛选条件（与列表查询保持一致）
 	if keyword := c.Query("keyword"); keyword != "" {
@@ -403,6 +442,12 @@ func (h *RequirementHandler) UpdateRequirementStatus(c *gin.Context) {
 	var requirement model.Requirement
 	if err := h.db.First(&requirement, id).Error; err != nil {
 		utils.Error(c, 404, "需求不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能更新自己创建或参与的需求
+	if !utils.CheckRequirementAccess(h.db, c, requirement.ID) {
+		utils.Error(c, 403, "没有权限更新该需求")
 		return
 	}
 
