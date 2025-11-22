@@ -70,6 +70,7 @@
 
               <a-card :bordered="false">
                 <a-table
+                  :scroll="{ x: 'max-content' }"
                   :columns="dailyColumns"
                   :data-source="dailyReports"
                   :loading="dailyLoading"
@@ -177,6 +178,7 @@
 
               <a-card :bordered="false">
                 <a-table
+                  :scroll="{ x: 'max-content' }"
                   :columns="weeklyColumns"
                   :data-source="weeklyReports"
                   :loading="weeklyLoading"
@@ -941,8 +943,9 @@ onMounted(() => {
 }
 
 .content-inner {
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
+  width: 100%;
 }
 </style>
 

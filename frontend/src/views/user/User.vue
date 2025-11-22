@@ -59,6 +59,7 @@
               :columns="columns"
               :data-source="users"
               :loading="loading"
+              :scroll="{ x: 'max-content' }"
               :pagination="pagination"
               @change="handleTableChange"
               row-key="id"

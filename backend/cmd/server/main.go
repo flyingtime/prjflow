@@ -345,6 +345,32 @@ func main() {
 		weeklyReportGroup.PATCH("/:id/status", reportHandler.UpdateWeeklyReportStatus)
 	}
 
+	// 附件管理路由
+	attachmentHandler := api.NewAttachmentHandler(db)
+	attachmentGroup := r.Group("/api/attachments", middleware.Auth())
+	{
+		attachmentGroup.POST("/upload", middleware.RequirePermission(db, "attachment:upload"), attachmentHandler.UploadFile)
+		attachmentGroup.GET("/:id", attachmentHandler.GetAttachment)
+		attachmentGroup.GET("/:id/download", attachmentHandler.DownloadFile)
+		attachmentGroup.DELETE("/:id", middleware.RequirePermission(db, "attachment:delete"), attachmentHandler.DeleteAttachment)
+		attachmentGroup.GET("", attachmentHandler.GetAttachments)
+		attachmentGroup.POST("/:id/attach", attachmentHandler.AttachToEntity)
+	}
+
+	// 静态文件服务（上传的文件）
+	// 配置上传文件的静态服务，路径为 /uploads/*
+	storagePath := config.AppConfig.Upload.StoragePath
+	if !filepath.IsAbs(storagePath) {
+		storagePath = filepath.Join(".", storagePath)
+	}
+	// 确保目录存在
+	if err := os.MkdirAll(storagePath, 0755); err == nil {
+		r.Static("/uploads", storagePath)
+		log.Printf("上传文件静态服务目录: %s", storagePath)
+	} else {
+		log.Printf("警告: 无法创建上传文件目录 %s: %v", storagePath, err)
+	}
+
 	// 静态文件服务（前端构建后的文件）
 	// 注意：必须在所有 API 路由之后，但在 catch-all 路由之前
 	// 获取前端 dist 目录路径（支持从项目根目录或 backend 目录运行）

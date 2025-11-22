@@ -21,6 +21,7 @@
                   :columns="roleColumns"
                   :data-source="roles"
                   :loading="roleLoading"
+                  :scroll="{ x: 'max-content' }"
                   row-key="id"
                 >
                   <template #bodyCell="{ column, record }">
@@ -75,6 +76,7 @@
                   :columns="permissionColumns"
                   :data-source="permissions"
                   :loading="permissionLoading"
+                  :scroll="{ x: 'max-content' }"
                   row-key="id"
                 >
                   <template #bodyCell="{ column, record }">

@@ -73,6 +73,13 @@ func AutoMigrate(db *gorm.DB) error {
 
 		// 系统配置
 		&model.SystemConfig{},
+
+		// 附件
+		&model.Attachment{},
+		&model.ProjectAttachment{},
+		&model.RequirementAttachment{},
+		&model.TaskAttachment{},
+		&model.BugAttachment{},
 	)
 
 	// AutoMigrate 之后，再次清理可能产生的临时表
@@ -163,6 +170,10 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 		{Code: "department:create", Name: "创建部门", Resource: "department", Action: "create", Description: "创建新部门", Status: 1},
 		{Code: "department:update", Name: "更新部门", Resource: "department", Action: "update", Description: "更新部门信息", Status: 1},
 		{Code: "department:delete", Name: "删除部门", Resource: "department", Action: "delete", Description: "删除部门", Status: 1},
+
+		// 附件管理权限（操作权限）
+		{Code: "attachment:upload", Name: "上传附件", Resource: "attachment", Action: "upload", Description: "上传附件文件", Status: 1},
+		{Code: "attachment:delete", Name: "删除附件", Resource: "attachment", Action: "delete", Description: "删除附件文件", Status: 1},
 	}
 
 	// 创建或更新权限

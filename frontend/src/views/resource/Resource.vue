@@ -74,6 +74,7 @@
             :columns="columns"
             :data-source="resources"
             :loading="loading"
+            :scroll="{ x: 'max-content' }"
             :pagination="pagination"
             @change="handleTableChange"
             row-key="id"
@@ -188,6 +189,7 @@
         :columns="allocationColumns"
         :data-source="allocations"
         :loading="allocationLoading"
+        :scroll="{ x: 'max-content' }"
         :pagination="allocationPagination"
         @change="handleAllocationTableChange"
         row-key="id"
@@ -840,8 +842,9 @@ onMounted(() => {
 }
 
 .content-inner {
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
+  width: 100%;
   background: #fff;
   padding: 24px;
   border-radius: 8px;
