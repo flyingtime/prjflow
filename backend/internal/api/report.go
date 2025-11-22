@@ -52,10 +52,25 @@ func (h *ReportHandler) summarizeWorkContent(userID uint, startDate, endDate tim
 		// 记录错误但不返回给前端，避免影响用户体验
 		// log.Printf("汇总工作内容查询失败: userID=%d, startDate=%s, endDate=%s, error=%v",
 		// 	userID, startDateOnly.Format("2006-01-02"), endDateOnly.Format("2006-01-02"), err)
-		return "暂无工作记录", 0
+		// 即使资源分配查询失败，也继续查询创建的bug
+		allocations = []model.ResourceAllocation{}
 	}
 
-	if len(allocations) == 0 {
+	// 查询用户在指定日期范围内创建的Bug（即使没有资源分配记录）
+	// 使用时间范围比较：created_at >= startDateOnly AND created_at < endDateExclusive
+	// 与资源分配的日期范围逻辑保持一致
+	var createdBugs []model.Bug
+	bugErr := h.db.Where("creator_id = ?", userID).
+		Where("created_at >= ? AND created_at < ?", startDateOnly, endDateExclusive).
+		Preload("Project").
+		Find(&createdBugs).Error
+	if bugErr != nil {
+		// 查询失败不影响其他汇总，继续处理
+		createdBugs = []model.Bug{}
+	}
+
+	// 如果既没有资源分配记录，也没有创建的bug，返回空内容
+	if len(allocations) == 0 && len(createdBugs) == 0 {
 		return "暂无工作记录", 0
 	}
 
@@ -102,6 +117,31 @@ func (h *ReportHandler) summarizeWorkContent(userID uint, startDate, endDate tim
 				Hours:       alloc.Hours,
 			})
 		}
+	}
+
+	// 添加用户创建的Bug（去重，避免与资源分配中的Bug重复）
+	bugIDMap := make(map[uint]bool)
+	for _, bug := range bugs {
+		bugIDMap[bug.ID] = true
+	}
+
+	for _, bug := range createdBugs {
+		// 如果这个bug已经在资源分配中，跳过（避免重复）
+		if bugIDMap[bug.ID] {
+			continue
+		}
+
+		projectName := "未知项目"
+		if bug.Project.ID > 0 {
+			projectName = bug.Project.Name
+		}
+
+		bugs = append(bugs, WorkItem{
+			ID:          bug.ID,
+			Title:       bug.Title,
+			ProjectName: projectName,
+			Hours:       0, // 创建的bug如果没有资源分配，工时为0
+		})
 	}
 
 	// 生成Markdown格式的工作内容摘要
