@@ -497,7 +497,7 @@
             :filter-option="filterUserOption"
           >
             <a-select-option
-              v-for="user in users"
+              v-for="user in availableApprovers"
               :key="user.id"
               :value="user.id"
             >
@@ -608,7 +608,7 @@
             :filter-option="filterUserOption"
           >
             <a-select-option
-              v-for="user in users"
+              v-for="user in availableApprovers"
               :key="user.id"
               :value="user.id"
             >
@@ -1099,9 +1099,16 @@ const loadUsers = async () => {
   }
 }
 
+// 可用的审批人列表（过滤掉当前用户自己）
+const availableApprovers = computed(() => {
+  const currentUserId = authStore.user?.id
+  if (!currentUserId) return users.value
+  return users.value.filter(user => user.id !== currentUserId)
+})
+
 // 用户选择器过滤函数
 const filterUserOption = (input: string, option: any) => {
-  const user = users.value.find(u => u.id === option.value)
+  const user = availableApprovers.value.find(u => u.id === option.value)
   if (!user) return false
   const keyword = input.toLowerCase()
   return (
