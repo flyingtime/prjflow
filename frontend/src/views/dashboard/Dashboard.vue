@@ -138,9 +138,18 @@
                   </a-row>
                 </a-tab-pane>
 
-                <a-tab-pane key="reports" tab="工作报告">
+                <a-tab-pane key="reports">
+                  <template #tab>
+                    <a-badge 
+                      :count="reports.pending_approval" 
+                      :number-style="{ backgroundColor: '#ff4d4f' }"
+                      :show-zero="false"
+                    >
+                      <span>工作报告</span>
+                    </a-badge>
+                  </template>
                   <a-row :gutter="16">
-                    <a-col :span="12">
+                    <a-col :span="8">
                       <a-card
                         class="stat-card"
                         @click="goToReports('pending')"
@@ -152,7 +161,7 @@
                         />
                       </a-card>
                     </a-col>
-                    <a-col :span="12">
+                    <a-col :span="8">
                       <a-card
                         class="stat-card"
                         @click="goToReports('submitted')"
@@ -161,6 +170,18 @@
                           title="已提交"
                           :value="reports.submitted"
                           :value-style="{ color: '#52c41a' }"
+                        />
+                      </a-card>
+                    </a-col>
+                    <a-col :span="8">
+                      <a-card
+                        class="stat-card"
+                        @click="goToReports('approval')"
+                      >
+                        <a-statistic
+                          title="待审批"
+                          :value="reports.pending_approval"
+                          :value-style="{ color: '#1890ff' }"
                         />
                       </a-card>
                     </a-col>
@@ -178,7 +199,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Badge } from 'ant-design-vue'
 import { getDashboard, type DashboardData } from '@/api/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'
@@ -193,7 +214,7 @@ const dashboardData = ref<DashboardData>({
   bugs: { open: 0, in_progress: 0, resolved: 0 },
   requirements: { in_progress: 0, completed: 0 },
   projects: [],
-  reports: { pending: 0, submitted: 0 },
+  reports: { pending: 0, submitted: 0, pending_approval: 0 },
   statistics: {
     total_tasks: 0,
     total_bugs: 0,
@@ -254,10 +275,17 @@ const goToProject = (projectId: number) => {
 
 // 跳转到工作报告
 const goToReports = (status: string) => {
-  router.push({
-    path: '/reports',
-    query: { status }
-  })
+  if (status === 'approval') {
+    router.push({
+      path: '/reports',
+      query: { tab: 'approval' }
+    })
+  } else {
+    router.push({
+      path: '/reports',
+      query: { status }
+    })
+  }
 }
 
 onMounted(() => {

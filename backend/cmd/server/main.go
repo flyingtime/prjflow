@@ -334,6 +334,7 @@ func main() {
 		dailyReportGroup.PUT("/:id", reportHandler.UpdateDailyReport)
 		dailyReportGroup.DELETE("/:id", reportHandler.DeleteDailyReport)
 		dailyReportGroup.PATCH("/:id/status", reportHandler.UpdateDailyReportStatus)
+		dailyReportGroup.POST("/:id/approve", reportHandler.ApproveDailyReport)
 	}
 	weeklyReportGroup := r.Group("/api/weekly-reports", middleware.Auth())
 	{
@@ -343,6 +344,7 @@ func main() {
 		weeklyReportGroup.PUT("/:id", reportHandler.UpdateWeeklyReport)
 		weeklyReportGroup.DELETE("/:id", reportHandler.DeleteWeeklyReport)
 		weeklyReportGroup.PATCH("/:id/status", reportHandler.UpdateWeeklyReportStatus)
+		weeklyReportGroup.POST("/:id/approve", reportHandler.ApproveWeeklyReport)
 	}
 
 	// 附件管理路由

@@ -10,8 +10,17 @@ export interface DailyReport {
   user?: any
   project_id?: number
   project?: any
-  task_id?: number
-  task?: any
+  tasks?: Array<{ id: number; title: string }> // 任务数组（多选）
+  approvers?: Array<{ id: number; nickname?: string; username: string }> // 审批人数组（多选）
+  approval_records?: Array<{ // 审批记录
+    id: number
+    approver_id: number
+    approver?: { id: number; nickname?: string; username: string }
+    status: 'pending' | 'approved' | 'rejected'
+    comment?: string
+    created_at?: string
+    updated_at?: string
+  }>
   created_at?: string
   updated_at?: string
 }
@@ -27,8 +36,17 @@ export interface WeeklyReport {
   user?: any
   project_id?: number
   project?: any
-  task_id?: number
-  task?: any
+  tasks?: Array<{ id: number; title: string }> // 任务数组（多选）
+  approvers?: Array<{ id: number; nickname?: string; username: string }> // 审批人数组（多选）
+  approval_records?: Array<{ // 审批记录
+    id: number
+    approver_id: number
+    approver?: { id: number; nickname?: string; username: string }
+    status: 'pending' | 'approved' | 'rejected'
+    comment?: string
+    created_at?: string
+    updated_at?: string
+  }>
   created_at?: string
   updated_at?: string
 }
@@ -53,7 +71,8 @@ export interface CreateDailyReportRequest {
   hours?: number
   status?: 'draft' | 'submitted' | 'approved'
   project_id?: number
-  task_id?: number
+  task_ids?: number[] // 任务ID数组（多选）
+  approver_ids?: number[] // 审批人ID数组（多选）
 }
 
 export interface UpdateDailyReportRequest {
@@ -62,7 +81,8 @@ export interface UpdateDailyReportRequest {
   hours?: number
   status?: 'draft' | 'submitted' | 'approved'
   project_id?: number
-  task_id?: number
+  task_ids?: number[] // 任务ID数组（多选）
+  approver_ids?: number[] // 审批人ID数组（多选）
 }
 
 export interface CreateWeeklyReportRequest {
@@ -72,7 +92,8 @@ export interface CreateWeeklyReportRequest {
   next_week_plan?: string
   status?: 'draft' | 'submitted' | 'approved'
   project_id?: number
-  task_id?: number
+  task_ids?: number[] // 任务ID数组（多选）
+  approver_ids?: number[] // 审批人ID数组（多选）
 }
 
 export interface UpdateWeeklyReportRequest {
@@ -82,7 +103,8 @@ export interface UpdateWeeklyReportRequest {
   next_week_plan?: string
   status?: 'draft' | 'submitted' | 'approved'
   project_id?: number
-  task_id?: number
+  task_ids?: number[] // 任务ID数组（多选）
+  approver_ids?: number[] // 审批人ID数组（多选）
 }
 
 export interface UpdateReportStatusRequest {
@@ -122,6 +144,15 @@ export const updateDailyReportStatus = async (id: number, data: UpdateReportStat
   return request.patch(`/daily-reports/${id}/status`, data)
 }
 
+export interface ApproveReportRequest {
+  status: 'approved' | 'rejected'
+  comment?: string
+}
+
+export const approveDailyReport = async (id: number, data: ApproveReportRequest): Promise<DailyReport> => {
+  return request.post(`/daily-reports/${id}/approve`, data)
+}
+
 // 周报相关API
 export const getWeeklyReports = async (params?: {
   status?: string
@@ -153,5 +184,9 @@ export const deleteWeeklyReport = async (id: number): Promise<void> => {
 
 export const updateWeeklyReportStatus = async (id: number, data: UpdateReportStatusRequest): Promise<WeeklyReport> => {
   return request.patch(`/weekly-reports/${id}/status`, data)
+}
+
+export const approveWeeklyReport = async (id: number, data: ApproveReportRequest): Promise<WeeklyReport> => {
+  return request.post(`/weekly-reports/${id}/approve`, data)
 }
 

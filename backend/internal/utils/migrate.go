@@ -58,6 +58,8 @@ func AutoMigrate(db *gorm.DB) error {
 		// 工作报告
 		&model.DailyReport{},
 		&model.WeeklyReport{},
+		&model.DailyReportApproval{},
+		&model.WeeklyReportApproval{},
 
 		// 插件管理
 		&model.Plugin{},
