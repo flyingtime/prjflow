@@ -122,15 +122,6 @@
                         >
                           提交
                         </a-button>
-                        <a-button
-                          v-if="canApproveDaily(record)"
-                          type="link"
-                          size="small"
-                          style="color: #52c41a"
-                          @click="handleDailyApproveClick(record)"
-                        >
-                          审批
-                        </a-button>
                         <a-popconfirm
                           title="确定要删除这个日报吗？"
                           @confirm="handleDailyDelete(record.id)"
@@ -252,15 +243,6 @@
                         >
                           提交
                         </a-button>
-                        <a-button
-                          v-if="canApproveWeekly(record)"
-                          type="link"
-                          size="small"
-                          style="color: #52c41a"
-                          @click="handleWeeklyApproveClick(record)"
-                        >
-                          审批
-                        </a-button>
                         <a-popconfirm
                           title="确定要删除这个周报吗？"
                           @confirm="handleWeeklyDelete(record.id)"
@@ -284,185 +266,138 @@
                   <span>审批</span>
                 </a-badge>
               </template>
-              <a-tabs v-model:activeKey="approvalSubTab" @change="handleApprovalSubTabChange">
-                <a-tab-pane key="daily-approval" tab="日报审批">
-                  <a-card :bordered="false" style="margin-bottom: 16px">
-                    <a-form layout="inline" :model="approvalDailySearchForm">
-                      <a-form-item label="审批状态">
-                        <a-select
-                          v-model:value="approvalDailySearchForm.approval_status"
-                          placeholder="选择审批状态"
-                          allow-clear
-                          style="width: 150px"
-                        >
-                          <a-select-option value="pending">待审批</a-select-option>
-                          <a-select-option value="approved">已审批</a-select-option>
-                          <a-select-option value="rejected">已拒绝</a-select-option>
-                        </a-select>
-                      </a-form-item>
-                      <a-form-item label="开始日期">
-                        <a-date-picker
-                          v-model:value="approvalDailySearchForm.start_date"
-                          placeholder="选择开始日期"
-                          style="width: 150px"
-                          format="YYYY-MM-DD"
-                        />
-                      </a-form-item>
-                      <a-form-item label="结束日期">
-                        <a-date-picker
-                          v-model:value="approvalDailySearchForm.end_date"
-                          placeholder="选择结束日期"
-                          style="width: 150px"
-                          format="YYYY-MM-DD"
-                        />
-                      </a-form-item>
-                      <a-form-item>
-                        <a-button type="primary" @click="handleApprovalDailySearch">查询</a-button>
-                        <a-button style="margin-left: 8px" @click="handleApprovalDailyReset">重置</a-button>
-                      </a-form-item>
-                    </a-form>
-                  </a-card>
-
-                  <a-card :bordered="false">
-                    <a-table
-                      :scroll="{ x: 'max-content' }"
-                      :columns="approvalDailyColumns"
-                      :data-source="approvalDailyReports"
-                      :loading="approvalDailyLoading"
-                      :pagination="approvalDailyPagination"
-                      row-key="id"
-                      @change="handleApprovalDailyTableChange"
+              <a-card :bordered="false" style="margin-bottom: 16px">
+                <a-form layout="inline" :model="approvalSearchForm">
+                  <a-form-item label="审批状态">
+                    <a-select
+                      v-model:value="approvalSearchForm.approval_status"
+                      placeholder="选择审批状态"
+                      allow-clear
+                      style="width: 150px"
                     >
-                      <template #bodyCell="{ column, record }">
-                        <template v-if="column.key === 'status'">
-                          <a-tag :color="getStatusColor(record.status)">
-                            {{ getStatusText(record.status) }}
-                          </a-tag>
-                        </template>
-                        <template v-else-if="column.key === 'date'">
-                          {{ formatDate(record.date) }}
-                        </template>
-                        <template v-else-if="column.key === 'user'">
-                          {{ record.user?.nickname || record.user?.username || '-' }}
-                        </template>
-                        <template v-else-if="column.key === 'project'">
-                          {{ record.project?.name || '-' }}
-                        </template>
-                        <template v-else-if="column.key === 'approval_status'">
-                          <a-tag :color="getApprovalStatusColor(record)">
-                            {{ getApprovalStatusText(record) }}
-                          </a-tag>
-                        </template>
-                        <template v-else-if="column.key === 'action'">
-                          <a-space>
-                            <a-button type="link" size="small" @click="handleApprovalDailyView(record)">
-                              查看
-                            </a-button>
-                            <a-button
-                              v-if="canApproveDaily(record)"
-                              type="link"
-                              size="small"
-                              style="color: #52c41a"
-                              @click="handleDailyApproveClick(record)"
-                            >
-                              审批
-                            </a-button>
-                          </a-space>
-                        </template>
-                      </template>
-                    </a-table>
-                  </a-card>
-                </a-tab-pane>
-
-                <a-tab-pane key="weekly-approval" tab="周报审批">
-                  <a-card :bordered="false" style="margin-bottom: 16px">
-                    <a-form layout="inline" :model="approvalWeeklySearchForm">
-                      <a-form-item label="审批状态">
-                        <a-select
-                          v-model:value="approvalWeeklySearchForm.approval_status"
-                          placeholder="选择审批状态"
-                          allow-clear
-                          style="width: 150px"
-                        >
-                          <a-select-option value="pending">待审批</a-select-option>
-                          <a-select-option value="approved">已审批</a-select-option>
-                          <a-select-option value="rejected">已拒绝</a-select-option>
-                        </a-select>
-                      </a-form-item>
-                      <a-form-item label="开始日期">
-                        <a-date-picker
-                          v-model:value="approvalWeeklySearchForm.start_date"
-                          placeholder="选择开始日期"
-                          style="width: 150px"
-                          format="YYYY-MM-DD"
-                        />
-                      </a-form-item>
-                      <a-form-item label="结束日期">
-                        <a-date-picker
-                          v-model:value="approvalWeeklySearchForm.end_date"
-                          placeholder="选择结束日期"
-                          style="width: 150px"
-                          format="YYYY-MM-DD"
-                        />
-                      </a-form-item>
-                      <a-form-item>
-                        <a-button type="primary" @click="handleApprovalWeeklySearch">查询</a-button>
-                        <a-button style="margin-left: 8px" @click="handleApprovalWeeklyReset">重置</a-button>
-                      </a-form-item>
-                    </a-form>
-                  </a-card>
-
-                  <a-card :bordered="false">
-                    <a-table
-                      :scroll="{ x: 'max-content' }"
-                      :columns="approvalWeeklyColumns"
-                      :data-source="approvalWeeklyReports"
-                      :loading="approvalWeeklyLoading"
-                      :pagination="approvalWeeklyPagination"
-                      row-key="id"
-                      @change="handleApprovalWeeklyTableChange"
+                      <a-select-option value="pending">待审批</a-select-option>
+                      <a-select-option value="approved">已审批</a-select-option>
+                      <a-select-option value="rejected">已拒绝</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                  <a-form-item label="提交人">
+                    <a-select
+                      v-model:value="approvalSearchForm.user_id"
+                      placeholder="选择提交人"
+                      allow-clear
+                      show-search
+                      :filter-option="filterUserOption"
+                      style="width: 150px"
                     >
-                      <template #bodyCell="{ column, record }">
-                        <template v-if="column.key === 'status'">
-                          <a-tag :color="getStatusColor(record.status)">
-                            {{ getStatusText(record.status) }}
-                          </a-tag>
-                        </template>
-                        <template v-else-if="column.key === 'week'">
-                          {{ formatDate(record.week_start) }} ~ {{ formatDate(record.week_end) }}
-                        </template>
-                        <template v-else-if="column.key === 'user'">
-                          {{ record.user?.nickname || record.user?.username || '-' }}
-                        </template>
-                        <template v-else-if="column.key === 'project'">
-                          {{ record.project?.name || '-' }}
-                        </template>
-                        <template v-else-if="column.key === 'approval_status'">
-                          <a-tag :color="getApprovalStatusColor(record)">
-                            {{ getApprovalStatusText(record) }}
-                          </a-tag>
-                        </template>
-                        <template v-else-if="column.key === 'action'">
-                          <a-space>
-                            <a-button type="link" size="small" @click="handleApprovalWeeklyView(record)">
-                              查看
-                            </a-button>
-                            <a-button
-                              v-if="canApproveWeekly(record)"
-                              type="link"
-                              size="small"
-                              style="color: #52c41a"
-                              @click="handleWeeklyApproveClick(record)"
-                            >
-                              审批
-                            </a-button>
-                          </a-space>
-                        </template>
-                      </template>
-                    </a-table>
-                  </a-card>
-                </a-tab-pane>
-              </a-tabs>
+                      <a-select-option
+                        v-for="user in users"
+                        :key="user.id"
+                        :value="user.id"
+                      >
+                        {{ user.nickname || user.username }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                  <a-form-item label="开始日期">
+                    <a-date-picker
+                      v-model:value="approvalSearchForm.start_date"
+                      placeholder="选择开始日期"
+                      style="width: 150px"
+                      format="YYYY-MM-DD"
+                    />
+                  </a-form-item>
+                  <a-form-item label="结束日期">
+                    <a-date-picker
+                      v-model:value="approvalSearchForm.end_date"
+                      placeholder="选择结束日期"
+                      style="width: 150px"
+                      format="YYYY-MM-DD"
+                    />
+                  </a-form-item>
+                  <a-form-item>
+                    <a-button type="primary" @click="handleApprovalSearch">查询</a-button>
+                    <a-button style="margin-left: 8px" @click="handleApprovalReset">重置</a-button>
+                  </a-form-item>
+                </a-form>
+              </a-card>
+
+              <a-card :bordered="false">
+                <a-table
+                  :scroll="{ x: 'max-content' }"
+                  :columns="approvalColumns"
+                  :data-source="approvalReports"
+                  :loading="approvalLoading"
+                  :pagination="approvalPagination"
+                  row-key="rowKey"
+                  @change="handleApprovalTableChange"
+                >
+                  <template #bodyCell="{ column, record }">
+                    <template v-if="column.key === 'type'">
+                      <a-tag :color="record.reportType === 'daily' ? 'blue' : 'green'">
+                        {{ record.reportType === 'daily' ? '日报' : '周报' }}
+                      </a-tag>
+                    </template>
+                    <template v-else-if="column.key === 'status'">
+                      <a-tag :color="getStatusColor(record.status)">
+                        {{ getStatusText(record.status) }}
+                      </a-tag>
+                    </template>
+                    <template v-else-if="column.key === 'date'">
+                      <span v-if="record.reportType === 'daily'">
+                        {{ formatDate(record.date) }}
+                      </span>
+                      <span v-else>
+                        {{ formatDate(record.week_start) }} ~ {{ formatDate(record.week_end) }}
+                      </span>
+                    </template>
+                    <template v-else-if="column.key === 'user'">
+                      {{ record.user?.nickname || record.user?.username || '-' }}
+                    </template>
+                    <template v-else-if="column.key === 'project'">
+                      {{ record.project?.name || '-' }}
+                    </template>
+                    <template v-else-if="column.key === 'content'">
+                      <span v-if="record.reportType === 'daily'">
+                        {{ record.content || '-' }}
+                      </span>
+                      <span v-else>
+                        {{ record.summary || '-' }}
+                      </span>
+                    </template>
+                    <template v-else-if="column.key === 'approval_status'">
+                      <a-tag v-if="getApprovalStatusText(record)" :color="getApprovalStatusColor(record)">
+                        {{ getApprovalStatusText(record) }}
+                      </a-tag>
+                      <span v-else>-</span>
+                    </template>
+                    <template v-else-if="column.key === 'action'">
+                      <a-space>
+                        <a-button type="link" size="small" @click="handleApprovalView(record)">
+                          查看
+                        </a-button>
+                        <a-button
+                          v-if="record.reportType === 'daily' && canApproveDaily(record) && !isApprovalCompleted(record)"
+                          type="link"
+                          size="small"
+                          style="color: #52c41a"
+                          @click="handleDailyApproveClick(record)"
+                        >
+                          审批
+                        </a-button>
+                        <a-button
+                          v-if="record.reportType === 'weekly' && canApproveWeekly(record) && !isApprovalCompleted(record)"
+                          type="link"
+                          size="small"
+                          style="color: #52c41a"
+                          @click="handleWeeklyApproveClick(record)"
+                        >
+                          审批
+                        </a-button>
+                      </a-space>
+                    </template>
+                  </template>
+                </a-table>
+              </a-card>
             </a-tab-pane>
           </a-tabs>
         </div>
@@ -900,7 +835,6 @@ marked.setOptions({
 
 const route = useRoute()
 const activeTab = ref<'daily' | 'weekly' | 'approval'>('daily')
-const approvalSubTab = ref<'daily-approval' | 'weekly-approval'>('daily-approval')
 
 // 日报相关
 const dailyLoading = ref(false)
@@ -1012,15 +946,20 @@ const weeklyFormRules = {
   week_end: [{ required: true, message: '请选择周结束日期', trigger: 'change' }]
 }
 
-// 审批日报相关
-const approvalDailyLoading = ref(false)
-const approvalDailyReports = ref<DailyReport[]>([])
-const approvalDailySearchForm = reactive({
+// 审批相关（合并日报和周报）
+type ApprovalReport = (DailyReport | WeeklyReport) & {
+  reportType: 'daily' | 'weekly'
+  rowKey: string
+}
+const approvalLoading = ref(false)
+const approvalReports = ref<ApprovalReport[]>([])
+const approvalSearchForm = reactive({
   approval_status: undefined as string | undefined,
+  user_id: undefined as number | undefined,
   start_date: undefined as Dayjs | undefined,
   end_date: undefined as Dayjs | undefined
 })
-const approvalDailyPagination = reactive({
+const approvalPagination = reactive({
   current: 1,
   pageSize: 10,
   total: 0,
@@ -1028,40 +967,14 @@ const approvalDailyPagination = reactive({
   showSizeChanger: true,
   showQuickJumper: true
 })
-const approvalDailyColumns = [
-  { title: '日期', key: 'date', width: 120 },
+const approvalColumns = [
+  { title: '类型', key: 'type', width: 80 },
+  { title: '日期/周期', key: 'date', width: 200 },
   { title: '提交人', key: 'user', width: 120 },
-  { title: '工作内容', dataIndex: 'content', key: 'content', ellipsis: true },
-  { title: '工时', dataIndex: 'hours', key: 'hours', width: 100 },
+  { title: '内容', key: 'content', ellipsis: true },
   { title: '状态', key: 'status', width: 100 },
-  { title: '项目', key: 'project', width: 120 },
   { title: '审批状态', key: 'approval_status', width: 120 },
-  { title: '操作', key: 'action', width: 150, fixed: 'right' as const }
-]
-
-// 审批周报相关
-const approvalWeeklyLoading = ref(false)
-const approvalWeeklyReports = ref<WeeklyReport[]>([])
-const approvalWeeklySearchForm = reactive({
-  approval_status: undefined as string | undefined,
-  start_date: undefined as Dayjs | undefined,
-  end_date: undefined as Dayjs | undefined
-})
-const approvalWeeklyPagination = reactive({
-  current: 1,
-  pageSize: 10,
-  total: 0,
-  showTotal: (total: number) => `共 ${total} 条`,
-  showSizeChanger: true,
-  showQuickJumper: true
-})
-const approvalWeeklyColumns = [
-  { title: '周期', key: 'week', width: 200 },
-  { title: '提交人', key: 'user', width: 120 },
-  { title: '工作总结', dataIndex: 'summary', key: 'summary', ellipsis: true },
-  { title: '状态', key: 'status', width: 100 },
   { title: '项目', key: 'project', width: 120 },
-  { title: '审批状态', key: 'approval_status', width: 120 },
   { title: '操作', key: 'action', width: 150, fixed: 'right' as const }
 ]
 
@@ -1205,17 +1118,7 @@ const handleTabChange = (key: string) => {
   } else if (key === 'weekly') {
     loadWeeklyReports()
   } else if (key === 'approval') {
-    handleApprovalSubTabChange(approvalSubTab.value)
-  }
-}
-
-// 审批子标签页切换
-const handleApprovalSubTabChange = (key: string) => {
-  approvalSubTab.value = key as 'daily-approval' | 'weekly-approval'
-  if (key === 'daily-approval') {
-    loadApprovalDailyReports()
-  } else if (key === 'weekly-approval') {
-    loadApprovalWeeklyReports()
+    loadApprovalReports()
   }
 }
 
@@ -1332,7 +1235,7 @@ const handleDailySubmitForm = async () => {
     dailyModalVisible.value = false
     loadDailyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalDailyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1350,7 +1253,7 @@ const handleDailySubmit = async (record: DailyReport) => {
     message.success('提交成功')
     loadDailyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalDailyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1365,7 +1268,7 @@ const handleDailyDelete = async (id: number) => {
     message.success('删除成功')
     loadDailyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalDailyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1476,7 +1379,7 @@ const handleWeeklySubmitForm = async () => {
     weeklyModalVisible.value = false
     loadWeeklyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalWeeklyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1494,7 +1397,7 @@ const handleWeeklySubmit = async (record: WeeklyReport) => {
     message.success('提交成功')
     loadWeeklyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalWeeklyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1510,7 +1413,7 @@ const handleWeeklyDelete = async (id: number) => {
     message.success('删除成功')
     loadWeeklyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalWeeklyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1587,7 +1490,7 @@ const handleDailyApproveSubmit = async () => {
     dailyApproveModalVisible.value = false
     loadDailyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalDailyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1607,7 +1510,7 @@ const handleDailyApproveReject = async () => {
     dailyApproveModalVisible.value = false
     loadDailyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalDailyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1656,7 +1559,7 @@ const handleWeeklyApproveSubmit = async () => {
     weeklyApproveModalVisible.value = false
     loadWeeklyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalWeeklyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1676,7 +1579,7 @@ const handleWeeklyApproveReject = async () => {
     weeklyApproveModalVisible.value = false
     loadWeeklyReports()
     if (activeTab.value === 'approval') {
-      loadApprovalWeeklyReports()
+      loadApprovalReports()
     }
     loadPendingApprovalCount()
   } catch (error: any) {
@@ -1747,100 +1650,111 @@ const getStatusText = (status: string) => {
   return texts[status] || status
 }
 
-// 加载审批日报列表
-const loadApprovalDailyReports = async () => {
-  approvalDailyLoading.value = true
+// 加载审批列表（合并日报和周报）
+const loadApprovalReports = async () => {
+  approvalLoading.value = true
   try {
-    const params: any = {
-      page: approvalDailyPagination.current,
-      size: approvalDailyPagination.pageSize,
-      for_approval: true // 获取需要审批的报告
-    }
-    if (approvalDailySearchForm.start_date && approvalDailySearchForm.start_date.isValid()) {
-      params.start_date = approvalDailySearchForm.start_date.format('YYYY-MM-DD')
-    }
-    if (approvalDailySearchForm.end_date && approvalDailySearchForm.end_date.isValid()) {
-      params.end_date = approvalDailySearchForm.end_date.format('YYYY-MM-DD')
-    }
-    const response = await getDailyReports(params)
     const currentUserId = authStore.user?.id
+    const allReports: ApprovalReport[] = []
+    
+    // 加载日报
+    const dailyParams: any = {
+      page: 1,
+      size: 1000, // 获取所有数据，前端分页
+      for_approval: true
+    }
+    if (approvalSearchForm.user_id) {
+      dailyParams.user_id = approvalSearchForm.user_id
+    }
+    if (approvalSearchForm.start_date && approvalSearchForm.start_date.isValid()) {
+      dailyParams.start_date = approvalSearchForm.start_date.format('YYYY-MM-DD')
+    }
+    if (approvalSearchForm.end_date && approvalSearchForm.end_date.isValid()) {
+      dailyParams.end_date = approvalSearchForm.end_date.format('YYYY-MM-DD')
+    }
+    const dailyResponse = await getDailyReports(dailyParams)
+    
+    // 加载周报
+    const weeklyParams: any = {
+      page: 1,
+      size: 1000, // 获取所有数据，前端分页
+      for_approval: true
+    }
+    if (approvalSearchForm.user_id) {
+      weeklyParams.user_id = approvalSearchForm.user_id
+    }
+    if (approvalSearchForm.start_date && approvalSearchForm.start_date.isValid()) {
+      weeklyParams.start_date = approvalSearchForm.start_date.format('YYYY-MM-DD')
+    }
+    if (approvalSearchForm.end_date && approvalSearchForm.end_date.isValid()) {
+      weeklyParams.end_date = approvalSearchForm.end_date.format('YYYY-MM-DD')
+    }
+    const weeklyResponse = await getWeeklyReports(weeklyParams)
+    
+    // 合并日报，添加类型标识
+    dailyResponse.list.forEach((report: DailyReport) => {
+      allReports.push({
+        ...report,
+        reportType: 'daily',
+        rowKey: `daily-${report.id}`
+      } as ApprovalReport)
+    })
+    
+    // 合并周报，添加类型标识
+    weeklyResponse.list.forEach((report: WeeklyReport) => {
+      allReports.push({
+        ...report,
+        reportType: 'weekly',
+        rowKey: `weekly-${report.id}`
+      } as ApprovalReport)
+    })
     
     // 根据审批状态过滤
-    let filtered = response.list
-    if (approvalDailySearchForm.approval_status) {
-      filtered = filtered.filter((report: DailyReport) => {
+    let filtered = allReports
+    if (approvalSearchForm.approval_status) {
+      filtered = filtered.filter((report: ApprovalReport) => {
         if (!report.approval_records || report.approval_records.length === 0) {
-          return approvalDailySearchForm.approval_status === 'pending'
+          return approvalSearchForm.approval_status === 'pending'
         }
         const myApproval = report.approval_records.find((r: any) => r.approver_id === currentUserId)
         if (!myApproval) {
-          return approvalDailySearchForm.approval_status === 'pending'
+          return approvalSearchForm.approval_status === 'pending'
         }
-        return myApproval.status === approvalDailySearchForm.approval_status
+        return myApproval.status === approvalSearchForm.approval_status
       })
     }
-    approvalDailyReports.value = filtered
-    // 如果前端过滤了，使用过滤后的数量；否则使用后端返回的总数
-    approvalDailyPagination.total = approvalDailySearchForm.approval_status ? filtered.length : response.total
-  } catch (error: any) {
-    message.error(error.message || '加载审批日报列表失败')
-  } finally {
-    approvalDailyLoading.value = false
-  }
-}
-
-// 加载审批周报列表
-const loadApprovalWeeklyReports = async () => {
-  approvalWeeklyLoading.value = true
-  try {
-    const params: any = {
-      page: approvalWeeklyPagination.current,
-      size: approvalWeeklyPagination.pageSize,
-      for_approval: true // 获取需要审批的报告
-    }
-    if (approvalWeeklySearchForm.start_date && approvalWeeklySearchForm.start_date.isValid()) {
-      params.start_date = approvalWeeklySearchForm.start_date.format('YYYY-MM-DD')
-    }
-    if (approvalWeeklySearchForm.end_date && approvalWeeklySearchForm.end_date.isValid()) {
-      params.end_date = approvalWeeklySearchForm.end_date.format('YYYY-MM-DD')
-    }
-    const response = await getWeeklyReports(params)
-    const currentUserId = authStore.user?.id
     
-    // 根据审批状态过滤
-    let filtered = response.list
-    if (approvalWeeklySearchForm.approval_status) {
-      filtered = filtered.filter((report: WeeklyReport) => {
-        if (!report.approval_records || report.approval_records.length === 0) {
-          return approvalWeeklySearchForm.approval_status === 'pending'
-        }
-        const myApproval = report.approval_records.find((r: any) => r.approver_id === currentUserId)
-        if (!myApproval) {
-          return approvalWeeklySearchForm.approval_status === 'pending'
-        }
-        return myApproval.status === approvalWeeklySearchForm.approval_status
-      })
-    }
-    approvalWeeklyReports.value = filtered
-    // 如果前端过滤了，使用过滤后的数量；否则使用后端返回的总数
-    approvalWeeklyPagination.total = approvalWeeklySearchForm.approval_status ? filtered.length : response.total
+    // 按创建时间倒序排序
+    filtered.sort((a, b) => {
+      const aTime = new Date(a.created_at || 0).getTime()
+      const bTime = new Date(b.created_at || 0).getTime()
+      return bTime - aTime
+    })
+    
+    // 前端分页
+    const start = (approvalPagination.current - 1) * approvalPagination.pageSize
+    const end = start + approvalPagination.pageSize
+    approvalReports.value = filtered.slice(start, end)
+    approvalPagination.total = filtered.length
   } catch (error: any) {
-    message.error(error.message || '加载审批周报列表失败')
+    message.error(error.message || '加载审批列表失败')
   } finally {
-    approvalWeeklyLoading.value = false
+    approvalLoading.value = false
   }
 }
 
 // 获取审批状态颜色（用于审批列表，显示当前用户的审批状态）
 const getApprovalStatusColor = (record: DailyReport | WeeklyReport) => {
   const currentUserId = authStore.user?.id
+  // 如果当前用户不是审批人，返回空（显示空白）
   if (!record.approval_records || record.approval_records.length === 0) {
-    return 'orange' // 待审批
+    return '' // 没有审批记录，返回空
   }
   const myApproval = record.approval_records.find((r: any) => r.approver_id === currentUserId)
   if (!myApproval) {
-    return 'orange' // 待审批
+    return '' // 当前用户不是审批人，返回空
   }
+  // 当前用户是审批人，显示审批状态
   if (myApproval.status === 'approved') {
     return 'success' // 已通过
   } else if (myApproval.status === 'rejected') {
@@ -1852,13 +1766,15 @@ const getApprovalStatusColor = (record: DailyReport | WeeklyReport) => {
 // 获取审批状态文本（用于审批列表，显示当前用户的审批状态）
 const getApprovalStatusText = (record: DailyReport | WeeklyReport) => {
   const currentUserId = authStore.user?.id
+  // 如果当前用户不是审批人，返回空（显示空白）
   if (!record.approval_records || record.approval_records.length === 0) {
-    return '待审批'
+    return '' // 没有审批记录，返回空
   }
   const myApproval = record.approval_records.find((r: any) => r.approver_id === currentUserId)
   if (!myApproval) {
-    return '待审批'
+    return '' // 当前用户不是审批人，返回空
   }
+  // 当前用户是审批人，显示审批状态
   if (myApproval.status === 'approved') {
     return '已通过'
   } else if (myApproval.status === 'rejected') {
@@ -1901,71 +1817,59 @@ const getApproverStatusText = (record: DailyReport | WeeklyReport, approverId: n
   return '待审批'
 }
 
-// 审批日报搜索
-const handleApprovalDailySearch = () => {
-  approvalDailyPagination.current = 1
-  loadApprovalDailyReports()
-}
-
-// 审批日报重置
-const handleApprovalDailyReset = () => {
-  approvalDailySearchForm.approval_status = undefined
-  approvalDailySearchForm.start_date = undefined
-  approvalDailySearchForm.end_date = undefined
-  approvalDailyPagination.current = 1
-  loadApprovalDailyReports()
-}
-
-// 审批日报表格变化
-const handleApprovalDailyTableChange = (pag: any) => {
-  approvalDailyPagination.current = pag.current
-  approvalDailyPagination.pageSize = pag.pageSize
-  loadApprovalDailyReports()
-}
-
-// 审批周报搜索
-const handleApprovalWeeklySearch = () => {
-  approvalWeeklyPagination.current = 1
-  loadApprovalWeeklyReports()
-}
-
-// 审批周报重置
-const handleApprovalWeeklyReset = () => {
-  approvalWeeklySearchForm.approval_status = undefined
-  approvalWeeklySearchForm.start_date = undefined
-  approvalWeeklySearchForm.end_date = undefined
-  approvalWeeklyPagination.current = 1
-  loadApprovalWeeklyReports()
-}
-
-// 审批周报表格变化
-const handleApprovalWeeklyTableChange = (pag: any) => {
-  approvalWeeklyPagination.current = pag.current
-  approvalWeeklyPagination.pageSize = pag.pageSize
-  loadApprovalWeeklyReports()
-}
-
-// 查看审批日报详情
-const handleApprovalDailyView = async (record: DailyReport) => {
-  try {
-    const report = await getDailyReport(record.id)
-    dailyApproveData.value = report
-    dailyApproveComment.value = ''
-    dailyApproveModalVisible.value = true
-  } catch (error: any) {
-    message.error(error.message || '加载日报详情失败')
+// 判断当前用户的审批是否已完成（已通过或已拒绝）
+const isApprovalCompleted = (record: DailyReport | WeeklyReport): boolean => {
+  const currentUserId = authStore.user?.id
+  if (!currentUserId) return false
+  if (!record.approval_records || record.approval_records.length === 0) {
+    return false
   }
+  const myApproval = record.approval_records.find((r: any) => r.approver_id === currentUserId)
+  if (!myApproval) {
+    return false
+  }
+  return myApproval.status === 'approved' || myApproval.status === 'rejected'
 }
 
-// 查看审批周报详情
-const handleApprovalWeeklyView = async (record: WeeklyReport) => {
+// 审批搜索
+const handleApprovalSearch = () => {
+  approvalPagination.current = 1
+  loadApprovalReports()
+}
+
+// 审批重置
+const handleApprovalReset = () => {
+  approvalSearchForm.approval_status = undefined
+  approvalSearchForm.user_id = undefined
+  approvalSearchForm.start_date = undefined
+  approvalSearchForm.end_date = undefined
+  approvalPagination.current = 1
+  loadApprovalReports()
+}
+
+// 审批表格变化
+const handleApprovalTableChange = (pag: any) => {
+  approvalPagination.current = pag.current
+  approvalPagination.pageSize = pag.pageSize
+  loadApprovalReports()
+}
+
+// 查看审批详情
+const handleApprovalView = async (record: ApprovalReport) => {
   try {
-    const report = await getWeeklyReport(record.id)
-    weeklyApproveData.value = report
-    weeklyApproveComment.value = ''
-    weeklyApproveModalVisible.value = true
+    if (record.reportType === 'daily') {
+      const report = await getDailyReport(record.id)
+      dailyApproveData.value = report
+      dailyApproveComment.value = ''
+      dailyApproveModalVisible.value = true
+    } else {
+      const report = await getWeeklyReport(record.id)
+      weeklyApproveData.value = report
+      weeklyApproveComment.value = ''
+      weeklyApproveModalVisible.value = true
+    }
   } catch (error: any) {
-    message.error(error.message || '加载周报详情失败')
+    message.error(error.message || '加载报告详情失败')
   }
 }
 
@@ -2022,9 +1926,6 @@ onMounted(() => {
   // 注意：状态字段默认保持为空，不从路由参数自动设置
   if (route.query.tab) {
     activeTab.value = route.query.tab as 'daily' | 'weekly' | 'approval'
-    if (activeTab.value === 'approval' && route.query.subTab) {
-      approvalSubTab.value = route.query.subTab as 'daily-approval' | 'weekly-approval'
-    }
   }
   
   loadDailyReports()
@@ -2040,7 +1941,7 @@ watch(activeTab, () => {
   } else if (activeTab.value === 'weekly') {
     loadWeeklyReports()
   } else if (activeTab.value === 'approval') {
-    handleApprovalSubTabChange(approvalSubTab.value)
+    loadApprovalReports()
     loadPendingApprovalCount()
   }
 })
@@ -2051,9 +1952,7 @@ watch(() => route.query, () => {
     const tab = route.query.tab as string
     if (tab === 'approval') {
       activeTab.value = 'approval'
-      if (route.query.subTab) {
-        approvalSubTab.value = route.query.subTab as 'daily-approval' | 'weekly-approval'
-      }
+      loadApprovalReports()
     } else if (tab === 'daily' || tab === 'weekly') {
       activeTab.value = tab as 'daily' | 'weekly'
     }

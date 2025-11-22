@@ -5,7 +5,7 @@ export interface DailyReport {
   date: string
   content?: string
   hours: number
-  status: 'draft' | 'submitted' | 'approved'
+  status: 'draft' | 'submitted' | 'approved' | 'rejected'
   user_id: number
   user?: any
   project_id?: number
@@ -31,7 +31,7 @@ export interface WeeklyReport {
   week_end: string
   summary?: string
   next_week_plan?: string
-  status: 'draft' | 'submitted' | 'approved'
+  status: 'draft' | 'submitted' | 'approved' | 'rejected'
   user_id: number
   user?: any
   project_id?: number
