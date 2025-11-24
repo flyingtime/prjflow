@@ -101,6 +101,10 @@ func main() {
 		authGroup.GET("/user/info", middleware.Auth(), authHandler.GetUserInfo)
 		authGroup.POST("/logout", middleware.Auth(), authHandler.Logout)
 		authGroup.POST("/change-password", middleware.Auth(), authHandler.ChangePassword) // 修改密码
+		// 微信绑定相关路由
+		authGroup.GET("/wechat/bind/qrcode", middleware.Auth(), authHandler.GetWeChatBindQRCode) // 获取微信绑定二维码
+		authGroup.GET("/wechat/bind/callback", authHandler.WeChatBindCallback)                     // 微信绑定回调接口（GET请求，微信直接重定向到这里）
+		authGroup.POST("/wechat/unbind", middleware.Auth(), authHandler.UnbindWeChat)            // 解绑微信
 	}
 
 	// 权限管理路由

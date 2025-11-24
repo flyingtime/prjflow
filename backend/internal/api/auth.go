@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/url"
 
 	"project-management/internal/config"
@@ -420,14 +421,15 @@ func (h *AuthHandler) GetUserInfo(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{
-		"id":         user.ID,
-		"username":   user.Username,
-		"nickname":   user.Nickname,
-		"email":      user.Email,
-		"avatar":     user.Avatar,
-		"phone":      user.Phone,
-		"department": user.Department,
-		"roles":      roleNames,
+		"id":            user.ID,
+		"username":      user.Username,
+		"nickname":      user.Nickname,
+		"email":         user.Email,
+		"avatar":        user.Avatar,
+		"phone":         user.Phone,
+		"wechat_open_id": user.WeChatOpenID,
+		"department":    user.Department,
+		"roles":         roleNames,
 	})
 }
 
@@ -565,5 +567,271 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	// JWT是无状态的，客户端删除token即可
 	utils.Success(c, gin.H{
 		"message": "登出成功",
+	})
+}
+
+// GetWeChatBindQRCode 获取微信绑定二维码
+func (h *AuthHandler) GetWeChatBindQRCode(c *gin.Context) {
+	// 检查用户是否已登录
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Error(c, 401, "未授权，请先登录")
+		return
+	}
+
+	// 检查用户是否已绑定微信
+	var user model.User
+	if err := h.db.First(&user, userID).Error; err != nil {
+		utils.Error(c, 404, "用户不存在")
+		return
+	}
+
+	if user.WeChatOpenID != nil && *user.WeChatOpenID != "" {
+		utils.Error(c, 400, "您已绑定微信，请先解绑后再绑定新的微信")
+		return
+	}
+
+	// 从数据库读取微信配置
+	var wechatAppIDConfig model.SystemConfig
+	if err := h.db.Where("key = ?", "wechat_app_id").First(&wechatAppIDConfig).Error; err != nil {
+		// 如果数据库中没有配置，尝试使用配置文件中的配置
+		if config.AppConfig.WeChat.AppID == "" {
+			utils.Error(c, 400, "请先配置微信AppID和AppSecret")
+			return
+		}
+		h.wechatClient.AppID = config.AppConfig.WeChat.AppID
+		h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
+	} else {
+		// 从数据库读取配置
+		var wechatAppSecretConfig model.SystemConfig
+		h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig)
+		h.wechatClient.AppID = wechatAppIDConfig.Value
+		h.wechatClient.AppSecret = wechatAppSecretConfig.Value
+	}
+
+	// 获取回调地址（指向绑定回调接口）
+	var redirectURI string
+	if config.AppConfig.WeChat.CallbackDomain != "" {
+		domain := config.AppConfig.WeChat.CallbackDomain
+		if len(domain) > 0 && domain[len(domain)-1] != '/' {
+			domain += "/"
+		}
+		redirectURI = domain + "api/auth/wechat/bind/callback"
+	} else {
+		// 从 Referer 头获取
+		referer := c.GetHeader("Referer")
+		if referer != "" {
+			redirectURI = referer + "/api/auth/wechat/bind/callback"
+		} else {
+			redirectURI = "http://localhost:8080/api/auth/wechat/bind/callback"
+		}
+	}
+
+	// 生成二维码获取ticket
+	qrCode, err := h.wechatClient.GetQRCode(redirectURI)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "获取二维码失败: "+err.Error())
+		return
+	}
+
+	// 生成唯一的ticket
+	ticket := qrCode.Ticket
+	// state格式：bind:{ticket}:{user_id}
+	var userIDStr string
+	if userIDInt, ok := userID.(int); ok {
+		userIDStr = fmt.Sprintf("%d", userIDInt)
+	} else if userIDUint, ok := userID.(uint); ok {
+		userIDStr = fmt.Sprintf("%d", userIDUint)
+	} else {
+		utils.Error(c, utils.CodeError, "无效的用户ID")
+		return
+	}
+	stateWithTicket := "bind:" + ticket + ":" + userIDStr
+
+	// 重新生成二维码，将ticket和user_id包含在state中
+	qrCode, err = h.wechatClient.GetQRCode(redirectURI, stateWithTicket)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "获取二维码失败: "+err.Error())
+		return
+	}
+
+	// 返回授权URL，前端需要将其转换为二维码图片
+	utils.Success(c, gin.H{
+		"ticket":         ticket,
+		"qr_code_url":    qrCode.URL, // 这是授权URL，需要转换为二维码
+		"auth_url":       qrCode.URL, // 授权URL
+		"expire_seconds": qrCode.ExpireSeconds,
+	})
+}
+
+// BindCallbackHandler 绑定场景的微信回调处理
+type BindCallbackHandler struct {
+	db *gorm.DB
+}
+
+func (h *BindCallbackHandler) Validate(ctx *WeChatCallbackContext) error {
+	// 从state中提取user_id
+	// state格式：bind:{ticket}:{user_id}
+	if ctx.State == "" {
+		return &CallbackError{Message: "缺少state参数"}
+	}
+
+	// 解析state：bind:{ticket}:{user_id}
+	var userIDStr string
+	if len(ctx.State) > 5 && ctx.State[:5] == "bind:" {
+		// 提取ticket和user_id
+		parts := ctx.State[5:] // 去掉"bind:"前缀
+		// 找到最后一个冒号，后面是user_id
+		lastColonIndex := -1
+		for i := len(parts) - 1; i >= 0; i-- {
+			if parts[i] == ':' {
+				lastColonIndex = i
+				break
+			}
+		}
+		if lastColonIndex > 0 {
+			userIDStr = parts[lastColonIndex+1:]
+			ctx.Ticket = parts[:lastColonIndex]
+		} else {
+			return &CallbackError{Message: "state参数格式错误"}
+		}
+	} else {
+		return &CallbackError{Message: "state参数格式错误"}
+	}
+
+	// 验证用户是否存在
+	var user model.User
+	if err := ctx.DB.First(&user, userIDStr).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return &CallbackError{Message: "用户不存在"}
+		}
+		return &CallbackError{Message: "查询用户失败", Err: err}
+	}
+
+	// 检查用户是否已绑定其他微信
+	if user.WeChatOpenID != nil && *user.WeChatOpenID != "" {
+		return &CallbackError{Message: "您已绑定微信，请先解绑后再绑定新的微信"}
+	}
+
+	// 将user_id存储到上下文中，供Process使用
+	ctx.DB = ctx.DB // 确保DB可用
+	return nil
+}
+
+func (h *BindCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{}, error) {
+	// 从state中提取user_id
+	var userIDStr string
+	if len(ctx.State) > 5 && ctx.State[:5] == "bind:" {
+		parts := ctx.State[5:]
+		lastColonIndex := -1
+		for i := len(parts) - 1; i >= 0; i-- {
+			if parts[i] == ':' {
+				lastColonIndex = i
+				break
+			}
+		}
+		if lastColonIndex > 0 {
+			userIDStr = parts[lastColonIndex+1:]
+		}
+	}
+
+	// 查找用户
+	var user model.User
+	if err := ctx.DB.First(&user, userIDStr).Error; err != nil {
+		return nil, &CallbackError{Message: "用户不存在", Err: err}
+	}
+
+	// 检查该微信OpenID是否已被其他用户绑定
+	var existingUser model.User
+	if err := ctx.DB.Where("wechat_open_id = ? AND id != ?", ctx.UserInfo.OpenID, user.ID).First(&existingUser).Error; err == nil {
+		return nil, &CallbackError{Message: "该微信已被其他用户绑定"}
+	} else if err != gorm.ErrRecordNotFound {
+		return nil, &CallbackError{Message: "查询用户失败", Err: err}
+	}
+
+	// 更新用户的wechat_open_id
+	wechatOpenID := ctx.UserInfo.OpenID
+	user.WeChatOpenID = &wechatOpenID
+	// 可选：更新头像
+	if ctx.UserInfo.HeadImgURL != "" {
+		user.Avatar = ctx.UserInfo.HeadImgURL
+	}
+	if err := ctx.DB.Save(&user).Error; err != nil {
+		return nil, &CallbackError{Message: "绑定失败", Err: err}
+	}
+
+	// 通过WebSocket通知PC前端绑定成功
+	if ctx.Ticket != "" {
+		websocket.GetHub().SendMessage(ctx.Ticket, "info", nil, "正在绑定...")
+		websocket.GetHub().SendMessage(ctx.Ticket, "success", gin.H{
+			"message": "绑定成功",
+		}, "微信绑定成功")
+	}
+
+	return gin.H{
+		"message": "绑定成功",
+		"user": gin.H{
+			"id":            user.ID,
+			"username":      user.Username,
+			"wechat_open_id": user.WeChatOpenID,
+		},
+	}, nil
+}
+
+func (h *BindCallbackHandler) GetSuccessHTML(ctx *WeChatCallbackContext, data interface{}) string {
+	return GetDefaultSuccessHTML("绑定成功", "请返回 PC 端查看")
+}
+
+func (h *BindCallbackHandler) GetErrorHTML(ctx *WeChatCallbackContext, err error) string {
+	return GetDefaultErrorHTML("绑定失败", err.Error())
+}
+
+// WeChatBindCallback 处理微信绑定回调（GET请求，微信直接重定向到这里）
+func (h *AuthHandler) WeChatBindCallback(c *gin.Context) {
+	code := c.Query("code")
+	state := c.Query("state")
+
+	handler := &BindCallbackHandler{db: h.db}
+	ctx, result, err := ProcessWeChatCallback(h.db, h.wechatClient, code, state, handler)
+
+	if err != nil {
+		c.Data(200, "text/html; charset=utf-8", []byte(handler.GetErrorHTML(ctx, err)))
+		return
+	}
+
+	// 返回成功页面（在微信内显示）
+	c.Data(200, "text/html; charset=utf-8", []byte(handler.GetSuccessHTML(ctx, result)))
+}
+
+// UnbindWeChat 解绑微信
+func (h *AuthHandler) UnbindWeChat(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Error(c, 401, "未授权，请先登录")
+		return
+	}
+
+	// 查找用户
+	var user model.User
+	if err := h.db.First(&user, userID).Error; err != nil {
+		utils.Error(c, 404, "用户不存在")
+		return
+	}
+
+	// 检查用户是否已绑定微信
+	if user.WeChatOpenID == nil || *user.WeChatOpenID == "" {
+		utils.Error(c, 400, "您尚未绑定微信")
+		return
+	}
+
+	// 解绑：将wechat_open_id设置为NULL
+	user.WeChatOpenID = nil
+	if err := h.db.Save(&user).Error; err != nil {
+		utils.Error(c, utils.CodeError, "解绑失败")
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"message": "解绑成功",
 	})
 }

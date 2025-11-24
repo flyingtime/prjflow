@@ -63,3 +63,18 @@ export const changePassword = async (data: ChangePasswordRequest): Promise<{ mes
   return request.post('/auth/change-password', data)
 }
 
+// 微信绑定相关
+export const getWeChatBindQRCode = async (): Promise<QRCodeResponse> => {
+  const data: any = await request.get('/auth/wechat/bind/qrcode')
+  return {
+    ticket: data.ticket || '',
+    qrCodeUrl: data.qr_code_url || data.auth_url || '',
+    authUrl: data.auth_url || data.qr_code_url || '',
+    expireSeconds: data.expire_seconds || 600
+  }
+}
+
+export const unbindWeChat = async (): Promise<{ message: string }> => {
+  return request.post('/auth/wechat/unbind')
+}
+

@@ -44,6 +44,15 @@
               {{ authStore.user?.username }}{{ authStore.user?.nickname ? `(${authStore.user.nickname})` : '' }}
             </a-menu-item>
             <a-menu-divider />
+            <a-menu-item key="wechatBind" @click="handleWeChatBind" v-if="!isWeChatBound">
+              <template #icon><QrcodeOutlined /></template>
+              绑定微信
+            </a-menu-item>
+            <a-menu-item key="wechatUnbind" @click="handleWeChatUnbind" v-if="isWeChatBound">
+              <template #icon><QrcodeOutlined /></template>
+              解绑微信
+            </a-menu-item>
+            <a-menu-divider />
             <a-menu-item key="changePassword" @click="handleChangePassword">
               <template #icon><LockOutlined /></template>
               修改密码
@@ -90,6 +99,24 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 微信绑定二维码弹窗 -->
+    <a-modal
+      v-model:open="weChatBindVisible"
+      title="绑定微信"
+      :footer="null"
+      :width="400"
+    >
+      <WeChatQRCode
+        v-if="weChatBindVisible"
+        :fetchQRCode="fetchWeChatBindQRCode"
+        :auto-fetch="true"
+        initial-status-text="请使用微信扫码绑定"
+        hint="扫码后会在微信内打开授权页面，确认后完成绑定"
+        @success="handleWeChatBindSuccess"
+        @error="handleWeChatBindError"
+      />
+    </a-modal>
   </a-layout-header>
 </template>
 
@@ -100,6 +127,7 @@ import { message } from 'ant-design-vue'
 import {
   LogoutOutlined,
   LockOutlined,
+  QrcodeOutlined,
   DashboardOutlined,
   ProjectOutlined,
   TeamOutlined,
@@ -107,8 +135,9 @@ import {
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePermissionStore } from '@/stores/permission'
-import { changePassword } from '@/api/auth'
+import { changePassword, getWeChatBindQRCode, unbindWeChat } from '@/api/auth'
 import { getMenus, type MenuItem } from '@/api/permission'
+import WeChatQRCode from './WeChatQRCode.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -223,6 +252,49 @@ const handleChangePassword = () => {
 // 检查用户是否已有密码（通过检查是否有wechat_open_id但没有密码来判断）
 // 注意：这个判断不准确，我们改为允许旧密码为空，后端会判断
 const hasPassword = ref(true) // 默认假设有密码，如果后端返回需要旧密码的错误，再提示
+
+// 微信绑定相关
+const isWeChatBound = computed(() => {
+  return !!(authStore.user?.wechat_open_id)
+})
+
+const weChatBindVisible = ref(false)
+
+// 获取微信绑定二维码的函数（供WeChatQRCode组件使用）
+const fetchWeChatBindQRCode = async () => {
+  return await getWeChatBindQRCode()
+}
+
+// 绑定微信
+const handleWeChatBind = () => {
+  weChatBindVisible.value = true
+}
+
+// 解绑微信
+const handleWeChatUnbind = async () => {
+  try {
+    await unbindWeChat()
+    message.success('解绑成功')
+    // 刷新用户信息
+    await authStore.loadUserInfo()
+  } catch (error: any) {
+    message.error(error.message || '解绑失败')
+  }
+}
+
+// 绑定成功回调
+const handleWeChatBindSuccess = async () => {
+  message.success('微信绑定成功')
+  weChatBindVisible.value = false
+  // 刷新用户信息
+  await authStore.loadUserInfo()
+}
+
+// 绑定失败回调
+const handleWeChatBindError = (error: string) => {
+  message.error(error || '绑定失败')
+  weChatBindVisible.value = false
+}
 
 const handleChangePasswordSubmit = async () => {
   if (changePasswordForm.value.new_password !== changePasswordForm.value.confirm_password) {
