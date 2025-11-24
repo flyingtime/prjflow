@@ -55,3 +55,4 @@ temp/
 backend/server
 backend/main
 .VSCodeCounter/
+backend/uploads/
