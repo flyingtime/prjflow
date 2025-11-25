@@ -101,8 +101,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { 
   checkInitStatus, 
@@ -114,7 +114,6 @@ import { useAuthStore } from '@/stores/auth'
 import WeChatQRCode from '@/components/WeChatQRCode.vue'
 
 const router = useRouter()
-const route = useRoute()
 const authStore = useAuthStore()
 
 const loading = ref(false)

@@ -290,3 +290,5 @@ func CheckBugAccess(db *gorm.DB, c *gin.Context, bugID uint) bool {
 	return CheckProjectAccess(db, c, bug.ProjectID)
 }
 
+
+

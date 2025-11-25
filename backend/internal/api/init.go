@@ -125,6 +125,15 @@ func (h *InitHandler) InitSystem(c *gin.Context) {
 	// 临时设置WeChatClient配置
 	h.wechatClient.AppID = wechatAppIDConfig.Value
 	h.wechatClient.AppSecret = wechatAppSecretConfig.Value
+	// 确保使用配置文件中的 account_type
+	h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
+	if h.wechatClient.AccountType == "" {
+		h.wechatClient.AccountType = "open_platform" // 默认使用开放平台
+	}
+	h.wechatClient.Scope = config.AppConfig.WeChat.Scope
+	if h.wechatClient.Scope == "" {
+		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
+	}
 
 	// 获取access_token
 	accessTokenResp, err := h.wechatClient.GetAccessToken(req.Code)
@@ -170,13 +179,13 @@ func (h *InitHandler) InitSystem(c *gin.Context) {
 	if adminUsername == "" {
 		adminUsername = "管理员"
 	}
-	
+
 	// 确保昵称不为空（如果微信昵称为空，使用用户名作为默认昵称）
 	adminNickname := userInfo.Nickname
 	if adminNickname == "" {
 		adminNickname = adminUsername
 	}
-	
+
 	wechatOpenID := userInfo.OpenID
 	adminUser := model.User{
 		WeChatOpenID: &wechatOpenID,
@@ -256,6 +265,15 @@ func (h *InitHandler) GetInitQRCode(c *gin.Context) {
 	// 临时设置WeChatClient配置
 	h.wechatClient.AppID = wechatAppIDConfig.Value
 	h.wechatClient.AppSecret = wechatAppSecretConfig.Value
+	// 确保使用配置文件中的 account_type（如果未配置，默认使用 open_platform）
+	h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
+	if h.wechatClient.AccountType == "" {
+		h.wechatClient.AccountType = "open_platform" // 默认使用开放平台
+	}
+	h.wechatClient.Scope = config.AppConfig.WeChat.Scope
+	if h.wechatClient.Scope == "" {
+		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
+	}
 
 	// 获取回调地址（初始化回调地址）
 	// 优先级：1. 配置文件中的 callback_domain 2. 查询参数 3. Referer 头 4. 默认值

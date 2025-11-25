@@ -155,8 +155,8 @@ const loadMenus = async () => {
   try {
     const menus = await getMenus()
     console.log('后端返回的菜单:', menus)
-    console.log('用户权限:', permissionStore.permissions.value)
-    console.log('用户角色:', permissionStore.roles.value)
+    console.log('用户权限:', permissionStore.permissions)
+    console.log('用户角色:', permissionStore.roles)
     // 完全使用后端返回的菜单
     menuItems.value = menus || []
     useBackendMenu.value = true

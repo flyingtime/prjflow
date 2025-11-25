@@ -103,6 +103,7 @@ const handlePaste = async (e: ClipboardEvent) => {
   // 查找图片项
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
+    if (!item) continue
     if (item.type.indexOf('image') !== -1) {
       e.preventDefault()
       e.stopPropagation()
@@ -162,6 +163,7 @@ const uploadLocalImages = async (uploadFn: (file: File, projectId: number) => Pr
 
   for (const match of matches) {
     const blobUrl = match[2]
+    if (!blobUrl) continue
     const file = localImages.get(blobUrl)
 
     if (file && props.projectId) {
@@ -180,7 +182,8 @@ const uploadLocalImages = async (uploadFn: (file: File, projectId: number) => Pr
         })
         
         // 替换URL（替换所有匹配的blob URL）
-        content = content.replace(new RegExp(blobUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), serverUrl)
+        const escapedBlobUrl = blobUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        content = content.replace(new RegExp(escapedBlobUrl, 'g'), serverUrl)
         
         // 清理 blob URL
         URL.revokeObjectURL(blobUrl)
@@ -207,14 +210,14 @@ defineExpose({
 // 挂载时添加粘贴事件监听
 onMounted(() => {
   if (!props.readonly && editorContainerRef.value) {
-    editorContainerRef.value.addEventListener('paste', handlePaste as EventListener)
+    editorContainerRef.value.addEventListener('paste', handlePaste as unknown as EventListener)
   }
 })
 
 // 组件卸载时清理 blob URL和事件监听
 onUnmounted(() => {
   if (editorContainerRef.value) {
-    editorContainerRef.value.removeEventListener('paste', handlePaste as EventListener)
+    editorContainerRef.value.removeEventListener('paste', handlePaste as unknown as EventListener)
   }
   localImages.forEach((_, blobUrl) => {
     URL.revokeObjectURL(blobUrl)

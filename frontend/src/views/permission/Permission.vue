@@ -353,8 +353,7 @@ import {
   deletePermission,
   assignRolePermissions,
   type Role,
-  type Permission,
-  type MenuItem
+  type Permission
 } from '@/api/permission'
 
 // const route = useRoute()

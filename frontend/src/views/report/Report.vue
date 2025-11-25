@@ -691,7 +691,6 @@ import {
   type CreateWeeklyReportRequest
 } from '@/api/report'
 import { getDashboard } from '@/api/dashboard'
-import { uploadFile } from '@/api/attachment'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'

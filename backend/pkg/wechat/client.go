@@ -157,6 +157,25 @@ func (c *WeChatClient) GetAccessToken(code string) (*AccessTokenResponse, error)
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	// 先检查是否是错误响应
+	var errorResp struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+	}
+	if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.ErrCode != 0 {
+		// 根据错误码提供更详细的错误信息
+		switch errorResp.ErrCode {
+		case 40029:
+			return nil, fmt.Errorf("code已过期或已使用，请重新扫码: %s", errorResp.ErrMsg)
+		case 40163:
+			return nil, fmt.Errorf("code已被使用，请重新扫码: %s", errorResp.ErrMsg)
+		case 40125:
+			return nil, fmt.Errorf("scope参数错误或没有scope权限。请检查：1) 授权回调域名是否正确配置（只填写域名，不包含协议和端口）；2) 是否使用了正确的AppID类型（开放平台网站应用使用 open_platform，公众号使用 official_account）；3) 是否已申请微信登录接口权限: %s", errorResp.ErrMsg)
+		default:
+			return nil, fmt.Errorf("微信接口错误 (errcode: %d): %s", errorResp.ErrCode, errorResp.ErrMsg)
+		}
+	}
+
 	var result AccessTokenResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)

@@ -32,7 +32,7 @@
           <a-progress
             v-if="file.status === 'uploading'"
             :percent="file.percent || 0"
-            :size="small"
+            size="small"
             style="width: 100px; margin-right: 8px"
           />
           <!-- 下载按钮（已上传） -->
@@ -61,7 +61,7 @@
     <!-- 已存在的附件列表（只读模式） -->
     <div v-if="readonly && existingAttachments.length > 0" class="file-list">
       <div
-        v-for="(attachment, index) in existingAttachments"
+        v-for="attachment in existingAttachments"
         :key="attachment.id"
         class="file-item"
       >
@@ -93,7 +93,8 @@ import {
   DownloadOutlined,
   PaperClipOutlined
 } from '@ant-design/icons-vue'
-import type { UploadFile, UploadRequestOption } from 'ant-design-vue'
+import type { UploadFile } from 'ant-design-vue'
+import type { UploadRequestOption } from 'ant-design-vue/es/vc-upload/interface'
 import { uploadFile as uploadFileAPI, deleteAttachment, downloadFile, type Attachment } from '@/api/attachment'
 
 interface Props {
@@ -113,7 +114,11 @@ const emit = defineEmits<{
   'update:modelValue': [value: number[]]
 }>()
 
-const fileList = ref<UploadFile[]>([])
+interface ExtendedUploadFile extends UploadFile {
+  id?: number
+}
+
+const fileList = ref<ExtendedUploadFile[]>([])
 
 // 格式化文件大小
 const formatFileSize = (bytes: number): string => {
@@ -145,7 +150,7 @@ const handleUpload = async (options: UploadRequestOption) => {
   }
 
   // 添加到文件列表
-  const uploadFileItem: UploadFile = {
+  const uploadFileItem: ExtendedUploadFile = {
     uid: `${Date.now()}-${Math.random()}`,
     name: file.name,
     size: file.size,
@@ -186,7 +191,7 @@ const handleUpload = async (options: UploadRequestOption) => {
 }
 
 // 删除文件
-const handleRemove = async (file: UploadFile, index: number) => {
+const handleRemove = async (file: ExtendedUploadFile, index: number) => {
   // 如果已上传，需要调用删除API
   if (file.status === 'done' && file.id) {
     try {
@@ -206,7 +211,7 @@ const handleRemove = async (file: UploadFile, index: number) => {
 }
 
 // 下载文件
-const handleDownload = async (file: UploadFile) => {
+const handleDownload = async (file: ExtendedUploadFile) => {
   if (!file.id || !file.name) return
 
   try {

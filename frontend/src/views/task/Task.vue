@@ -652,11 +652,11 @@ const loadRequirementsForProject = async () => {
   }
 }
 
-// 项目变更处理
-const handleProjectChange = () => {
-  formData.requirement_id = undefined
-  loadRequirementsForProject()
-}
+// 项目变更处理（已内联到其他地方，保留函数定义以防需要）
+// const handleProjectChange = () => {
+//   formData.requirement_id = undefined
+//   loadRequirementsForProject()
+// }
 
 // 搜索
 const handleSearch = () => {

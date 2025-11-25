@@ -199,7 +199,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { message, Badge } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 import { getDashboard, type DashboardData } from '@/api/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'

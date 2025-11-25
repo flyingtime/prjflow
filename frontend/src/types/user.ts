@@ -5,5 +5,6 @@ export interface User {
   email?: string
   avatar?: string
   roles?: string[]
+  wechat_open_id?: string
 }
 
