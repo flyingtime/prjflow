@@ -42,7 +42,13 @@
                 </a-descriptions-item>
                 <a-descriptions-item label="成员数">{{ statistics?.total_members || 0 }} 人</a-descriptions-item>
                 <a-descriptions-item label="描述" :span="2">
-                  {{ project?.description || '-' }}
+                  <div v-if="project?.description" class="description-content">
+                    <MarkdownEditor
+                      :model-value="project.description"
+                      :readonly="true"
+                    />
+                  </div>
+                  <span v-else>-</span>
                 </a-descriptions-item>
               </a-descriptions>
             </a-card>
@@ -307,6 +313,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import AppHeader from '@/components/AppHeader.vue'
 import ModuleManagement from '@/components/ModuleManagement.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { 
   getProject, 
   getProjectMembers,
@@ -565,19 +572,28 @@ onMounted(() => {
 
 <style scoped>
 .project-detail {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .content {
+  flex: 1;
   padding: 24px;
   background: #f0f2f5;
-  min-height: calc(100vh - 64px);
+  overflow-y: auto;
 }
 
 .content-inner {
   background: white;
   padding: 24px;
   border-radius: 4px;
+  min-height: fit-content;
+}
+
+.description-content {
+  max-width: 100%;
 }
 
 .stat-card {
