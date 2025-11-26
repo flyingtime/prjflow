@@ -58,3 +58,4 @@ backend/main
 backend/uploads/
 backend/cmd/server/frontend-dist/
 zentaopms/
+backend/migrate
