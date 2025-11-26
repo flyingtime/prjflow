@@ -36,24 +36,26 @@
             <a-card class="dashboard-card" :bordered="false">
               <a-tabs v-model:activeKey="activeTab" type="card" class="centered-tabs">
                 <a-tab-pane key="projects" tab="我的项目">
-                  <a-list
-                    :data-source="projects"
-                    :loading="loading"
-                  >
-                    <template #renderItem="{ item }">
-                      <a-list-item @click="goToProject(item.id)">
-                        <a-list-item-meta>
-                          <template #title>
-                            {{ item.name }}
-                          </template>
-                          <template #description>
-                            <a-tag>{{ item.role }}</a-tag>
-                            <span style="margin-left: 8px;">{{ item.code }}</span>
-                          </template>
-                        </a-list-item-meta>
-                      </a-list-item>
-                    </template>
-                  </a-list>
+                  <div class="project-list-container">
+                    <a-list
+                      :data-source="projects"
+                      :loading="loading"
+                    >
+                      <template #renderItem="{ item }">
+                        <a-list-item @click="goToProject(item.id)">
+                          <a-list-item-meta>
+                            <template #title>
+                              {{ item.name }}
+                            </template>
+                            <template #description>
+                              <a-tag>{{ item.role }}</a-tag>
+                              <span style="margin-left: 8px;">{{ item.code }}</span>
+                            </template>
+                          </a-list-item-meta>
+                        </a-list-item>
+                      </template>
+                    </a-list>
+                  </div>
                 </a-tab-pane>
 
                 <a-tab-pane key="bugs" tab="我的Bug">
@@ -360,12 +362,11 @@ onMounted(() => {
 
 :deep(.ant-list-item) {
   cursor: pointer;
-  transition: all 0.3s;
+  transition: background-color 0.3s;
 }
 
 :deep(.ant-list-item):hover {
   background-color: #f5f5f5;
-  transform: translateX(4px);
 }
 
 .todo-card:hover {
@@ -388,5 +389,10 @@ onMounted(() => {
   width: 100%;
   display: flex;
   justify-content: center;
+}
+
+.project-list-container {
+  max-height: calc(100vh - 500px);
+  overflow-y: auto;
 }
 </style>
