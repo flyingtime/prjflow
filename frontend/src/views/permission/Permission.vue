@@ -21,7 +21,9 @@
                   :columns="roleColumns"
                   :data-source="roles"
                   :loading="roleLoading"
-                  :scroll="{ x: 'max-content' }"
+                  :scroll="{ x: 'max-content', y: tableScrollHeight }"
+                  :pagination="rolePagination"
+                  @change="handleRoleTableChange"
                   row-key="id"
                 >
                   <template #bodyCell="{ column, record }">
@@ -76,7 +78,9 @@
                   :columns="permissionColumns"
                   :data-source="permissions"
                   :loading="permissionLoading"
-                  :scroll="{ x: 'max-content' }"
+                  :scroll="{ x: 'max-content', y: tableScrollHeight }"
+                  :pagination="permissionPagination"
+                  @change="handlePermissionTableChange"
                   row-key="id"
                 >
                   <template #bodyCell="{ column, record }">
@@ -232,19 +236,19 @@
             <span style="margin-left: 8px; color: #999">点击输入框选择图标</span>
           </a-form-item>
           <a-form-item label="父菜单" name="parent_menu_id">
-            <a-select
-              v-model:value="permissionFormData.parent_menu_id"
-              placeholder="选择父菜单（留空则为顶级菜单）"
-              allow-clear
-            >
-              <a-select-option
-                v-for="perm in permissions.filter(p => p.is_menu && p.id !== permissionFormData.id)"
-                :key="perm.id"
-                :value="perm.id"
+              <a-select
+                v-model:value="permissionFormData.parent_menu_id"
+                placeholder="选择父菜单（留空则为顶级菜单）"
+                allow-clear
               >
-                {{ perm.menu_title || perm.name }}
-              </a-select-option>
-            </a-select>
+                <a-select-option
+                  v-for="perm in allPermissions.filter(p => p.is_menu && p.id !== permissionFormData.id)"
+                  :key="perm.id"
+                  :value="perm.id"
+                >
+                  {{ perm.menu_title || perm.name }}
+                </a-select-option>
+              </a-select>
           </a-form-item>
           <a-form-item label="菜单排序" name="menu_order">
             <a-input-number v-model:value="permissionFormData.menu_order" :min="0" placeholder="数字越小越靠前" />
@@ -370,6 +374,30 @@ const assignSubmitting = ref(false)
 const roles = ref<Role[]>([])
 const permissions = ref<Permission[]>([])
 const expandedAssignMenuKeys = ref<(string | number)[]>([])
+
+// 分页配置
+const rolePagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showTotal: (total: number) => `共 ${total} 条`,
+  showSizeChanger: true,
+  showQuickJumper: true
+})
+
+const permissionPagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showTotal: (total: number) => `共 ${total} 条`,
+  showSizeChanger: true,
+  showQuickJumper: true
+})
+
+// 计算表格滚动高度
+const tableScrollHeight = computed(() => {
+  return 'calc(100vh - 450px)'
+})
 
 const roleColumns = [
   { title: '角色名称', dataIndex: 'name', key: 'name' },
@@ -559,7 +587,12 @@ const handleSelectIcon = (iconName: string) => {
 const loadRoles = async () => {
   roleLoading.value = true
   try {
-    roles.value = await getRoles()
+    const allRoles = await getRoles()
+    rolePagination.total = allRoles.length
+    // 前端分页
+    const start = (rolePagination.current - 1) * rolePagination.pageSize
+    const end = start + rolePagination.pageSize
+    roles.value = allRoles.slice(start, end)
   } catch (error: any) {
     message.error(error.message || '加载角色列表失败')
   } finally {
@@ -567,13 +600,21 @@ const loadRoles = async () => {
   }
 }
 
+// 存储所有权限（用于权限树和分页）
+const allPermissions = ref<Permission[]>([])
+
 // 加载权限列表
 const loadPermissions = async () => {
   permissionLoading.value = true
   try {
-    permissions.value = await getPermissions()
-    // 构建权限树
-    permissionTreeData.value = buildPermissionTree(permissions.value)
+    allPermissions.value = await getPermissions()
+    permissionPagination.total = allPermissions.value.length
+    // 前端分页
+    const start = (permissionPagination.current - 1) * permissionPagination.pageSize
+    const end = start + permissionPagination.pageSize
+    permissions.value = allPermissions.value.slice(start, end)
+    // 构建权限树（使用所有权限）
+    permissionTreeData.value = buildPermissionTree(allPermissions.value)
   } catch (error: any) {
     message.error(error.message || '加载权限列表失败')
   } finally {
@@ -649,6 +690,12 @@ const handleDeleteRole = async (id: number) => {
   try {
     await deleteRole(id)
     message.success('删除成功')
+    // 如果当前页没有数据了，跳转到上一页
+    rolePagination.total = Math.max(0, rolePagination.total - 1)
+    const totalPages = Math.ceil(rolePagination.total / rolePagination.pageSize)
+    if (rolePagination.current > totalPages && totalPages > 0) {
+      rolePagination.current = totalPages
+    }
     loadRoles()
   } catch (error: any) {
     message.error(error.message || '删除失败')
@@ -801,6 +848,12 @@ const handleDeletePermission = async (id: number) => {
   try {
     await deletePermission(id)
     message.success('删除成功')
+    // 如果当前页没有数据了，跳转到上一页
+    permissionPagination.total = Math.max(0, permissionPagination.total - 1)
+    const totalPages = Math.ceil(permissionPagination.total / permissionPagination.pageSize)
+    if (permissionPagination.current > totalPages && totalPages > 0) {
+      permissionPagination.current = totalPages
+    }
     loadPermissions()
   } catch (error: any) {
     message.error(error.message || '删除失败')
@@ -809,7 +862,7 @@ const handleDeletePermission = async (id: number) => {
 
 // 全部权限树数据（用于左侧显示）
 const allPermissionTreeData = computed<PermissionTreeNode[]>(() => {
-  return buildPermissionTree(permissions.value)
+  return buildPermissionTree(allPermissions.value)
 })
 
 // 分配权限对话框中的动态菜单树数据（根据勾选的权限生成）
@@ -819,8 +872,8 @@ const assignMenuTreeData = computed<MenuTreeNode[]>(() => {
     .filter(id => typeof id === 'number')
     .map(id => id as number)
   
-  // 从permissions中筛选出勾选的、且是菜单的权限
-  const menuPermissions = permissions.value.filter(
+  // 从allPermissions中筛选出勾选的、且是菜单的权限
+  const menuPermissions = allPermissions.value.filter(
     p => checkedIds.includes(p.id) && p.is_menu && p.status === 1
   )
   
@@ -940,13 +993,27 @@ const buildMenuTreeFromPermissions = (menuPerms: Permission[]): MenuTreeNode[] =
 
 // 根据ID编辑权限
 const handleEditPermissionById = (permissionId: number | string) => {
-  // 从permissions中找到对应的权限
-  const perm = permissions.value.find(p => p.id === permissionId)
+  // 从allPermissions中找到对应的权限
+  const perm = allPermissions.value.find(p => p.id === permissionId)
   if (perm) {
     handleEditPermission(perm)
   } else {
     message.warning('未找到对应的权限')
   }
+}
+
+// 角色表格分页变化
+const handleRoleTableChange = (pag: any) => {
+  rolePagination.current = pag.current
+  rolePagination.pageSize = pag.pageSize
+  loadRoles()
+}
+
+// 权限表格分页变化
+const handlePermissionTableChange = (pag: any) => {
+  permissionPagination.current = pag.current
+  permissionPagination.pageSize = pag.pageSize
+  loadPermissions()
 }
 
 onMounted(() => {
@@ -987,11 +1054,8 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  height: 0;
-}
-
-.content-inner {
+  overflow: auto;
+  min-height: 0;
   background: white;
   padding: 24px;
   border-radius: 4px;
