@@ -128,6 +128,19 @@ func (m *Migrator) MigrateAll() error {
 	log.Printf("  - 任务: %d 个", m.stats.taskCount)
 	log.Printf("  - Bug: %d 个", m.stats.bugCount)
 	log.Println("==========================================")
+	
+	// 更新初始化状态为已初始化
+	log.Println("更新初始化状态...")
+	initConfig := model.SystemConfig{
+		Key:   "initialized",
+		Value: "true",
+		Type:  "boolean",
+	}
+	if err := m.goProjectDB.Where("key = ?", "initialized").Assign(model.SystemConfig{Value: "true", Type: "boolean"}).FirstOrCreate(&initConfig).Error; err != nil {
+		return fmt.Errorf("更新初始化状态失败: %w", err)
+	}
+	log.Println("初始化状态已更新为已完成")
+	
 	return nil
 }
 
