@@ -13,150 +13,156 @@
             </template>
           </a-page-header>
 
-          <a-card :bordered="false" style="margin-bottom: 16px">
-            <a-form layout="inline" :model="searchForm">
-              <a-form-item label="关键词">
-                <a-input
-                  v-model:value="searchForm.keyword"
-                  placeholder="需求标题/描述"
-                  allow-clear
-                  style="width: 200px"
-                />
-              </a-form-item>
-              <a-form-item label="项目">
-                <a-select
-                  v-model:value="searchForm.project_id"
-                  placeholder="选择项目"
-                  allow-clear
-                  style="width: 150px"
-                  @change="handleSearchProjectChange"
-                >
-                  <a-select-option
-                    v-for="project in projects"
-                    :key="project.id"
-                    :value="project.id"
-                  >
-                    {{ project.name }}
-                  </a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item label="状态">
-                <a-select
-                  v-model:value="searchForm.status"
-                  placeholder="选择状态"
-                  allow-clear
-                  style="width: 120px"
-                >
-                  <a-select-option value="pending">待处理</a-select-option>
-                  <a-select-option value="in_progress">进行中</a-select-option>
-                  <a-select-option value="completed">已完成</a-select-option>
-                  <a-select-option value="cancelled">已取消</a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item label="优先级">
-                <a-select
-                  v-model:value="searchForm.priority"
-                  placeholder="选择优先级"
-                  allow-clear
-                  style="width: 120px"
-                >
-                  <a-select-option value="low">低</a-select-option>
-                  <a-select-option value="medium">中</a-select-option>
-                  <a-select-option value="high">高</a-select-option>
-                  <a-select-option value="urgent">紧急</a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item>
-                <a-button type="primary" @click="handleSearch">查询</a-button>
-                <a-button style="margin-left: 8px" @click="handleReset">重置</a-button>
-              </a-form-item>
-            </a-form>
-          </a-card>
+          <a-tabs v-model:activeKey="activeTab">
+            <!-- 统计标签页 -->
+            <a-tab-pane key="statistics" tab="统计">
+              <!-- 统计概览 -->
+              <a-row :gutter="16" style="margin-bottom: 16px">
+                <a-col :span="6">
+                  <a-card :bordered="false">
+                    <a-statistic
+                      title="总需求数"
+                      :value="statistics?.total || 0"
+                      :value-style="{ color: '#1890ff' }"
+                    />
+                  </a-card>
+                </a-col>
+                <a-col :span="6">
+                  <a-card :bordered="false">
+                    <a-statistic
+                      title="待处理"
+                      :value="statistics?.pending || 0"
+                      :value-style="{ color: '#faad14' }"
+                    />
+                  </a-card>
+                </a-col>
+                <a-col :span="6">
+                  <a-card :bordered="false">
+                    <a-statistic
+                      title="进行中"
+                      :value="statistics?.in_progress || 0"
+                      :value-style="{ color: '#1890ff' }"
+                    />
+                  </a-card>
+                </a-col>
+                <a-col :span="6">
+                  <a-card :bordered="false">
+                    <a-statistic
+                      title="已完成"
+                      :value="statistics?.completed || 0"
+                      :value-style="{ color: '#52c41a' }"
+                    />
+                  </a-card>
+                </a-col>
+              </a-row>
 
-          <!-- 统计概览 -->
-          <a-row :gutter="16" style="margin-bottom: 16px">
-            <a-col :span="6">
-              <a-card :bordered="false">
-                <a-statistic
-                  title="总需求数"
-                  :value="statistics?.total || 0"
-                  :value-style="{ color: '#1890ff' }"
-                />
+              <!-- 优先级统计 -->
+              <a-card title="优先级统计" :bordered="false" class="priority-statistics-card">
+                <a-row :gutter="16">
+                  <a-col :span="6">
+                    <a-statistic
+                      title="低"
+                      :value="statistics?.low_priority || 0"
+                      :value-style="{ color: '#8c8c8c' }"
+                    />
+                  </a-col>
+                  <a-col :span="6">
+                    <a-statistic
+                      title="中"
+                      :value="statistics?.medium_priority || 0"
+                      :value-style="{ color: '#1890ff' }"
+                    />
+                  </a-col>
+                  <a-col :span="6">
+                    <a-statistic
+                      title="高"
+                      :value="statistics?.high_priority || 0"
+                      :value-style="{ color: '#faad14' }"
+                    />
+                  </a-col>
+                  <a-col :span="6">
+                    <a-statistic
+                      title="紧急"
+                      :value="statistics?.urgent_priority || 0"
+                      :value-style="{ color: '#ff4d4f' }"
+                    />
+                  </a-col>
+                </a-row>
               </a-card>
-            </a-col>
-            <a-col :span="6">
-              <a-card :bordered="false">
-                <a-statistic
-                  title="待处理"
-                  :value="statistics?.pending || 0"
-                  :value-style="{ color: '#faad14' }"
-                />
-              </a-card>
-            </a-col>
-            <a-col :span="6">
-              <a-card :bordered="false">
-                <a-statistic
-                  title="进行中"
-                  :value="statistics?.in_progress || 0"
-                  :value-style="{ color: '#1890ff' }"
-                />
-              </a-card>
-            </a-col>
-            <a-col :span="6">
-              <a-card :bordered="false">
-                <a-statistic
-                  title="已完成"
-                  :value="statistics?.completed || 0"
-                  :value-style="{ color: '#52c41a' }"
-                />
-              </a-card>
-            </a-col>
-          </a-row>
+            </a-tab-pane>
 
-          <!-- 优先级统计 -->
-          <a-card title="优先级统计" :bordered="false" style="margin-bottom: 16px">
-            <a-row :gutter="16">
-              <a-col :span="6">
-                <a-statistic
-                  title="低"
-                  :value="statistics?.low_priority || 0"
-                  :value-style="{ color: '#8c8c8c' }"
-                />
-              </a-col>
-              <a-col :span="6">
-                <a-statistic
-                  title="中"
-                  :value="statistics?.medium_priority || 0"
-                  :value-style="{ color: '#1890ff' }"
-                />
-              </a-col>
-              <a-col :span="6">
-                <a-statistic
-                  title="高"
-                  :value="statistics?.high_priority || 0"
-                  :value-style="{ color: '#faad14' }"
-                />
-              </a-col>
-              <a-col :span="6">
-                <a-statistic
-                  title="紧急"
-                  :value="statistics?.urgent_priority || 0"
-                  :value-style="{ color: '#ff4d4f' }"
-                />
-              </a-col>
-            </a-row>
-          </a-card>
+            <!-- 列表标签页 -->
+            <a-tab-pane key="list" tab="列表">
+              <a-card :bordered="false" style="margin-bottom: 16px">
+                <a-form layout="inline" :model="searchForm">
+                  <a-form-item label="关键词">
+                    <a-input
+                      v-model:value="searchForm.keyword"
+                      placeholder="需求标题/描述"
+                      allow-clear
+                      style="width: 200px"
+                    />
+                  </a-form-item>
+                  <a-form-item label="项目">
+                    <a-select
+                      v-model:value="searchForm.project_id"
+                      placeholder="选择项目"
+                      allow-clear
+                      style="width: 150px"
+                      @change="handleSearchProjectChange"
+                    >
+                      <a-select-option
+                        v-for="project in projects"
+                        :key="project.id"
+                        :value="project.id"
+                      >
+                        {{ project.name }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                  <a-form-item label="状态">
+                    <a-select
+                      v-model:value="searchForm.status"
+                      placeholder="选择状态"
+                      allow-clear
+                      style="width: 120px"
+                    >
+                      <a-select-option value="pending">待处理</a-select-option>
+                      <a-select-option value="in_progress">进行中</a-select-option>
+                      <a-select-option value="completed">已完成</a-select-option>
+                      <a-select-option value="cancelled">已取消</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                  <a-form-item label="优先级">
+                    <a-select
+                      v-model:value="searchForm.priority"
+                      placeholder="选择优先级"
+                      allow-clear
+                      style="width: 120px"
+                    >
+                      <a-select-option value="low">低</a-select-option>
+                      <a-select-option value="medium">中</a-select-option>
+                      <a-select-option value="high">高</a-select-option>
+                      <a-select-option value="urgent">紧急</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                  <a-form-item>
+                    <a-button type="primary" @click="handleSearch">查询</a-button>
+                    <a-button style="margin-left: 8px" @click="handleReset">重置</a-button>
+                  </a-form-item>
+                </a-form>
+              </a-card>
 
-          <a-card :bordered="false" class="table-card">
-            <a-table
-              :columns="columns"
-              :data-source="requirements"
-              :loading="loading"
-              :pagination="pagination"
-              :scroll="{ x: 'max-content', y: tableScrollHeight }"
-              row-key="id"
-              @change="handleTableChange"
-            >
+              <a-card :bordered="false" class="table-card">
+                <a-table
+                  :columns="columns"
+                  :data-source="requirements"
+                  :loading="loading"
+                  :pagination="pagination"
+                  :scroll="{ x: 'max-content', y: tableScrollHeight }"
+                  row-key="id"
+                  @change="handleTableChange"
+                >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'status'">
                   <a-tag :color="getStatusColor(record.status)">
@@ -216,6 +222,8 @@
               </template>
             </a-table>
           </a-card>
+            </a-tab-pane>
+          </a-tabs>
         </div>
       </a-layout-content>
     </a-layout>
@@ -339,7 +347,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
@@ -373,6 +381,7 @@ const requirements = ref<Requirement[]>([])
 const projects = ref<Project[]>([])
 const users = ref<User[]>([])
 const statistics = ref<RequirementStatistics | null>(null)
+const activeTab = ref<string>('list')
 
 const searchForm = reactive({
   keyword: '',
@@ -391,9 +400,9 @@ const pagination = reactive({
   showQuickJumper: true
 })
 
-// 计算表格滚动高度
+// 计算表格滚动高度（考虑 tab 标签页的高度）
 const tableScrollHeight = computed(() => {
-  return 'calc(100vh - 500px)'
+  return 'calc(100vh - 550px)'
 })
 
 const columns = [
@@ -746,6 +755,13 @@ const filterUserOption = (input: string, option: any) => {
   )
 }
 
+// 监听 tab 切换，切换到统计 tab 时加载统计信息
+watch(activeTab, (newTab) => {
+  if (newTab === 'statistics') {
+    loadStatistics()
+  }
+})
+
 onMounted(() => {
   // 从 localStorage 恢复最后选择的搜索项目
   const lastSearchProjectId = getLastSelected<number>('last_selected_requirement_project_search')
@@ -857,14 +873,68 @@ onMounted(() => {
   min-height: 0;
 }
 
-.content-inner {
-  max-width: 100%;
-  margin: 0 auto;
-  width: 100%;
+.content-inner :deep(.ant-tabs) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
 }
 
-.table-card {
-  margin-top: 16px;
+.content-inner :deep(.ant-tabs-content-holder) {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
 }
+
+.content-inner :deep(.ant-tabs-tabpane) {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.content-inner :deep(.ant-tabs-tabpane) > * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.content-inner :deep(.ant-tabs-tabpane) .ant-row {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  max-width: 100%;
+}
+
+.content-inner :deep(.ant-tabs-tabpane) .ant-col {
+  padding-left: 8px;
+  padding-right: 8px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.content-inner :deep(.ant-tabs-tabpane) .ant-card {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 优先级统计卡片对齐 - 让白色背景左边与上方卡片对齐 */
+.priority-statistics-card {
+  margin-left: 8px; /* 与 col 的左边 padding 对齐（gutter 的一半） */
+  margin-right: 8px; /* 与 col 的右边 padding 对齐 */
+}
+
+.priority-statistics-card :deep(.ant-card-head) {
+  padding-left: 16px; /* 恢复标题的左边 padding */
+  padding-right: 16px;
+}
+
+.priority-statistics-card :deep(.ant-card-body) {
+  padding-left: 16px; /* 恢复 body 的左边 padding，与上方卡片内容对齐 */
+  padding-right: 16px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
 </style>
 
