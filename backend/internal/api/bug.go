@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 	"project-management/internal/model"
 	"project-management/internal/utils"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type BugHandler struct {
@@ -67,10 +68,65 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 	}
 
 	// 分配人筛选（通过关联表）
+	hasAssigneeFilter := false
+	var bugIDs []uint
 	if assigneeID := c.Query("assignee_id"); assigneeID != "" {
-		query = query.Joins("JOIN bug_assignees ON bug_assignees.bug_id = bugs.id").
-			Where("bug_assignees.user_id = ?", assigneeID).
-			Group("bugs.id")
+		// 当有分配人筛选时，先查询符合条件的 Bug ID
+		idQuery := h.db.Model(&model.Bug{}).Select("DISTINCT bugs.id")
+
+		// 应用权限过滤
+		idQuery = utils.FilterBugsByUser(h.db, c, idQuery)
+
+		// 应用所有筛选条件
+		if keyword := c.Query("keyword"); keyword != "" {
+			idQuery = idQuery.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+		}
+		if projectID := c.Query("project_id"); projectID != "" {
+			idQuery = idQuery.Where("project_id = ?", projectID)
+		}
+		if status := c.Query("status"); status != "" {
+			idQuery = idQuery.Where("status = ?", status)
+		}
+		if priority := c.Query("priority"); priority != "" {
+			idQuery = idQuery.Where("priority = ?", priority)
+		}
+		if severity := c.Query("severity"); severity != "" {
+			idQuery = idQuery.Where("severity = ?", severity)
+		}
+		if requirementID := c.Query("requirement_id"); requirementID != "" {
+			idQuery = idQuery.Where("requirement_id = ?", requirementID)
+		}
+		if moduleID := c.Query("module_id"); moduleID != "" {
+			idQuery = idQuery.Where("module_id = ?", moduleID)
+		}
+		if creatorID := c.Query("creator_id"); creatorID != "" {
+			idQuery = idQuery.Where("creator_id = ?", creatorID)
+		}
+
+		// JOIN 分配人表
+		idQuery = idQuery.Joins("JOIN bug_assignees ON bug_assignees.bug_id = bugs.id").
+			Where("bug_assignees.user_id = ?", assigneeID)
+
+		// 获取符合条件的 Bug ID 列表
+		if err := idQuery.Pluck("bugs.id", &bugIDs).Error; err != nil {
+			utils.Error(c, utils.CodeError, "查询失败")
+			return
+		}
+
+		// 如果没有符合条件的 Bug，直接返回空结果
+		if len(bugIDs) == 0 {
+			utils.Success(c, gin.H{
+				"list":      []model.Bug{},
+				"total":     0,
+				"page":      utils.GetPage(c),
+				"page_size": utils.GetPageSize(c),
+			})
+			return
+		}
+
+		// 使用 ID 列表查询，避免 JOIN + GROUP BY 对 Preload 的影响
+		query = query.Where("bugs.id IN ?", bugIDs)
+		hasAssigneeFilter = true
 	}
 
 	// 分页
@@ -78,11 +134,45 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 	pageSize := utils.GetPageSize(c)
 	offset := (page - 1) * pageSize
 
+	// 构建 countQuery，应用与 query 相同的筛选条件
 	var total int64
-	// 权限过滤：普通用户只能看到自己创建或参与的Bug
 	countQuery := utils.FilterBugsByUser(h.db, c, h.db.Model(&model.Bug{}))
+
+	// 应用所有筛选条件（与 query 保持一致）
+	if keyword := c.Query("keyword"); keyword != "" {
+		countQuery = countQuery.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+	if projectID := c.Query("project_id"); projectID != "" {
+		countQuery = countQuery.Where("project_id = ?", projectID)
+	}
+	if status := c.Query("status"); status != "" {
+		countQuery = countQuery.Where("status = ?", status)
+	}
+	if priority := c.Query("priority"); priority != "" {
+		countQuery = countQuery.Where("priority = ?", priority)
+	}
+	if severity := c.Query("severity"); severity != "" {
+		countQuery = countQuery.Where("severity = ?", severity)
+	}
+	if requirementID := c.Query("requirement_id"); requirementID != "" {
+		countQuery = countQuery.Where("requirement_id = ?", requirementID)
+	}
+	if moduleID := c.Query("module_id"); moduleID != "" {
+		countQuery = countQuery.Where("module_id = ?", moduleID)
+	}
+	if creatorID := c.Query("creator_id"); creatorID != "" {
+		countQuery = countQuery.Where("creator_id = ?", creatorID)
+	}
+	// 分配人筛选（通过关联表）
+	if hasAssigneeFilter {
+		// 使用已查询的 ID 列表进行计数
+		countQuery = countQuery.Where("id IN ?", bugIDs)
+	}
+
+	// 计数
 	countQuery.Count(&total)
 
+	// 查询数据（现在 query 已经应用了所有筛选条件，包括 ID 列表）
 	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&bugs).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询失败")
 		return
@@ -117,15 +207,15 @@ func (h *BugHandler) GetBug(c *gin.Context) {
 // CreateBug 创建Bug
 func (h *BugHandler) CreateBug(c *gin.Context) {
 	var req struct {
-		Title         string   `json:"title" binding:"required"`
-		Description   string   `json:"description"`
-		Status        string   `json:"status"`
-		Priority      string   `json:"priority"`
-		Severity      string   `json:"severity"`
-		ProjectID     uint     `json:"project_id" binding:"required"`
-		RequirementID *uint    `json:"requirement_id"`
-		ModuleID      *uint    `json:"module_id"`
-		AssigneeIDs   []uint   `json:"assignee_ids"`
+		Title          string   `json:"title" binding:"required"`
+		Description    string   `json:"description"`
+		Status         string   `json:"status"`
+		Priority       string   `json:"priority"`
+		Severity       string   `json:"severity"`
+		ProjectID      uint     `json:"project_id" binding:"required"`
+		RequirementID  *uint    `json:"requirement_id"`
+		ModuleID       *uint    `json:"module_id"`
+		AssigneeIDs    []uint   `json:"assignee_ids"`
 		EstimatedHours *float64 `json:"estimated_hours"`
 	}
 
@@ -146,11 +236,11 @@ func (h *BugHandler) CreateBug(c *gin.Context) {
 		req.Status = "open"
 	}
 	validStatuses := map[string]bool{
-		"open":      true,
-		"assigned":  true,
+		"open":        true,
+		"assigned":    true,
 		"in_progress": true,
-		"resolved":  true,
-		"closed":    true,
+		"resolved":    true,
+		"closed":      true,
 	}
 	if !validStatuses[req.Status] {
 		utils.Error(c, 400, "状态值无效")
@@ -293,7 +383,7 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 		AssigneeIDs    *[]uint  `json:"assignee_ids"`
 		EstimatedHours *float64 `json:"estimated_hours"`
 		ActualHours    *float64 `json:"actual_hours"` // 实际工时，会自动创建资源分配
-		WorkDate       *string  `json:"work_date"`     // 工作日期（YYYY-MM-DD），用于资源分配
+		WorkDate       *string  `json:"work_date"`    // 工作日期（YYYY-MM-DD），用于资源分配
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -322,11 +412,11 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 	if req.Status != nil {
 		// 验证状态
 		validStatuses := map[string]bool{
-			"open":      true,
-			"assigned":  true,
+			"open":        true,
+			"assigned":    true,
 			"in_progress": true,
-			"resolved":  true,
-			"closed":    true,
+			"resolved":    true,
+			"closed":      true,
 		}
 		if !validStatuses[*req.Status] {
 			utils.Error(c, 400, "状态值无效")
@@ -404,7 +494,7 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 		}
 		bug.EstimatedHours = req.EstimatedHours
 	}
-	
+
 	// 如果更新了实际工时，自动创建或更新资源分配
 	if req.ActualHours != nil {
 		if *req.ActualHours < 0 {
@@ -413,7 +503,7 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 		}
 		// 先加载分配人信息
 		h.db.Preload("Assignees").First(&bug, bug.ID)
-		
+
 		// 注意：重新查询后，需要恢复已更新的字段（如 description）
 		if req.Description != nil {
 			bug.Description = *req.Description
@@ -440,7 +530,7 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 		if req.EstimatedHours != nil {
 			bug.EstimatedHours = req.EstimatedHours
 		}
-		
+
 		// Bug可能有多个分配人，需要为每个分配人创建资源分配
 		// 这里先处理第一个分配人，或者需要前端指定分配人
 		// 暂时使用第一个分配人，如果没有分配人则直接设置actual_hours
@@ -458,7 +548,7 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 				workDate = time.Now()
 			}
 			workDate = time.Date(workDate.Year(), workDate.Month(), workDate.Day(), 0, 0, 0, 0, workDate.Location())
-			
+
 			// 为第一个分配人同步到资源分配
 			if err := h.syncBugActualHours(&bug, *req.ActualHours, workDate, bug.Assignees[0].ID); err != nil {
 				utils.Error(c, utils.CodeError, "同步资源分配失败: "+err.Error())
@@ -471,7 +561,7 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 			bug.ActualHours = req.ActualHours
 		}
 	}
-	
+
 	fmt.Printf("UpdateBug: 保存前 bug.Description = %q\n", bug.Description)
 	if err := h.db.Save(&bug).Error; err != nil {
 		utils.Error(c, utils.CodeError, "更新失败")
@@ -552,14 +642,14 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 
 	var req struct {
 		Status            string   `json:"status" binding:"required"`
-		Solution          *string  `json:"solution"`           // 解决方案
-		SolutionNote      *string  `json:"solution_note"`      // 解决方案备注
-		EstimatedHours   *float64 `json:"estimated_hours"`    // 预估工时
-		ActualHours       *float64 `json:"actual_hours"`      // 实际工时
-		WorkDate          *string  `json:"work_date"`          // 工作日期（YYYY-MM-DD），用于资源分配
+		Solution          *string  `json:"solution"`            // 解决方案
+		SolutionNote      *string  `json:"solution_note"`       // 解决方案备注
+		EstimatedHours    *float64 `json:"estimated_hours"`     // 预估工时
+		ActualHours       *float64 `json:"actual_hours"`        // 实际工时
+		WorkDate          *string  `json:"work_date"`           // 工作日期（YYYY-MM-DD），用于资源分配
 		ResolvedVersionID *uint    `json:"resolved_version_id"` // 解决版本ID
-		VersionNumber     *string  `json:"version_number"`     // 版本号（如果创建新版本）
-		CreateVersion     *bool    `json:"create_version"`     // 是否创建新版本
+		VersionNumber     *string  `json:"version_number"`      // 版本号（如果创建新版本）
+		CreateVersion     *bool    `json:"create_version"`      // 是否创建新版本
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -569,11 +659,11 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 
 	// 验证状态
 	validStatuses := map[string]bool{
-		"open":      true,
-		"assigned":  true,
+		"open":        true,
+		"assigned":    true,
 		"in_progress": true,
-		"resolved":  true,
-		"closed":    true,
+		"resolved":    true,
+		"closed":      true,
 	}
 	if !validStatuses[req.Status] {
 		utils.Error(c, 400, "状态值无效")
@@ -583,13 +673,13 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 	// 验证解决方案（如果提供了）
 	if req.Solution != nil {
 		validSolutions := map[string]bool{
-			"设计如此":     true,
-			"重复Bug":    true,
-			"外部原因":    true,
-			"已解决":      true,
-			"无法重现":    true,
-			"延期处理":    true,
-			"不予解决":    true,
+			"设计如此":   true,
+			"重复Bug":  true,
+			"外部原因":   true,
+			"已解决":    true,
+			"无法重现":   true,
+			"延期处理":   true,
+			"不予解决":   true,
 			"转为研发需求": true,
 		}
 		if !validSolutions[*req.Solution] {
@@ -659,7 +749,7 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 		}
 		// 先加载分配人信息
 		h.db.Preload("Assignees").First(&bug, bug.ID)
-		
+
 		// 如果有分配人，创建或更新资源分配
 		if len(bug.Assignees) > 0 {
 			// 确定工作日期
@@ -675,7 +765,7 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 				workDate = time.Now()
 			}
 			workDate = time.Date(workDate.Year(), workDate.Month(), workDate.Day(), 0, 0, 0, 0, workDate.Location())
-			
+
 			// 为第一个分配人同步到资源分配
 			if err := h.syncBugActualHours(&bug, *req.ActualHours, workDate, bug.Assignees[0].ID); err != nil {
 				utils.Error(c, utils.CodeError, "同步资源分配失败: "+err.Error())
@@ -704,19 +794,19 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 // GetBugStatistics 获取Bug统计
 func (h *BugHandler) GetBugStatistics(c *gin.Context) {
 	var stats struct {
-		Total           int64 `json:"total"`
-		Open            int64 `json:"open"`
-		Assigned        int64 `json:"assigned"`
-		InProgress      int64 `json:"in_progress"`
-		Resolved        int64 `json:"resolved"`
-		Closed          int64 `json:"closed"`
-		LowPriority     int64 `json:"low_priority"`
-		MediumPriority  int64 `json:"medium_priority"`
-		HighPriority    int64 `json:"high_priority"`
-		UrgentPriority  int64 `json:"urgent_priority"`
-		LowSeverity     int64 `json:"low_severity"`
-		MediumSeverity  int64 `json:"medium_severity"`
-		HighSeverity    int64 `json:"high_severity"`
+		Total            int64 `json:"total"`
+		Open             int64 `json:"open"`
+		Assigned         int64 `json:"assigned"`
+		InProgress       int64 `json:"in_progress"`
+		Resolved         int64 `json:"resolved"`
+		Closed           int64 `json:"closed"`
+		LowPriority      int64 `json:"low_priority"`
+		MediumPriority   int64 `json:"medium_priority"`
+		HighPriority     int64 `json:"high_priority"`
+		UrgentPriority   int64 `json:"urgent_priority"`
+		LowSeverity      int64 `json:"low_severity"`
+		MediumSeverity   int64 `json:"medium_severity"`
+		HighSeverity     int64 `json:"high_severity"`
 		CriticalSeverity int64 `json:"critical_severity"`
 	}
 
