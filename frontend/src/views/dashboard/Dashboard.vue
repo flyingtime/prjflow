@@ -213,7 +213,7 @@ const loading = ref(false)
 const activeTab = ref('projects')
 const dashboardData = ref<DashboardData>({
   tasks: { todo: 0, in_progress: 0, done: 0 },
-  bugs: { open: 0, in_progress: 0, resolved: 0 },
+  bugs: { active: 0, resolved: 0, closed: 0 },
   requirements: { in_progress: 0, completed: 0 },
   projects: [],
   reports: { pending: 0, submitted: 0, pending_approval: 0 },

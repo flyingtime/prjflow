@@ -698,7 +698,8 @@ const handleManageBugs = (record: Project) => {
 }
 
 // 管理成员（保留，可能在其他地方使用）
-const handleManageMembers = async (record: Project) => {
+// @ts-ignore
+const _handleManageMembers = async (record: Project) => {
   currentProjectId.value = record.id
   memberModalVisible.value = true
   selectedUserIds.value = []
@@ -707,7 +708,8 @@ const handleManageMembers = async (record: Project) => {
 }
 
 // 功能模块管理（保留，可能在其他地方使用）
-const handleManageModules = async (record: Project) => {
+// @ts-ignore
+const _handleManageModules = async (record: Project) => {
   currentProjectId.value = record.id
   moduleManageModalVisible.value = true
 }

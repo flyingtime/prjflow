@@ -1072,7 +1072,8 @@ const handleResolve = (record: Bug) => {
 }
 
 // 状态变更（保留用于其他场景，如详情页）
-const handleStatusChange = (record: Bug, status: string) => {
+// @ts-ignore
+const _handleStatusChange = (record: Bug, status: string) => {
   // 只有"已解决"状态才弹出对话框
   if (status === 'resolved') {
     handleOpenStatusModal(record, status)

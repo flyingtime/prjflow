@@ -35,8 +35,8 @@
                 <a-descriptions-item label="开始日期">{{ project?.start_date || '-' }}</a-descriptions-item>
                 <a-descriptions-item label="结束日期">{{ project?.end_date || '-' }}</a-descriptions-item>
                 <a-descriptions-item label="状态">
-                  <a-tag :color="project?.status === 1 ? 'green' : 'red'">
-                    {{ project?.status === 1 ? '正常' : '禁用' }}
+                  <a-tag :color="project?.status === 'doing' || project?.status === 'wait' ? 'green' : 'red'">
+                    {{ project?.status === 'doing' || project?.status === 'wait' ? '正常' : '禁用' }}
                   </a-tag>
                 </a-descriptions-item>
                 <a-descriptions-item label="成员数">{{ statistics?.total_members || 0 }} 人</a-descriptions-item>

@@ -462,7 +462,7 @@ const formData = reactive<CreateTestCaseRequest & { id?: number }>({
   description: '',
   test_steps: '',
   types: [],
-  status: 'wait',
+  status: 'pending',
   project_id: 0,
   bug_ids: []
 })
@@ -570,7 +570,7 @@ const handleCreate = () => {
   formData.description = ''
   formData.test_steps = ''
   formData.types = []
-  formData.status = 'wait'
+  formData.status = 'pending'
   // 从 localStorage 恢复最后选择的项目
   const lastProjectId = getLastSelected<number>('last_selected_testcase_project_form')
   formData.project_id = lastProjectId || 0
@@ -587,7 +587,14 @@ const handleEdit = (record: TestCase) => {
   formData.description = record.description || ''
   formData.test_steps = record.test_steps || ''
   formData.types = record.types || []
-  formData.status = record.status
+  // 转换状态值：wait -> pending, normal -> passed, blocked -> failed, investigate -> running
+  const statusMap: Record<string, 'pending' | 'running' | 'passed' | 'failed'> = {
+    wait: 'pending',
+    normal: 'passed',
+    blocked: 'failed',
+    investigate: 'running'
+  }
+  formData.status = statusMap[record.status] || 'pending'
   formData.project_id = record.project_id
   formData.bug_ids = record.bugs?.map((b: any) => b.id) || []
   loadAvailableBugs()
