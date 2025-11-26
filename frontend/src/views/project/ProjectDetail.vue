@@ -179,6 +179,9 @@
 
             <!-- 项目成员 -->
             <a-card title="项目成员" :bordered="false">
+              <template #extra>
+                <a-button type="link" @click="handleManageMembers">成员管理</a-button>
+              </template>
               <a-list
                 :data-source="project?.members || []"
                 :loading="loading"
@@ -209,6 +212,79 @@
         </div>
       </a-layout-content>
     </a-layout>
+
+    <!-- 项目成员管理对话框 -->
+    <a-modal
+      v-model:open="memberModalVisible"
+      title="项目成员管理"
+      :mask-closable="true"
+      @cancel="handleCloseMemberModal"
+      @ok="handleCloseMemberModal"
+      ok-text="关闭"
+      width="800px"
+    >
+      <a-spin :spinning="memberLoading">
+        <div style="margin-bottom: 16px">
+          <a-space>
+            <a-select
+              v-model:value="selectedUserIds"
+              mode="multiple"
+              placeholder="选择用户"
+              style="width: 300px"
+            >
+              <a-select-option
+                v-for="user in users"
+                :key="user.id"
+                :value="user.id"
+              >
+                {{ user.username }}{{ user.nickname ? `(${user.nickname})` : '' }}
+              </a-select-option>
+            </a-select>
+            <a-select
+              v-model:value="memberRole"
+              placeholder="选择角色"
+              style="width: 150px"
+            >
+              <a-select-option value="owner">负责人</a-select-option>
+              <a-select-option value="member">成员</a-select-option>
+              <a-select-option value="viewer">查看者</a-select-option>
+            </a-select>
+            <a-button type="primary" @click="handleAddMembers">添加成员</a-button>
+          </a-space>
+        </div>
+        <a-table
+          :columns="memberColumns"
+          :data-source="projectMembers"
+          :scroll="{ x: 'max-content' }"
+          row-key="id"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'user'">
+              {{ record.user?.username || '-' }}{{ record.user?.nickname ? `(${record.user.nickname})` : '' }}
+            </template>
+            <template v-else-if="column.key === 'role'">
+              <a-select
+                :value="record.role"
+                @change="(value: any) => handleUpdateMemberRole(record.id, value)"
+                style="width: 120px"
+              >
+                <a-select-option value="owner">负责人</a-select-option>
+                <a-select-option value="member">成员</a-select-option>
+                <a-select-option value="viewer">查看者</a-select-option>
+              </a-select>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-popconfirm
+                title="确定要移除这个成员吗？"
+                @confirm="handleRemoveMember(record.id)"
+              >
+                <a-button type="link" size="small" danger>移除</a-button>
+              </a-popconfirm>
+            </template>
+          </template>
+        </a-table>
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
@@ -217,7 +293,17 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import AppHeader from '@/components/AppHeader.vue'
-import { getProject, type ProjectDetailResponse, type Project } from '@/api/project'
+import { 
+  getProject, 
+  getProjectMembers,
+  addProjectMembers,
+  updateProjectMember,
+  removeProjectMember,
+  type ProjectDetailResponse, 
+  type Project,
+  type ProjectMember
+} from '@/api/project'
+import { getUsers, type User } from '@/api/user'
 
 const route = useRoute()
 const router = useRouter()
@@ -225,6 +311,20 @@ const router = useRouter()
 const loading = ref(false)
 const project = ref<Project>()
 const statistics = ref<any>()
+
+// 成员管理相关
+const memberModalVisible = ref(false)
+const memberLoading = ref(false)
+const users = ref<User[]>([])
+const projectMembers = ref<ProjectMember[]>([])
+const selectedUserIds = ref<number[]>([])
+const memberRole = ref('member')
+
+const memberColumns = [
+  { title: '用户', key: 'user', width: 150 },
+  { title: '角色', key: 'role', width: 150 },
+  { title: '操作', key: 'action', width: 100 }
+]
 
 // 加载项目详情
 const loadProject = async () => {
@@ -274,12 +374,98 @@ const handleEdit = () => {
   })
 }
 
+// 加载用户列表
+const loadUsers = async () => {
+  try {
+    const response = await getUsers()
+    users.value = response.list || []
+  } catch (error: any) {
+    console.error('加载用户列表失败:', error)
+  }
+}
+
+// 加载项目成员
+const loadProjectMembers = async (projectId: number) => {
+  memberLoading.value = true
+  try {
+    projectMembers.value = await getProjectMembers(projectId)
+  } catch (error: any) {
+    message.error(error.message || '加载项目成员失败')
+  } finally {
+    memberLoading.value = false
+  }
+}
+
 // 成员管理
-const handleManageMembers = () => {
-  router.push({
-    path: '/project',
-    query: { manageMembers: project.value?.id }
-  })
+const handleManageMembers = async () => {
+  if (!project.value) return
+  memberModalVisible.value = true
+  selectedUserIds.value = []
+  memberRole.value = 'member'
+  await loadProjectMembers(project.value.id)
+  if (users.value.length === 0) {
+    await loadUsers()
+  }
+}
+
+// 关闭成员管理对话框
+const handleCloseMemberModal = async () => {
+  memberModalVisible.value = false
+  selectedUserIds.value = []
+  memberRole.value = 'member'
+  // 重新加载项目详情以更新成员列表
+  if (project.value) {
+    await loadProject()
+  }
+}
+
+// 添加成员
+const handleAddMembers = async () => {
+  if (!project.value || selectedUserIds.value.length === 0) {
+    message.warning('请选择用户')
+    return
+  }
+  try {
+    await addProjectMembers(project.value.id, {
+      user_ids: selectedUserIds.value,
+      role: memberRole.value
+    })
+    message.success('添加成功')
+    selectedUserIds.value = []
+    await loadProjectMembers(project.value.id)
+    // 重新加载项目详情
+    await loadProject()
+  } catch (error: any) {
+    message.error(error.message || '添加失败')
+  }
+}
+
+// 更新成员角色
+const handleUpdateMemberRole = async (memberId: number, role: string) => {
+  if (!project.value) return
+  try {
+    await updateProjectMember(project.value.id, memberId, role)
+    message.success('更新成功')
+    await loadProjectMembers(project.value.id)
+    // 重新加载项目详情
+    await loadProject()
+  } catch (error: any) {
+    message.error(error.message || '更新失败')
+  }
+}
+
+// 移除成员
+const handleRemoveMember = async (memberId: number) => {
+  if (!project.value) return
+  try {
+    await removeProjectMember(project.value.id, memberId)
+    message.success('移除成功')
+    await loadProjectMembers(project.value.id)
+    // 重新加载项目详情
+    await loadProject()
+  } catch (error: any) {
+    message.error(error.message || '移除失败')
+  }
 }
 
 // 功能模块管理

@@ -326,9 +326,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue'
 import { saveLastSelected, getLastSelected } from '@/utils/storage'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -337,6 +337,7 @@ import type { Dayjs } from 'dayjs'
 import { formatDate } from '@/utils/date'
 import {
   getProjects,
+  getProject,
   createProject,
   updateProject,
   deleteProject,
@@ -355,6 +356,7 @@ import AttachmentUpload from '@/components/AttachmentUpload.vue'
 import { getAttachments, type Attachment } from '@/api/attachment'
 
 const router = useRouter()
+const route = useRoute()
 
 const projectLoading = ref(false)
 const memberLoading = ref(false)
@@ -874,6 +876,79 @@ const getProjectStatusText = (status: string | number) => {
   return texts[statusStr] || String(status)
 }
 
+// 根据项目ID加载项目并打开编辑对话框
+const loadAndEditProject = async (projectId: number) => {
+  try {
+    const response = await getProject(projectId)
+    const project = response.project
+    
+    projectModalTitle.value = '编辑项目'
+    Object.assign(projectFormData, {
+      id: project.id,
+      name: project.name,
+      code: project.code,
+      description: project.description || '',
+      status: project.status,
+      tag_ids: project.tags ? project.tags.map(tag => tag.id) : []
+    })
+    if (project.start_date) {
+      projectFormData.start_date = dayjs(project.start_date) as Dayjs | undefined
+    }
+    if (project.end_date) {
+      projectFormData.end_date = dayjs(project.end_date) as Dayjs | undefined
+    }
+    
+    // 加载项目附件
+    try {
+      projectAttachments.value = await getAttachments({ project_id: project.id })
+      projectFormData.attachment_ids = projectAttachments.value.map(a => a.id)
+    } catch (error: any) {
+      console.error('加载附件失败:', error)
+      projectAttachments.value = []
+      projectFormData.attachment_ids = []
+    }
+    
+    projectModalVisible.value = true
+    
+    // 清除URL中的edit参数
+    router.replace({ path: '/project', query: {} })
+  } catch (error: any) {
+    message.error(error.message || '加载项目失败')
+  }
+}
+
+// 打开成员管理对话框
+const openMemberModal = async (projectId: number) => {
+  currentProjectId.value = projectId
+  memberModalVisible.value = true
+  selectedUserIds.value = []
+  memberRole.value = 'member'
+  await loadProjectMembers(projectId)
+  
+  // 清除URL中的manageMembers参数
+  router.replace({ path: '/project', query: {} })
+}
+
+// 监听路由查询参数
+watch(() => route.query.edit, async (editId) => {
+  if (editId) {
+    const projectId = Number(editId)
+    if (projectId && !isNaN(projectId)) {
+      await loadAndEditProject(projectId)
+    }
+  }
+}, { immediate: true })
+
+// 监听路由查询参数 manageMembers
+watch(() => route.query.manageMembers, async (manageMembersId) => {
+  if (manageMembersId) {
+    const projectId = Number(manageMembersId)
+    if (projectId && !isNaN(projectId)) {
+      await openMemberModal(projectId)
+    }
+  }
+}, { immediate: true })
+
 onMounted(() => {
   // 从 localStorage 恢复最后选择的搜索条件
   const lastSearchKeyword = getLastSelected<string>('last_selected_project_keyword_search')
@@ -887,6 +962,22 @@ onMounted(() => {
   loadProjects()
   loadUsers()
   loadTags()
+  
+  // 检查URL参数edit
+  if (route.query.edit) {
+    const projectId = Number(route.query.edit)
+    if (projectId && !isNaN(projectId)) {
+      loadAndEditProject(projectId)
+    }
+  }
+  
+  // 检查URL参数manageMembers
+  if (route.query.manageMembers) {
+    const projectId = Number(route.query.manageMembers)
+    if (projectId && !isNaN(projectId)) {
+      openMemberModal(projectId)
+    }
+  }
 })
 </script>
 
