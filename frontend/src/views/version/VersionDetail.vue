@@ -249,7 +249,7 @@ const getStatusText = (status: string) => {
     wait: '未开始',
     normal: '已发布',
     fail: '发布失败',
-    terminate: '停止维护'
+    terminate: '停止维护',
     archived: '已归档'
   }
   return texts[status] || status
