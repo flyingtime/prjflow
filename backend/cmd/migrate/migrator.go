@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite" // 纯Go SQLite驱动
 
@@ -812,6 +813,22 @@ func (m *Migrator) MigrateTasks() error {
 			}
 		}
 		
+		// 解析日期
+		startDate := ParseDate(zt.EstStarted)
+		dueDate := ParseDate(zt.Deadline)
+		
+		// 计算结束日期：优先使用截止日期，如果没有则根据开始日期和预估工时计算
+		var endDate *time.Time
+		if dueDate != nil {
+			// 如果有截止日期，使用截止日期作为结束日期
+			endDate = dueDate
+		} else if startDate != nil && zt.Estimate > 0 {
+			// 如果有开始日期和预估工时，计算结束日期（假设1天=8小时）
+			days := int(zt.Estimate)
+			end := startDate.AddDate(0, 0, days)
+			endDate = &end
+		}
+		
 		task := model.Task{
 			Title:         zt.Name,
 			Description:   zt.Desc,
@@ -821,8 +838,9 @@ func (m *Migrator) MigrateTasks() error {
 			RequirementID: requirementID,
 			CreatorID:     creatorID,
 			AssigneeID:    assigneeID,
-			StartDate:     ParseDate(zt.EstStarted),
-			DueDate:       ParseDate(zt.Deadline),
+			StartDate:     startDate,
+			EndDate:       endDate,
+			DueDate:       dueDate,
 			EstimatedHours: DaysToHours(zt.Estimate),
 			ActualHours:    DaysToHours(zt.Consumed),
 		}

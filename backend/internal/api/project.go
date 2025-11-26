@@ -474,26 +474,28 @@ func (h *ProjectHandler) GetProjectGantt(c *gin.Context) {
 
 	// 转换为甘特图数据格式
 	type GanttTask struct {
-		ID           uint   `json:"id"`
-		Title        string `json:"title"`
-		StartDate    string `json:"start_date,omitempty"`
-		EndDate      string `json:"end_date,omitempty"`
-		DueDate      string `json:"due_date,omitempty"`
-		Progress     int    `json:"progress"`
-		Status       string `json:"status"`
-		Priority     string `json:"priority"`
-		Assignee     string `json:"assignee,omitempty"`
-		Dependencies []uint `json:"dependencies,omitempty"`
+		ID             uint     `json:"id"`
+		Title          string   `json:"title"`
+		StartDate      string   `json:"start_date,omitempty"`
+		EndDate        string   `json:"end_date,omitempty"`
+		DueDate        string   `json:"due_date,omitempty"`
+		Progress       int      `json:"progress"`
+		Status         string   `json:"status"`
+		Priority       string   `json:"priority"`
+		Assignee       string   `json:"assignee,omitempty"`
+		EstimatedHours *float64 `json:"estimated_hours,omitempty"`
+		Dependencies   []uint   `json:"dependencies,omitempty"`
 	}
 
 	ganttTasks := make([]GanttTask, 0, len(tasks))
 	for _, task := range tasks {
 		ganttTask := GanttTask{
-			ID:       task.ID,
-			Title:    task.Title,
-			Progress: task.Progress,
-			Status:   task.Status,
-			Priority: task.Priority,
+			ID:             task.ID,
+			Title:          task.Title,
+			Progress:       task.Progress,
+			Status:         task.Status,
+			Priority:       task.Priority,
+			EstimatedHours: task.EstimatedHours,
 		}
 
 		// 格式化日期

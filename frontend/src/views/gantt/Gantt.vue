@@ -87,18 +87,27 @@
                     <div class="gantt-bars">
                       <!-- 任务条 -->
                       <div
-                        v-if="task.start_date && task.end_date"
+                        v-if="isValidDate(task.start_date) && getTaskEndDate(task)"
                         class="gantt-bar"
                         :class="getTaskBarClass(task)"
                         :style="getTaskBarStyle(task)"
                         :title="getTaskTooltip(task)"
                       >
                         <div 
-                          v-if="(task.progress || 0) > 0" 
                           class="gantt-bar-progress" 
                           :style="getProgressStyle(task)"
+                          :title="`进度: ${task.progress || 0}%`"
                         ></div>
                         <div class="gantt-bar-label">{{ task.title }}</div>
+                      </div>
+                      <!-- 没有日期的任务提示 -->
+                      <div
+                        v-else
+                        class="gantt-bar-missing-date"
+                        :title="`${task.title} - 缺少开始和结束日期，请设置后显示在时间轴上`"
+                      >
+                        <span class="missing-date-icon">⚠️</span>
+                        <span class="missing-date-text">未设置时间</span>
                       </div>
                       <!-- 依赖关系线 -->
                       <svg
@@ -240,13 +249,65 @@ const days = computed(() => {
   return result
 })
 
+// 检查日期是否有效
+const isValidDate = (dateStr: string | undefined): boolean => {
+  if (!dateStr || dateStr.trim() === '') return false
+  const date = dayjs(dateStr)
+  return date.isValid()
+}
+
+// 获取任务的结束日期（如果end_date不存在，尝试使用due_date或根据进度和预估工时计算）
+const getTaskEndDate = (task: GanttTask): string | undefined => {
+  // 优先使用end_date
+  if (isValidDate(task.end_date)) {
+    return task.end_date
+  }
+  // 如果没有end_date，使用due_date
+  if (isValidDate(task.due_date)) {
+    return task.due_date
+  }
+  // 如果有start_date和estimated_hours，根据进度计算结束日期
+  if (isValidDate(task.start_date) && task.estimated_hours && task.estimated_hours > 0) {
+    const start = dayjs(task.start_date!)
+    const estimatedDays = task.estimated_hours / 8 // 假设1天=8小时
+    
+    // 根据进度计算预计总天数
+    let totalDays = estimatedDays
+    if (task.progress > 0 && task.progress < 100) {
+      // 如果进度 > 0，根据当前进度推算预计总天数
+      // 预计总天数 = 预估天数 / (进度 / 100)
+      // 例如：预估1天，进度38%，预计总天数 = 1 / 0.38 ≈ 2.6天
+      totalDays = estimatedDays / (task.progress / 100)
+    } else if (task.progress === 100) {
+      // 如果已完成，使用预估天数
+      totalDays = estimatedDays
+    }
+    // 如果进度为0，使用预估天数
+    
+    // 确保至少1天
+    const days = Math.max(1, Math.ceil(totalDays))
+    return start.add(days, 'day').format('YYYY-MM-DD')
+  }
+  // 如果只有start_date，计算默认结束日期（开始日期+7天）
+  if (isValidDate(task.start_date)) {
+    const start = dayjs(task.start_date!)
+    return start.add(7, 'day').format('YYYY-MM-DD')
+  }
+  return undefined
+}
+
 // 计算任务条样式
 const getTaskBarStyle = (task: GanttTask) => {
-  if (!task.start_date || !task.end_date) return {}
+  if (!isValidDate(task.start_date)) return {}
   
-  const start = dayjs(task.start_date)
-  const end = dayjs(task.end_date)
+  const endDate = getTaskEndDate(task)
+  if (!endDate || !isValidDate(endDate)) return {}
+  
+  const start = dayjs(task.start_date!)
+  const end = dayjs(endDate)
   const rangeStart = timeRange.value.start
+  
+  if (!start.isValid() || !end.isValid()) return {}
   
   const left = start.diff(rangeStart, 'day') * dayWidth
   const width = end.diff(start, 'day') * dayWidth + dayWidth
@@ -261,8 +322,16 @@ const getTaskBarStyle = (task: GanttTask) => {
 const getProgressStyle = (task: GanttTask) => {
   // 确保进度值在0-100之间
   const progress = Math.max(0, Math.min(100, task.progress || 0))
+  // 如果进度大于0，确保至少显示3px宽度（通过calc计算）
+  if (progress > 0) {
+    // 使用calc确保最小宽度，但优先使用百分比
+    return {
+      width: `calc(${progress}% + 0px)`,
+      minWidth: '3px'
+    }
+  }
   return {
-    width: `${progress}%`
+    width: '0px'
   }
 }
 
@@ -363,6 +432,15 @@ const loadGanttData = async () => {
   try {
     const response = await getProjectGantt(projectId.value)
     tasks.value = response.tasks || []
+    // 调试：检查任务数据，特别是日期字段
+    console.log('甘特图任务数据:', tasks.value.map(t => ({ 
+      id: t.id, 
+      title: t.title, 
+      progress: t.progress,
+      start_date: t.start_date,
+      end_date: t.end_date,
+      hasDates: !!(t.start_date && t.end_date)
+    })))
   } catch (error: any) {
     message.error(error.message || '加载甘特图数据失败')
   } finally {
@@ -773,13 +851,19 @@ onUnmounted(() => {
   left: 0;
   top: 0;
   height: 100%;
-  /* 使用更明显的进度条颜色 - 深色半透明覆盖层，表示已完成部分 */
-  background: rgba(0, 0, 0, 0.2);
-  transition: width 0.3s;
+  /* 使用深色半透明覆盖层表示已完成部分，在所有颜色上都很明显 */
+  background: rgba(0, 0, 0, 0.35);
+  transition: width 0.3s ease;
   z-index: 1;
-  /* 添加边框以更明显地区分进度 */
-  border-right: 2px solid rgba(255, 255, 255, 0.5);
+  /* 添加明显的白色边框以区分进度 */
+  border-right: 3px solid rgba(255, 255, 255, 0.95);
   box-sizing: border-box;
+  /* 添加内阴影效果使进度条更明显 */
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+  /* 确保进度条可见，即使进度很小 */
+  min-width: 3px;
+  /* 确保进度条始终可见 */
+  pointer-events: none;
 }
 
 .gantt-bar-label {
@@ -794,6 +878,32 @@ onUnmounted(() => {
 
 .dependency-lines {
   pointer-events: none;
+}
+
+.gantt-bar-missing-date {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #fff7e6;
+  border: 1px dashed #ffa940;
+  border-radius: 4px;
+  color: #d46b08;
+  font-size: 12px;
+  cursor: help;
+  z-index: 1;
+}
+
+.missing-date-icon {
+  font-size: 14px;
+}
+
+.missing-date-text {
+  white-space: nowrap;
 }
 </style>
 

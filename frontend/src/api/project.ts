@@ -126,6 +126,7 @@ export interface GanttTask {
   status: string
   priority: string
   assignee?: string
+  estimated_hours?: number
   dependencies?: number[]
 }
 
