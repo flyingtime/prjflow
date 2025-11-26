@@ -29,8 +29,9 @@ type Migrator struct {
 	
 	// 统计信息
 	stats struct {
-		taskCount int
-		bugCount  int
+		taskCount         int
+		bugCount          int
+		projectMemberCount int
 	}
 }
 
@@ -116,6 +117,11 @@ func (m *Migrator) MigrateAll() error {
 		return fmt.Errorf("迁移Bug失败: %w", err)
 	}
 	
+	// 8. 迁移项目成员
+	if err := m.MigrateProjectMembers(); err != nil {
+		return fmt.Errorf("迁移项目成员失败: %w", err)
+	}
+	
 	log.Println("==========================================")
 	log.Println("数据迁移完成！")
 	log.Println("==========================================")
@@ -127,6 +133,7 @@ func (m *Migrator) MigrateAll() error {
 	log.Printf("  - 需求: %d 个", len(m.requirementIDMap))
 	log.Printf("  - 任务: %d 个", m.stats.taskCount)
 	log.Printf("  - Bug: %d 个", m.stats.bugCount)
+	log.Printf("  - 项目成员: %d 个", m.stats.projectMemberCount)
 	log.Println("==========================================")
 	
 	// 更新初始化状态为已初始化
@@ -555,9 +562,15 @@ func (m *Migrator) MigrateProjects() error {
 	log.Printf("找到 %d 个项目", len(zentaoProjects))
 	
 	for _, zp := range zentaoProjects {
+		// 生成项目code：如果为空，则基于名称和ID生成唯一code
+		projectCode := zp.Code
+		if projectCode == "" {
+			projectCode = GenerateProjectCode(zp.Name, zp.ID)
+		}
+		
 		project := model.Project{
 			Name:        zp.Name,
-			Code:        zp.Code,
+			Code:        projectCode,
 			Description: zp.Desc,
 			Status:      ConvertProjectStatus(zp.Status),
 		}
@@ -573,7 +586,7 @@ func (m *Migrator) MigrateProjects() error {
 		var existing model.Project
 		if err := m.goProjectDB.Where("code = ?", project.Code).First(&existing).Error; err == nil {
 			m.projectIDMap[zp.ID] = existing.ID
-			log.Printf("项目已存在: %s (ID: %d -> %d)", project.Name, zp.ID, existing.ID)
+			log.Printf("项目已存在: %s (ID: %d -> %d, code: %s)", project.Name, zp.ID, existing.ID, project.Code)
 			continue
 		}
 		
@@ -583,7 +596,7 @@ func (m *Migrator) MigrateProjects() error {
 		}
 		
 		m.projectIDMap[zp.ID] = project.ID
-		log.Printf("迁移项目: %s (ID: %d -> %d)", project.Name, zp.ID, project.ID)
+		log.Printf("迁移项目: %s (ID: %d -> %d, code: %s)", project.Name, zp.ID, project.ID, project.Code)
 	}
 	
 	log.Printf("项目迁移完成，共迁移 %d 个项目", len(m.projectIDMap))
@@ -932,6 +945,323 @@ func (m *Migrator) MigrateBugs() error {
 	}
 	
 	log.Printf("Bug迁移完成，共迁移 %d 个Bug", m.stats.bugCount)
+	return nil
+}
+
+// MigrateProjectMembers 迁移项目成员
+func (m *Migrator) MigrateProjectMembers() error {
+	log.Println("开始迁移项目成员...")
+	
+	type ZenTaoTeam struct {
+		Root    int    `gorm:"column:root"`    // 指向项目/执行/任务的ID
+		Type    string `gorm:"column:type"`    // 类型：project, execution, task
+		Account string `gorm:"column:account"` // 用户账号
+		Role    string `gorm:"column:role"`    // 角色
+		Join    string `gorm:"column:join"`    // 加入日期
+		Days    int    `gorm:"column:days"`    // 可用天数
+		Hours   string `gorm:"column:hours"`   // 可用工时
+	}
+	
+	var zentaoTeams []ZenTaoTeam
+	teamCount := 0
+	
+	// 尝试从 zt_team 表获取项目成员
+	if err := m.zenTaoDB.Table("zt_team").Find(&zentaoTeams).Error; err != nil {
+		log.Printf("警告: 未找到zt_team表或表为空，尝试从其他来源获取项目成员: %v", err)
+	} else {
+		teamCount = len(zentaoTeams)
+		log.Printf("从zt_team表找到 %d 条项目成员记录", teamCount)
+	}
+	
+	// 如果 zt_team 表为空，尝试从项目创建者、任务分配者等推断项目成员
+	if teamCount == 0 {
+		log.Println("zt_team表为空，尝试从项目相关数据推断项目成员...")
+		if err := m.migrateProjectMembersFromInference(); err != nil {
+			log.Printf("从推断方式迁移项目成员失败: %v", err)
+		}
+		return nil
+	}
+	
+	for _, zt := range zentaoTeams {
+		// 获取项目ID
+		// zt_team表的root字段指向项目/执行/任务的ID，type字段表示类型
+		var projectID uint
+		if zt.Root == 0 {
+			log.Printf("项目成员的root字段为0，跳过")
+			continue
+		}
+		
+		// 根据type字段处理不同的情况
+		if zt.Type == "project" {
+			// 直接是项目ID
+			if newID, ok := m.projectIDMap[zt.Root]; ok {
+				projectID = newID
+			} else {
+				log.Printf("项目成员的项目ID %d 不存在，跳过", zt.Root)
+				continue
+			}
+		} else if zt.Type == "execution" {
+			// 是执行（execution）ID，需要通过执行找到项目
+			type ZenTaoExecution struct {
+				ID      int `gorm:"column:id"`
+				Project int `gorm:"column:project"`
+				Name    string `gorm:"column:name"`
+			}
+			var execution ZenTaoExecution
+			if err := m.zenTaoDB.Table("zt_project").Where("id = ? AND type = 'execution'", zt.Root).First(&execution).Error; err == nil {
+				// 找到了执行，通过执行的项目ID查找
+				if newID, ok := m.projectIDMap[execution.Project]; ok {
+					projectID = newID
+					log.Printf("项目成员的执行ID %d (%s) 对应项目ID %d", zt.Root, execution.Name, execution.Project)
+				} else {
+					log.Printf("项目成员的执行ID %d (%s) 对应的项目ID %d 不存在，跳过", zt.Root, execution.Name, execution.Project)
+					continue
+				}
+			} else {
+				log.Printf("项目成员的执行ID %d 在zt_project表中不存在，跳过", zt.Root)
+				continue
+			}
+		} else if zt.Type == "task" {
+			// 是任务ID，需要通过任务找到项目
+			type ZenTaoTask struct {
+				ID       int `gorm:"column:id"`
+				Project  int `gorm:"column:project"`
+				Execution int `gorm:"column:execution"`
+			}
+			var task ZenTaoTask
+			if err := m.zenTaoDB.Table("zt_task").Where("id = ?", zt.Root).First(&task).Error; err == nil {
+				// 优先使用execution，如果没有则使用project
+				var targetProjectID int
+				if task.Execution > 0 {
+					targetProjectID = task.Execution
+				} else if task.Project > 0 {
+					targetProjectID = task.Project
+				}
+				
+				if targetProjectID > 0 {
+					if newID, ok := m.projectIDMap[targetProjectID]; ok {
+						projectID = newID
+						log.Printf("项目成员的任务ID %d 对应项目ID %d", zt.Root, targetProjectID)
+					} else {
+						log.Printf("项目成员的任务ID %d 对应的项目ID %d 不存在，跳过", zt.Root, targetProjectID)
+						continue
+					}
+				} else {
+					log.Printf("项目成员的任务ID %d 没有关联的项目，跳过", zt.Root)
+					continue
+				}
+			} else {
+				log.Printf("项目成员的任务ID %d 在zt_task表中不存在，跳过", zt.Root)
+				continue
+			}
+		} else {
+			log.Printf("项目成员的类型 %s 不支持，跳过", zt.Type)
+			continue
+		}
+		
+		// 获取用户ID
+		var userID uint
+		if zt.Account != "" {
+			type ZenTaoUserID struct {
+				ID int `gorm:"column:id"`
+			}
+			var userIDRecord ZenTaoUserID
+			if err := m.zenTaoDB.Table("zt_user").Where("account = ?", zt.Account).First(&userIDRecord).Error; err == nil {
+				if newID, ok := m.userIDMap[userIDRecord.ID]; ok {
+					userID = newID
+				} else {
+					log.Printf("项目成员的用户账号 %s 不存在，跳过", zt.Account)
+					continue
+				}
+			} else {
+				log.Printf("项目成员的用户账号 %s 未找到，跳过", zt.Account)
+				continue
+			}
+		} else {
+			log.Printf("项目成员的用户账号为空，跳过")
+			continue
+		}
+		
+		// 转换角色：将禅道角色映射到goproject角色
+		// 禅道角色可能是：项目经理、开发、测试、产品、设计等
+		// goproject角色：owner, member, viewer
+		role := ConvertProjectRole(zt.Role)
+		
+		// 检查是否已存在
+		var existingMember model.ProjectMember
+		if err := m.goProjectDB.Where("project_id = ? AND user_id = ?", projectID, userID).First(&existingMember).Error; err == nil {
+			// 如果已存在，更新角色
+			existingMember.Role = role
+			if err := m.goProjectDB.Save(&existingMember).Error; err != nil {
+				log.Printf("更新项目成员失败: 项目ID %d, 用户ID %d, 错误: %v", projectID, userID, err)
+			} else {
+				m.stats.projectMemberCount++
+				log.Printf("更新项目成员: 项目ID %d, 用户ID %d, 角色: %s", projectID, userID, role)
+			}
+			continue
+		}
+		
+		// 创建项目成员
+		member := model.ProjectMember{
+			ProjectID: projectID,
+			UserID:    userID,
+			Role:      role,
+		}
+		
+		if err := m.goProjectDB.Create(&member).Error; err != nil {
+			log.Printf("创建项目成员失败: 项目ID %d, 用户ID %d, 错误: %v", projectID, userID, err)
+			continue
+		}
+		
+		m.stats.projectMemberCount++
+		log.Printf("迁移项目成员: 项目ID %d, 用户ID %d, 角色: %s", projectID, userID, role)
+	}
+	
+	log.Printf("项目成员迁移完成，共迁移 %d 个成员", m.stats.projectMemberCount)
+	return nil
+}
+
+// migrateProjectMembersFromInference 从任务、需求、Bug等数据推断项目成员
+func (m *Migrator) migrateProjectMembersFromInference() error {
+	log.Println("开始从推断方式迁移项目成员...")
+	
+	// 用于存储项目成员映射：projectID -> map[userID]role
+	projectMembersMap := make(map[uint]map[uint]string)
+	
+	// 1. 从任务中获取项目成员（分配者）
+	type ZenTaoTaskMember struct {
+		Project    int    `gorm:"column:project"`
+		Execution  int    `gorm:"column:execution"`
+		AssignedTo string `gorm:"column:assignedTo"`
+	}
+	var taskMembers []ZenTaoTaskMember
+	if err := m.zenTaoDB.Table("zt_task").Where("deleted = '0' AND assignedTo != ''").
+		Select("project, execution, assignedTo").Find(&taskMembers).Error; err == nil {
+		log.Printf("从任务中找到 %d 条记录", len(taskMembers))
+		for _, tm := range taskMembers {
+			var projectID uint
+			if tm.Execution > 0 {
+				if newID, ok := m.projectIDMap[tm.Execution]; ok {
+					projectID = newID
+				}
+			} else if tm.Project > 0 {
+				if newID, ok := m.projectIDMap[tm.Project]; ok {
+					projectID = newID
+				}
+			}
+			
+			if projectID > 0 && tm.AssignedTo != "" {
+				type ZenTaoUserID struct {
+					ID int `gorm:"column:id"`
+				}
+				var userIDRecord ZenTaoUserID
+				if err := m.zenTaoDB.Table("zt_user").Where("account = ?", tm.AssignedTo).First(&userIDRecord).Error; err == nil {
+					if newID, ok := m.userIDMap[userIDRecord.ID]; ok {
+						if projectMembersMap[projectID] == nil {
+							projectMembersMap[projectID] = make(map[uint]string)
+						}
+						projectMembersMap[projectID][newID] = "member"
+					}
+				}
+			}
+		}
+		log.Printf("从任务中推断出 %d 个项目的成员", len(projectMembersMap))
+	}
+	
+	// 2. 从需求中获取项目成员（分配者）
+	type ZenTaoStoryMember struct {
+		AssignedTo string `gorm:"column:assignedTo"`
+	}
+	type ZenTaoProjectStory struct {
+		Project int `gorm:"column:project"`
+		Story   int `gorm:"column:story"`
+	}
+	var stories []struct {
+		ID         int    `gorm:"column:id"`
+		AssignedTo string `gorm:"column:assignedTo"`
+	}
+	if err := m.zenTaoDB.Table("zt_story").Where("deleted = '0' AND assignedTo != ''").
+		Select("id, assignedTo").Find(&stories).Error; err == nil {
+		log.Printf("从需求中找到 %d 条记录", len(stories))
+		for _, story := range stories {
+			var projectStory ZenTaoProjectStory
+			if err := m.zenTaoDB.Table("zt_projectstory").Where("story = ?", story.ID).First(&projectStory).Error; err == nil {
+				if projectID, ok := m.projectIDMap[projectStory.Project]; ok {
+					type ZenTaoUserID struct {
+						ID int `gorm:"column:id"`
+					}
+					var userIDRecord ZenTaoUserID
+					if err := m.zenTaoDB.Table("zt_user").Where("account = ?", story.AssignedTo).First(&userIDRecord).Error; err == nil {
+						if userID, ok := m.userIDMap[userIDRecord.ID]; ok {
+							if projectMembersMap[projectID] == nil {
+								projectMembersMap[projectID] = make(map[uint]string)
+							}
+							projectMembersMap[projectID][userID] = "member"
+						}
+					}
+				}
+			}
+		}
+		log.Printf("从需求中推断出 %d 个项目的成员", len(projectMembersMap))
+	}
+	
+	// 3. 从Bug中获取项目成员（分配者）
+	type ZenTaoBugMember struct {
+		Project    int    `gorm:"column:project"`
+		AssignedTo string `gorm:"column:assignedTo"`
+	}
+	var bugMembers []ZenTaoBugMember
+	if err := m.zenTaoDB.Table("zt_bug").Where("deleted = '0' AND assignedTo != ''").
+		Select("project, assignedTo").Find(&bugMembers).Error; err == nil {
+		log.Printf("从Bug中找到 %d 条记录", len(bugMembers))
+		for _, bm := range bugMembers {
+			if projectID, ok := m.projectIDMap[bm.Project]; ok {
+				type ZenTaoUserID struct {
+					ID int `gorm:"column:id"`
+				}
+				var userIDRecord ZenTaoUserID
+				if err := m.zenTaoDB.Table("zt_user").Where("account = ?", bm.AssignedTo).First(&userIDRecord).Error; err == nil {
+					if userID, ok := m.userIDMap[userIDRecord.ID]; ok {
+						if projectMembersMap[projectID] == nil {
+							projectMembersMap[projectID] = make(map[uint]string)
+						}
+						projectMembersMap[projectID][userID] = "member"
+					}
+				}
+			}
+		}
+	}
+	
+	// 创建项目成员记录
+	log.Printf("准备创建项目成员，共 %d 个项目有成员", len(projectMembersMap))
+	totalMembers := 0
+	for projectID, members := range projectMembersMap {
+		totalMembers += len(members)
+		for userID, role := range members {
+			// 检查是否已存在
+			var existingMember model.ProjectMember
+			if err := m.goProjectDB.Where("project_id = ? AND user_id = ?", projectID, userID).First(&existingMember).Error; err == nil {
+				log.Printf("项目成员已存在: 项目ID %d, 用户ID %d，跳过", projectID, userID)
+				continue
+			}
+			
+			member := model.ProjectMember{
+				ProjectID: projectID,
+				UserID:    userID,
+				Role:      role,
+			}
+			
+			if err := m.goProjectDB.Create(&member).Error; err != nil {
+				log.Printf("创建项目成员失败: 项目ID %d, 用户ID %d, 错误: %v", projectID, userID, err)
+				continue
+			}
+			
+			m.stats.projectMemberCount++
+			log.Printf("从推断方式迁移项目成员: 项目ID %d, 用户ID %d, 角色: %s", projectID, userID, role)
+		}
+	}
+	
+	log.Printf("从推断方式迁移项目成员完成，共找到 %d 个成员，成功迁移 %d 个成员", totalMembers, m.stats.projectMemberCount)
 	return nil
 }
 

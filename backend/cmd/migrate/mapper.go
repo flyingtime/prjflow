@@ -153,6 +153,36 @@ func ConvertUserStatus(deleted string) int {
 	return 1 // 正常
 }
 
+// ConvertProjectRole 转换项目角色
+// 禅道角色：项目经理、开发、测试、产品、设计等
+// goproject角色：owner, member, viewer
+func ConvertProjectRole(role string) string {
+	roleLower := strings.ToLower(role)
+	
+	// 项目经理、负责人等映射为owner
+	if strings.Contains(roleLower, "经理") || 
+	   strings.Contains(roleLower, "负责人") || 
+	   strings.Contains(roleLower, "owner") ||
+	   strings.Contains(roleLower, "leader") ||
+	   strings.Contains(roleLower, "pm") {
+		return "owner"
+	}
+	
+	// 开发、测试、产品、设计等映射为member
+	if strings.Contains(roleLower, "开发") || 
+	   strings.Contains(roleLower, "测试") || 
+	   strings.Contains(roleLower, "产品") || 
+	   strings.Contains(roleLower, "设计") ||
+	   strings.Contains(roleLower, "developer") ||
+	   strings.Contains(roleLower, "tester") ||
+	   strings.Contains(roleLower, "designer") {
+		return "member"
+	}
+	
+	// 其他角色默认为viewer
+	return "viewer"
+}
+
 // GenerateDeptCode 生成部门编码
 func GenerateDeptCode(name string, id int) string {
 	// 简单实现：使用ID作为编码，如果名称是中文则使用拼音首字母
@@ -179,6 +209,36 @@ func GenerateRoleCode(name string) string {
 		code = "role"
 	}
 	return code
+}
+
+// GenerateProjectCode 生成项目编码
+func GenerateProjectCode(name string, id int) string {
+	// 基于项目名称生成code，类似GenerateRoleCode
+	code := strings.ToLower(name)
+	code = strings.ReplaceAll(code, " ", "_")
+	code = strings.ReplaceAll(code, "-", "_")
+	code = strings.ReplaceAll(code, ".", "_")
+	// 移除其他特殊字符
+	var result strings.Builder
+	for _, r := range code {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+			result.WriteRune(r)
+		}
+	}
+	code = result.String()
+	
+	// 如果code为空或太短，使用项目ID
+	if code == "" || len(code) < 2 {
+		return fmt.Sprintf("project_%d", id)
+	}
+	
+	// 限制code长度（最多30个字符，为ID后缀留空间）
+	if len(code) > 30 {
+		code = code[:30]
+	}
+	
+	// 添加项目ID作为后缀确保唯一性
+	return fmt.Sprintf("%s_%d", code, id)
 }
 
 // MapZenTaoPermissionToGoProject 将zentao权限映射到goproject权限代码
