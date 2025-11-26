@@ -286,6 +286,18 @@
         </a-table>
       </a-spin>
     </a-modal>
+
+    <!-- 功能模块管理对话框 -->
+    <a-modal
+      v-model:open="moduleManageModalVisible"
+      title="功能模块管理（系统资源）"
+      :mask-closable="true"
+      @cancel="handleCloseModuleModal"
+      width="900px"
+      :footer="null"
+    >
+      <ModuleManagement :show-card="false" />
+    </a-modal>
   </div>
 </template>
 
@@ -294,6 +306,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import AppHeader from '@/components/AppHeader.vue'
+import ModuleManagement from '@/components/ModuleManagement.vue'
 import { 
   getProject, 
   getProjectMembers,
@@ -320,6 +333,9 @@ const users = ref<User[]>([])
 const projectMembers = ref<ProjectMember[]>([])
 const selectedUserIds = ref<number[]>([])
 const memberRole = ref('member')
+
+// 功能模块管理相关
+const moduleManageModalVisible = ref(false)
 
 const memberColumns = [
   { title: '用户', key: 'user', width: 150 },
@@ -480,10 +496,12 @@ const handleRemoveMember = async (memberId: number) => {
 
 // 功能模块管理
 const handleManageModules = () => {
-  router.push({
-    path: '/project',
-    query: { manageModules: project.value?.id }
-  })
+  moduleManageModalVisible.value = true
+}
+
+// 关闭模块管理对话框
+const handleCloseModuleModal = () => {
+  moduleManageModalVisible.value = false
 }
 
 // 需求管理

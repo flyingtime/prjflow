@@ -9,6 +9,7 @@
 - 用户 (zt_user -> users)
 - 项目 (zt_project -> projects)
 - 项目模块 (zt_module -> modules)
+- 版本 (zt_build -> versions)
 - 需求 (zt_story -> requirements)
 - 任务 (zt_task -> tasks)
 - Bug (zt_bug -> bugs)
@@ -56,9 +57,10 @@ go build -o migrate cmd/migrate/main.go
 3. 用户（依赖部门和角色）
 4. 项目（依赖用户）
 5. 项目模块（依赖项目）
-6. 需求（依赖项目和用户）
-7. 任务（依赖项目、需求和用户）
-8. Bug（依赖项目、需求和用户）
+6. 版本（依赖项目）
+7. 需求（依赖项目和用户）
+8. 任务（依赖项目、需求和用户）
+9. Bug（依赖项目、需求和用户）
 
 ## 数据映射规则
 
@@ -101,6 +103,16 @@ go build -o migrate cmd/migrate/main.go
 - `status`: 默认1（正常）
 - 只迁移 `deleted='0'` 的模块
 - 如果存在重名模块，只保留第一个（因为目标系统要求模块名称唯一）
+
+### 版本映射
+- `name` -> `version_number`（版本号）
+- `desc` -> `release_notes`（发布说明）
+- `date` -> `release_date`（发布日期）
+- `status`: 转换（wait->wait, normal->normal, fail->fail, terminate->terminate）
+- `project` -> `project_id`（通过ID映射）
+- 如果版本关联的是产品（product），会通过 `zt_projectproduct` 表查找对应的项目
+- 只迁移 `deleted='0'` 的版本
+- 如果版本号和项目ID的组合已存在，会跳过并记录日志
 
 ### 需求映射
 - `title` -> `title`

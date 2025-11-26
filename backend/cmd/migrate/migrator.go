@@ -28,6 +28,7 @@ type Migrator struct {
 	projectIDMap     map[int]uint
 	requirementIDMap map[int]uint
 	moduleIDMap      map[int]uint
+	versionIDMap     map[int]uint
 
 	// 统计信息
 	stats struct {
@@ -35,6 +36,7 @@ type Migrator struct {
 		bugCount           int
 		projectMemberCount int
 		moduleCount        int
+		versionCount       int
 	}
 }
 
@@ -47,6 +49,7 @@ func NewMigrator(config *MigrateConfig) (*Migrator, error) {
 		projectIDMap:     make(map[int]uint),
 		requirementIDMap: make(map[int]uint),
 		moduleIDMap:      make(map[int]uint),
+		versionIDMap:     make(map[int]uint),
 	}
 
 	// 连接zentao数据库
@@ -111,22 +114,27 @@ func (m *Migrator) MigrateAll() error {
 		return fmt.Errorf("迁移项目模块失败: %w", err)
 	}
 
-	// 6. 迁移需求
+	// 6. 迁移版本
+	if err := m.MigrateVersions(); err != nil {
+		return fmt.Errorf("迁移版本失败: %w", err)
+	}
+
+	// 7. 迁移需求
 	if err := m.MigrateRequirements(); err != nil {
 		return fmt.Errorf("迁移需求失败: %w", err)
 	}
 
-	// 7. 迁移任务
+	// 8. 迁移任务
 	if err := m.MigrateTasks(); err != nil {
 		return fmt.Errorf("迁移任务失败: %w", err)
 	}
 
-	// 8. 迁移Bug
+	// 9. 迁移Bug
 	if err := m.MigrateBugs(); err != nil {
 		return fmt.Errorf("迁移Bug失败: %w", err)
 	}
 
-	// 9. 迁移项目成员
+	// 10. 迁移项目成员
 	if err := m.MigrateProjectMembers(); err != nil {
 		return fmt.Errorf("迁移项目成员失败: %w", err)
 	}
@@ -144,6 +152,7 @@ func (m *Migrator) MigrateAll() error {
 	log.Printf("  - Bug: %d 个", m.stats.bugCount)
 	log.Printf("  - 项目成员: %d 个", m.stats.projectMemberCount)
 	log.Printf("  - 项目模块: %d 个", m.stats.moduleCount)
+	log.Printf("  - 版本: %d 个", m.stats.versionCount)
 	log.Println("==========================================")
 
 	// 更新初始化状态为已初始化
@@ -703,6 +712,96 @@ func (m *Migrator) MigrateModules() error {
 	}
 
 	log.Printf("项目模块迁移完成，共迁移 %d 个模块", m.stats.moduleCount)
+	return nil
+}
+
+// MigrateVersions 迁移版本
+func (m *Migrator) MigrateVersions() error {
+	log.Println("开始迁移版本...")
+
+	type ZenTaoBuild struct {
+		ID       int    `gorm:"column:id"`
+		Name     string `gorm:"column:name"`     // 版本名称/版本号
+		Project  int    `gorm:"column:project"`  // 所属项目ID
+		Product  int    `gorm:"column:product"`  // 所属产品ID
+		Date     string `gorm:"column:date"`     // 发布日期
+		Builder  string `gorm:"column:builder"`  // 构建者
+		ScmPath  string `gorm:"column:scmPath"`  // SCM路径
+		FilePath string `gorm:"column:filePath"` // 文件路径
+		Desc     string `gorm:"column:desc"`     // 描述
+		Status   string `gorm:"column:status"`   // 状态
+		Deleted  string `gorm:"column:deleted"`  // 删除标记
+	}
+
+	var zentaoBuilds []ZenTaoBuild
+	query := m.zenTaoDB.Table("zt_build").Where("deleted = '0'")
+	if err := query.Find(&zentaoBuilds).Error; err != nil {
+		// 如果表不存在，记录警告并返回
+		log.Printf("警告: 未找到zt_build表或表为空: %v", err)
+		return nil
+	}
+
+	log.Printf("找到 %d 个版本", len(zentaoBuilds))
+
+	for _, zb := range zentaoBuilds {
+		// 获取项目ID
+		var projectID uint
+		if zb.Project > 0 {
+			if newID, ok := m.projectIDMap[zb.Project]; ok {
+				projectID = newID
+			}
+		} else if zb.Product > 0 {
+			// 如果版本关联的是产品，需要通过产品查找项目
+			// 查找该产品关联的项目
+			type ZenTaoProjectProduct struct {
+				Project int `gorm:"column:project"`
+			}
+			var projectProduct ZenTaoProjectProduct
+			if err := m.zenTaoDB.Table("zt_projectproduct").Where("product = ?", zb.Product).First(&projectProduct).Error; err == nil {
+				if newID, ok := m.projectIDMap[projectProduct.Project]; ok {
+					projectID = newID
+				}
+			}
+		}
+
+		if projectID == 0 {
+			log.Printf("版本 %s 没有关联的项目，跳过", zb.Name)
+			continue
+		}
+
+		// 解析发布日期
+		var releaseDate *time.Time
+		if zb.Date != "" {
+			releaseDate = ParseDate(zb.Date)
+		}
+
+		version := model.Version{
+			VersionNumber: zb.Name,
+			ReleaseNotes:  zb.Desc,
+			Status:        ConvertVersionStatus(zb.Status),
+			ProjectID:     projectID,
+			ReleaseDate:   releaseDate,
+		}
+
+		// 检查是否已存在（基于版本号和项目ID）
+		var existing model.Version
+		if err := m.goProjectDB.Where("version_number = ? AND project_id = ?", version.VersionNumber, version.ProjectID).First(&existing).Error; err == nil {
+			m.versionIDMap[zb.ID] = existing.ID
+			log.Printf("版本已存在: %s (ID: %d -> %d, 项目ID: %d)", version.VersionNumber, zb.ID, existing.ID, projectID)
+			continue
+		}
+
+		if err := m.goProjectDB.Create(&version).Error; err != nil {
+			log.Printf("创建版本失败: %s, 错误: %v", version.VersionNumber, err)
+			continue
+		}
+
+		m.versionIDMap[zb.ID] = version.ID
+		m.stats.versionCount++
+		log.Printf("迁移版本: %s (ID: %d -> %d, 项目ID: %d)", version.VersionNumber, zb.ID, version.ID, projectID)
+	}
+
+	log.Printf("版本迁移完成，共迁移 %d 个版本", m.stats.versionCount)
 	return nil
 }
 

@@ -280,11 +280,11 @@
       v-model:open="moduleManageModalVisible"
       title="功能模块管理（系统资源）"
       :mask-closable="true"
-      @cancel="moduleManageModalVisible = false"
+      @cancel="handleCloseModuleModal"
       width="900px"
       :footer="null"
     >
-      <Module />
+      <ModuleManagement :show-card="false" />
     </a-modal>
 
     <!-- 标签管理对话框 -->
@@ -351,7 +351,7 @@ import {
 } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
 import { getTags, createTag, type Tag } from '@/api/tag'
-import Module from './Module.vue'
+import ModuleManagement from '@/components/ModuleManagement.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
 import { getAttachments, type Attachment } from '@/api/attachment'
 
@@ -725,6 +725,17 @@ const _handleManageModules = async (record: Project) => {
   moduleManageModalVisible.value = true
 }
 
+// 关闭模块管理对话框
+const handleCloseModuleModal = () => {
+  moduleManageModalVisible.value = false
+  // 清除URL中的manageModules参数
+  if (route.query.manageModules) {
+    const newQuery = { ...route.query }
+    delete newQuery.manageModules
+    router.replace({ path: route.path, query: newQuery })
+  }
+}
+
 // 添加成员
 const handleAddMembers = async () => {
   if (!currentProjectId.value || selectedUserIds.value.length === 0) {
@@ -985,6 +996,15 @@ onMounted(() => {
     const projectId = Number(route.query.manageMembers)
     if (projectId && !isNaN(projectId)) {
       openMemberModal(projectId)
+    }
+  }
+  
+  // 检查URL参数manageModules
+  if (route.query.manageModules) {
+    const projectId = Number(route.query.manageModules)
+    if (projectId && !isNaN(projectId)) {
+      currentProjectId.value = projectId
+      moduleManageModalVisible.value = true
     }
   }
 })
