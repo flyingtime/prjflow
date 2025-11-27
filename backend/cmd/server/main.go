@@ -328,6 +328,9 @@ func main() {
 		projectGroup.POST("", middleware.RequirePermission(db, "project:create"), projectHandler.CreateProject)
 		projectGroup.PUT("/:id", middleware.RequirePermission(db, "project:update"), projectHandler.UpdateProject)
 		projectGroup.DELETE("/:id", middleware.RequirePermission(db, "project:delete"), projectHandler.DeleteProject)
+		// 项目历史记录
+		projectGroup.GET("/:id/history", middleware.RequirePermission(db, "project:read"), projectHandler.GetProjectHistory)
+		projectGroup.POST("/:id/history/note", middleware.RequirePermission(db, "project:update"), projectHandler.AddProjectHistoryNote)
 		// 项目成员管理
 		projectGroup.GET("/:id/members", middleware.RequirePermission(db, "project:read"), projectHandler.GetProjectMembers)
 		projectGroup.POST("/:id/members", middleware.RequirePermission(db, "project:manage"), projectHandler.AddProjectMembers)
@@ -346,6 +349,9 @@ func main() {
 		requirementGroup.PUT("/:id", middleware.RequirePermission(db, "requirement:update"), requirementHandler.UpdateRequirement)
 		requirementGroup.DELETE("/:id", middleware.RequirePermission(db, "requirement:delete"), requirementHandler.DeleteRequirement)
 		requirementGroup.PATCH("/:id/status", middleware.RequirePermission(db, "requirement:update"), requirementHandler.UpdateRequirementStatus)
+		// 需求历史记录
+		requirementGroup.GET("/:id/history", middleware.RequirePermission(db, "requirement:read"), requirementHandler.GetRequirementHistory)
+		requirementGroup.POST("/:id/history/note", middleware.RequirePermission(db, "requirement:update"), requirementHandler.AddRequirementHistoryNote)
 	}
 
 	// 功能模块管理路由（模块是系统资源，使用项目权限）
@@ -387,6 +393,9 @@ func main() {
 		taskGroup.PUT("/:id", middleware.RequirePermission(db, "task:update"), taskHandler.UpdateTask)
 		taskGroup.DELETE("/:id", middleware.RequirePermission(db, "task:delete"), taskHandler.DeleteTask)
 		taskGroup.PATCH("/:id/status", middleware.RequirePermission(db, "task:update"), taskHandler.UpdateTaskStatus)
+		// 任务历史记录
+		taskGroup.GET("/:id/history", middleware.RequirePermission(db, "task:read"), taskHandler.GetTaskHistory)
+		taskGroup.POST("/:id/history/note", middleware.RequirePermission(db, "task:update"), taskHandler.AddTaskHistoryNote)
 		taskGroup.PATCH("/:id/progress", middleware.RequirePermission(db, "task:update"), taskHandler.UpdateTaskProgress)
 	}
 

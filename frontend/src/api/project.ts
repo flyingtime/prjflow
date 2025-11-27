@@ -115,6 +115,54 @@ export const removeProjectMember = async (projectId: number, memberId: number): 
   return request.delete(`/projects/${projectId}/members/${memberId}`)
 }
 
+// 历史记录相关接口（参考bug.ts）
+export interface History {
+  id: number
+  action_id: number
+  field: string
+  old: string
+  old_value: string
+  new: string
+  new_value: string
+  diff?: string
+  created_at?: string
+}
+
+export interface Action {
+  id: number
+  object_type: string
+  object_id: number
+  project_id: number
+  actor_id: number
+  actor?: {
+    id: number
+    username: string
+    nickname?: string
+  }
+  action: 'created' | 'edited' | 'assigned' | 'resolved' | 'closed' | 'confirmed' | 'commented'
+  date: string
+  comment?: string
+  extra?: string
+  histories?: History[]
+  created_at?: string
+}
+
+export interface ProjectHistoryResponse {
+  list: Action[]
+}
+
+export interface AddProjectHistoryNoteRequest {
+  comment: string
+}
+
+export const getProjectHistory = async (id: number): Promise<ProjectHistoryResponse> => {
+  return request.get(`/projects/${id}/history`)
+}
+
+export const addProjectHistoryNote = async (id: number, data: AddProjectHistoryNoteRequest): Promise<{ message: string }> => {
+  return request.post(`/projects/${id}/history/note`, data)
+}
+
 // 甘特图相关API
 export interface GanttTask {
   id: number

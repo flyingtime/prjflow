@@ -230,6 +230,14 @@ func (h *RequirementHandler) CreateRequirement(c *gin.Context) {
 	// 重新加载关联数据
 	h.db.Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, requirement.ID)
 
+	// 记录创建操作（userID已在上面定义）
+	if userID, exists := c.Get("user_id"); exists {
+		dbValue, _ := c.Get("db")
+		if db, ok := dbValue.(*gorm.DB); ok {
+			utils.RecordAction(db, "requirement", requirement.ID, "created", userID.(uint), "", nil)
+		}
+	}
+
 	utils.Success(c, requirement)
 }
 
@@ -247,6 +255,9 @@ func (h *RequirementHandler) UpdateRequirement(c *gin.Context) {
 		utils.Error(c, 403, "没有权限更新该需求")
 		return
 	}
+
+	// 保存旧对象用于比较
+	oldRequirement := requirement
 
 	var req struct {
 		Title          *string  `json:"title"`
@@ -381,6 +392,16 @@ func (h *RequirementHandler) UpdateRequirement(c *gin.Context) {
 
 	// 重新加载关联数据
 	h.db.Preload("Project").Preload("Creator").Preload("Assignee").First(&requirement, requirement.ID)
+
+	// 记录编辑操作和字段变更
+	userID, exists := c.Get("user_id")
+	if exists {
+		dbValue, _ := c.Get("db")
+		if db, ok := dbValue.(*gorm.DB); ok {
+			// 比较新旧对象并记录变更
+			utils.CompareAndRecord(db, oldRequirement, requirement, "requirement", requirement.ID, userID.(uint), "edited")
+		}
+	}
 
 	utils.Success(c, requirement)
 }
@@ -601,4 +622,87 @@ func (h *RequirementHandler) calculateAndUpdateActualHours(requirement *model.Re
 
 	requirement.ActualHours = &totalHours
 	h.db.Model(requirement).Update("actual_hours", totalHours)
+}
+
+// GetRequirementHistory 获取需求历史记录列表
+func (h *RequirementHandler) GetRequirementHistory(c *gin.Context) {
+	id := c.Param("id")
+	var requirement model.Requirement
+	if err := h.db.First(&requirement, id).Error; err != nil {
+		utils.Error(c, 404, "需求不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能查看自己创建或参与的需求的历史记录
+	if !utils.CheckRequirementAccess(h.db, c, requirement.ID) {
+		utils.Error(c, 403, "没有权限查看该需求的历史记录")
+		return
+	}
+
+	// 查询操作记录
+	var actions []model.Action
+	if err := h.db.Where("object_type = ? AND object_id = ?", "requirement", id).
+		Preload("Actor").
+		Preload("Histories").
+		Order("date DESC").
+		Find(&actions).Error; err != nil {
+		utils.Error(c, utils.CodeError, "查询历史记录失败")
+		return
+	}
+
+	// 处理历史记录，转换字段值显示
+	for i := range actions {
+		for j := range actions[i].Histories {
+			processedHistory := utils.ProcessHistory(h.db, &actions[i].Histories[j])
+			actions[i].Histories[j] = *processedHistory
+		}
+	}
+
+	utils.Success(c, gin.H{
+		"list": actions,
+	})
+}
+
+// AddRequirementHistoryNote 添加备注
+func (h *RequirementHandler) AddRequirementHistoryNote(c *gin.Context) {
+	id := c.Param("id")
+	var requirement model.Requirement
+	if err := h.db.First(&requirement, id).Error; err != nil {
+		utils.Error(c, 404, "需求不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能为自己创建或参与的需求添加备注
+	if !utils.CheckRequirementAccess(h.db, c, requirement.ID) {
+		utils.Error(c, 403, "没有权限为该需求添加备注")
+		return
+	}
+
+	var req struct {
+		Comment string `json:"comment" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, 400, "参数错误")
+		return
+	}
+
+	// 获取当前用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Error(c, 401, "未登录")
+		return
+	}
+
+	// 记录备注操作
+	dbValue, _ := c.Get("db")
+	if db, ok := dbValue.(*gorm.DB); ok {
+		_, err := utils.RecordAction(db, "requirement", requirement.ID, "commented", userID.(uint), req.Comment, nil)
+		if err != nil {
+			utils.Error(c, utils.CodeError, "添加备注失败")
+			return
+		}
+	}
+
+	utils.Success(c, gin.H{"message": "添加备注成功"})
 }

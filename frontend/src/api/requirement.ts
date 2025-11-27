@@ -94,3 +94,51 @@ export const getRequirementStatistics = async (params?: {
   return request.get('/requirements/statistics', { params })
 }
 
+// 历史记录相关接口（参考bug.ts和project.ts）
+export interface History {
+  id: number
+  action_id: number
+  field: string
+  old: string
+  old_value: string
+  new: string
+  new_value: string
+  diff?: string
+  created_at?: string
+}
+
+export interface Action {
+  id: number
+  object_type: string
+  object_id: number
+  project_id: number
+  actor_id: number
+  actor?: {
+    id: number
+    username: string
+    nickname?: string
+  }
+  action: 'created' | 'edited' | 'assigned' | 'resolved' | 'closed' | 'confirmed' | 'commented'
+  date: string
+  comment?: string
+  extra?: string
+  histories?: History[]
+  created_at?: string
+}
+
+export interface RequirementHistoryResponse {
+  list: Action[]
+}
+
+export interface AddRequirementHistoryNoteRequest {
+  comment: string
+}
+
+export const getRequirementHistory = async (id: number): Promise<RequirementHistoryResponse> => {
+  return request.get(`/requirements/${id}/history`)
+}
+
+export const addRequirementHistoryNote = async (id: number, data: AddRequirementHistoryNoteRequest): Promise<{ message: string }> => {
+  return request.post(`/requirements/${id}/history/note`, data)
+}
+

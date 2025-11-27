@@ -293,6 +293,14 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	// 重新加载关联数据
 	h.db.Preload("Project").Preload("Requirement").Preload("Creator").Preload("Assignee").Preload("Dependencies").First(&task, task.ID)
 
+	// 记录创建操作
+	if userID, exists := c.Get("user_id"); exists {
+		dbValue, _ := c.Get("db")
+		if db, ok := dbValue.(*gorm.DB); ok {
+			utils.RecordAction(db, "task", task.ID, "created", userID.(uint), "", nil)
+		}
+	}
+
 	utils.Success(c, task)
 }
 
@@ -310,6 +318,9 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		utils.Error(c, 403, "没有权限更新该任务")
 		return
 	}
+
+	// 保存旧对象用于比较
+	oldTask := task
 
 	var req struct {
 		Title          *string  `json:"title"`
@@ -520,6 +531,16 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 
 	// 重新加载关联数据
 	h.db.Preload("Project").Preload("Requirement").Preload("Creator").Preload("Assignee").Preload("Dependencies").First(&task, task.ID)
+
+	// 记录编辑操作和字段变更
+	userID, exists := c.Get("user_id")
+	if exists {
+		dbValue, _ := c.Get("db")
+		if db, ok := dbValue.(*gorm.DB); ok {
+			// 比较新旧对象并记录变更
+			utils.CompareAndRecord(db, oldTask, task, "task", task.ID, userID.(uint), "edited")
+		}
+	}
 
 	utils.Success(c, task)
 }
@@ -834,4 +855,87 @@ func (h *TaskHandler) calculateProgressFromHours(task *model.Task) {
 		"progress": progress,
 		"status":   task.Status,
 	})
+}
+
+// GetTaskHistory 获取任务历史记录列表
+func (h *TaskHandler) GetTaskHistory(c *gin.Context) {
+	id := c.Param("id")
+	var task model.Task
+	if err := h.db.First(&task, id).Error; err != nil {
+		utils.Error(c, 404, "任务不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能查看自己创建或参与的任务的历史记录
+	if !utils.CheckTaskAccess(h.db, c, task.ID) {
+		utils.Error(c, 403, "没有权限查看该任务的历史记录")
+		return
+	}
+
+	// 查询操作记录
+	var actions []model.Action
+	if err := h.db.Where("object_type = ? AND object_id = ?", "task", id).
+		Preload("Actor").
+		Preload("Histories").
+		Order("date DESC").
+		Find(&actions).Error; err != nil {
+		utils.Error(c, utils.CodeError, "查询历史记录失败")
+		return
+	}
+
+	// 处理历史记录，转换字段值显示
+	for i := range actions {
+		for j := range actions[i].Histories {
+			processedHistory := utils.ProcessHistory(h.db, &actions[i].Histories[j])
+			actions[i].Histories[j] = *processedHistory
+		}
+	}
+
+	utils.Success(c, gin.H{
+		"list": actions,
+	})
+}
+
+// AddTaskHistoryNote 添加备注
+func (h *TaskHandler) AddTaskHistoryNote(c *gin.Context) {
+	id := c.Param("id")
+	var task model.Task
+	if err := h.db.First(&task, id).Error; err != nil {
+		utils.Error(c, 404, "任务不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能为自己创建或参与的任务添加备注
+	if !utils.CheckTaskAccess(h.db, c, task.ID) {
+		utils.Error(c, 403, "没有权限为该任务添加备注")
+		return
+	}
+
+	var req struct {
+		Comment string `json:"comment" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, 400, "参数错误")
+		return
+	}
+
+	// 获取当前用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Error(c, 401, "未登录")
+		return
+	}
+
+	// 记录备注操作
+	dbValue, _ := c.Get("db")
+	if db, ok := dbValue.(*gorm.DB); ok {
+		_, err := utils.RecordAction(db, "task", task.ID, "commented", userID.(uint), req.Comment, nil)
+		if err != nil {
+			utils.Error(c, utils.CodeError, "添加备注失败")
+			return
+		}
+	}
+
+	utils.Success(c, gin.H{"message": "添加备注成功"})
 }

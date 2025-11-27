@@ -99,3 +99,51 @@ export const updateTaskProgress = async (id: number, data: UpdateTaskProgressReq
   return request.patch(`/tasks/${id}/progress`, data)
 }
 
+// 历史记录相关接口（参考bug.ts、project.ts和requirement.ts）
+export interface History {
+  id: number
+  action_id: number
+  field: string
+  old: string
+  old_value: string
+  new: string
+  new_value: string
+  diff?: string
+  created_at?: string
+}
+
+export interface Action {
+  id: number
+  object_type: string
+  object_id: number
+  project_id: number
+  actor_id: number
+  actor?: {
+    id: number
+    username: string
+    nickname?: string
+  }
+  action: 'created' | 'edited' | 'assigned' | 'resolved' | 'closed' | 'confirmed' | 'commented'
+  date: string
+  comment?: string
+  extra?: string
+  histories?: History[]
+  created_at?: string
+}
+
+export interface TaskHistoryResponse {
+  list: Action[]
+}
+
+export interface AddTaskHistoryNoteRequest {
+  comment: string
+}
+
+export const getTaskHistory = async (id: number): Promise<TaskHistoryResponse> => {
+  return request.get(`/tasks/${id}/history`)
+}
+
+export const addTaskHistoryNote = async (id: number, data: AddTaskHistoryNoteRequest): Promise<{ message: string }> => {
+  return request.post(`/tasks/${id}/history/note`, data)
+}
+

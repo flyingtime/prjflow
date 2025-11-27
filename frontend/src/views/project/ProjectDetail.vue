@@ -53,6 +53,80 @@
               </a-descriptions>
             </a-card>
 
+            <!-- 项目描述 -->
+            <a-card title="项目描述" :bordered="false" style="margin-bottom: 16px" v-if="project?.description">
+              <div class="markdown-content">
+                <MarkdownEditor
+                  :model-value="project.description"
+                  :readonly="true"
+                />
+              </div>
+            </a-card>
+
+            <!-- 历史记录 -->
+            <a-card :bordered="false" style="margin-bottom: 16px">
+              <template #title>
+                <span>历史记录</span>
+                <a-button 
+                  type="link" 
+                  size="small"
+                  @click.stop="handleAddNote" 
+                  :disabled="historyLoading"
+                  style="margin-left: 8px; padding: 0"
+                >
+                  添加备注
+                </a-button>
+              </template>
+              <a-spin :spinning="historyLoading" :style="{ minHeight: '100px' }">
+                <a-timeline v-if="historyList.length > 0">
+                  <a-timeline-item
+                    v-for="(action, index) in historyList"
+                    :key="action.id"
+                  >
+                    <template #dot>
+                      <span style="font-weight: bold; color: #1890ff">{{ historyList.length - index }}</span>
+                    </template>
+                    <div>
+                      <div style="margin-bottom: 8px">
+                        <span style="color: #666; margin-right: 8px">{{ formatDateTime(action.date) }}</span>
+                        <span>{{ getActionDescription(action) }}</span>
+                        <a-button
+                          v-if="hasHistoryDetails(action)"
+                          type="link"
+                          size="small"
+                          @click="toggleHistoryDetail(action.id)"
+                          style="padding: 0; height: auto; margin-left: 8px"
+                        >
+                          {{ expandedHistoryIds.has(action.id) ? '收起' : '展开' }}
+                        </a-button>
+                      </div>
+                      <!-- 字段变更详情和备注内容（可折叠） -->
+                      <div
+                        v-show="expandedHistoryIds.has(action.id)"
+                        style="margin-left: 24px; margin-top: 8px"
+                      >
+                        <!-- 字段变更详情 -->
+                        <div v-if="action.histories && action.histories.length > 0">
+                          <div
+                            v-for="history in action.histories"
+                            :key="history.id"
+                            style="margin-bottom: 4px; color: #666"
+                          >
+                            修改了{{ getFieldDisplayName(history.field) }}, 旧值为"{{ history.old_value || history.old || '-' }}",新值为"{{ history.new_value || history.new || '-' }}"。
+                          </div>
+                        </div>
+                        <!-- 备注内容 -->
+                        <div v-if="action.comment" style="margin-top: 8px; color: #666">
+                          {{ action.comment }}
+                        </div>
+                      </div>
+                    </div>
+                  </a-timeline-item>
+                </a-timeline>
+                <a-empty v-else description="暂无历史记录" />
+              </a-spin>
+            </a-card>
+
             <!-- 统计概览 -->
             <a-row :gutter="16" style="margin-bottom: 16px">
               <a-col :span="6">
@@ -304,27 +378,129 @@
     >
       <ModuleManagement :show-card="false" />
     </a-modal>
+
+    <!-- 项目编辑模态框 -->
+    <a-modal
+      v-model:open="editModalVisible"
+      title="编辑项目"
+      :width="800"
+      :mask-closable="false"
+      @ok="handleEditSubmit"
+      @cancel="handleEditCancel"
+    >
+      <a-form
+        ref="editFormRef"
+        :model="editFormData"
+        :rules="editFormRules"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="项目名称" name="name">
+          <a-input v-model:value="editFormData.name" placeholder="请输入项目名称" />
+        </a-form-item>
+        <a-form-item label="项目编码" name="code">
+          <a-input v-model:value="editFormData.code" placeholder="请输入项目编码" />
+        </a-form-item>
+        <a-form-item label="项目描述" name="description">
+          <MarkdownEditor
+            ref="editDescriptionEditorRef"
+            v-model="editFormData.description"
+            placeholder="请输入项目描述（支持Markdown）"
+            :rows="8"
+            :project-id="project?.id || 0"
+          />
+        </a-form-item>
+        <a-form-item label="状态" name="status">
+          <a-select v-model:value="editFormData.status">
+            <a-select-option value="wait">等待</a-select-option>
+            <a-select-option value="doing">进行中</a-select-option>
+            <a-select-option value="suspended">已暂停</a-select-option>
+            <a-select-option value="closed">已关闭</a-select-option>
+            <a-select-option value="done">已完成</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="标签" name="tag_ids">
+          <a-select
+            v-model:value="editFormData.tag_ids"
+            mode="multiple"
+            placeholder="选择标签（支持多选）"
+            allow-clear
+            :options="tagOptions"
+            :field-names="{ label: 'name', value: 'id' }"
+          />
+        </a-form-item>
+        <a-form-item label="开始日期" name="start_date">
+          <a-date-picker
+            v-model:value="editFormData.start_date"
+            placeholder="选择开始日期（可选）"
+            style="width: 100%"
+            format="YYYY-MM-DD"
+          />
+        </a-form-item>
+        <a-form-item label="结束日期" name="end_date">
+          <a-date-picker
+            v-model:value="editFormData.end_date"
+            placeholder="选择结束日期（可选）"
+            style="width: 100%"
+            format="YYYY-MM-DD"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 添加备注模态框 -->
+    <a-modal
+      v-model:open="noteModalVisible"
+      title="添加备注"
+      :mask-closable="true"
+      @ok="handleNoteSubmit"
+      @cancel="handleNoteCancel"
+    >
+      <a-form
+        ref="noteFormRef"
+        :model="noteFormData"
+        :rules="noteFormRules"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="备注" name="comment">
+          <a-textarea
+            v-model:value="noteFormData.comment"
+            placeholder="请输入备注"
+            :rows="4"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { formatDateTime } from '@/utils/date'
+import dayjs, { type Dayjs } from 'dayjs'
 import AppHeader from '@/components/AppHeader.vue'
 import ModuleManagement from '@/components/ModuleManagement.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { 
   getProject, 
+  updateProject,
   getProjectMembers,
   addProjectMembers,
   updateProjectMember,
   removeProjectMember,
+  getProjectHistory,
+  addProjectHistoryNote,
   type ProjectDetailResponse, 
   type Project,
-  type ProjectMember
+  type ProjectMember,
+  type CreateProjectRequest,
+  type Action
 } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
+import { getTags, type Tag } from '@/api/tag'
 
 const route = useRoute()
 const router = useRouter()
@@ -343,6 +519,42 @@ const memberRole = ref('member')
 
 // 功能模块管理相关
 const moduleManageModalVisible = ref(false)
+
+// 历史记录相关
+const historyLoading = ref(false)
+const historyList = ref<Action[]>([])
+const expandedHistoryIds = ref<Set<number>>(new Set())
+const noteModalVisible = ref(false)
+const noteFormRef = ref()
+const noteFormData = reactive({
+  comment: ''
+})
+const noteFormRules = {
+  comment: [{ required: true, message: '请输入备注', trigger: 'blur' }]
+}
+
+// 编辑模态框相关
+const editModalVisible = ref(false)
+const editFormRef = ref()
+const editDescriptionEditorRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
+const editFormData = reactive<Omit<CreateProjectRequest, 'start_date' | 'end_date'> & { 
+  start_date?: Dayjs | undefined
+  end_date?: Dayjs | undefined
+}>({
+  name: '',
+  code: '',
+  description: '',
+  status: 'wait',
+  tag_ids: [],
+  start_date: undefined,
+  end_date: undefined
+})
+const editFormRules = {
+  name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
+  code: [{ required: true, message: '请输入项目编码', trigger: 'blur' }]
+}
+const tags = ref<Tag[]>([])
+const tagOptions = ref<Array<{ id: number; name: string; color?: string }>>([])
 
 const memberColumns = [
   { title: '用户', key: 'user', width: 150 },
@@ -364,6 +576,7 @@ const loadProject = async () => {
     const data: ProjectDetailResponse = await getProject(projectId)
     project.value = data.project
     statistics.value = data.statistics
+    await loadProjectHistory(projectId) // 加载历史记录
   } catch (error: any) {
     message.error(error.message || '加载项目详情失败')
     router.push('/project')
@@ -400,11 +613,180 @@ const handleViewResourceStatistics = () => {
 }
 
 // 编辑项目
-const handleEdit = () => {
-  router.push({
-    path: '/project',
-    query: { edit: project.value?.id }
-  })
+const handleEdit = async () => {
+  if (!project.value) return
+  
+  editFormData.name = project.value.name
+  editFormData.code = project.value.code
+  editFormData.description = project.value.description || ''
+  editFormData.status = project.value.status
+  editFormData.tag_ids = project.value.tags?.map(t => t.id) || []
+  editFormData.start_date = project.value.start_date ? dayjs(project.value.start_date) : undefined
+  editFormData.end_date = project.value.end_date ? dayjs(project.value.end_date) : undefined
+  
+  editModalVisible.value = true
+  await loadTags()
+}
+
+// 编辑提交
+const handleEditSubmit = async () => {
+  if (!project.value) return
+  
+  try {
+    await editFormRef.value.validate()
+    
+    // 获取最新的描述内容
+    let description = editFormData.description || ''
+    
+    // 如果有项目ID，尝试上传本地图片（如果有的话）
+    if (editDescriptionEditorRef.value && project.value.id) {
+      try {
+        const uploadedDescription = await editDescriptionEditorRef.value.uploadLocalImages(async (file: File, projectId: number) => {
+          // TODO: 需要实现文件上传API
+          const { uploadFile } = await import('@/api/attachment')
+          const attachment = await uploadFile(file, projectId)
+          return attachment
+        })
+        description = uploadedDescription
+      } catch (error: any) {
+        console.error('上传图片失败:', error)
+        message.warning('部分图片上传失败，请检查')
+        description = editFormData.description || ''
+      }
+    }
+    
+    const data: Partial<CreateProjectRequest> = {
+      name: editFormData.name,
+      code: editFormData.code,
+      description: description || '',
+      status: editFormData.status,
+      tag_ids: editFormData.tag_ids,
+      start_date: editFormData.start_date && typeof editFormData.start_date !== 'string' && 'isValid' in editFormData.start_date && (editFormData.start_date as Dayjs).isValid() ? (editFormData.start_date as Dayjs).format('YYYY-MM-DD') : (typeof editFormData.start_date === 'string' ? editFormData.start_date : undefined),
+      end_date: editFormData.end_date && typeof editFormData.end_date !== 'string' && 'isValid' in editFormData.end_date && (editFormData.end_date as Dayjs).isValid() ? (editFormData.end_date as Dayjs).format('YYYY-MM-DD') : (typeof editFormData.end_date === 'string' ? editFormData.end_date : undefined)
+    }
+    
+    await updateProject(project.value.id, data)
+    
+    message.success('更新成功')
+    editModalVisible.value = false
+    await loadProject() // 重新加载项目详情（会自动加载历史记录）
+  } catch (error: any) {
+    if (error.errorFields) {
+      return
+    }
+    message.error(error.message || '更新失败')
+  }
+}
+
+// 编辑取消
+const handleEditCancel = () => {
+  editFormRef.value?.resetFields()
+}
+
+// 加载标签
+const loadTags = async () => {
+  try {
+    tags.value = await getTags()
+    tagOptions.value = tags.value.map(t => ({ id: t.id, name: t.name, color: t.color }))
+  } catch (error: any) {
+    console.error('加载标签列表失败:', error)
+  }
+}
+
+// 加载历史记录
+const loadProjectHistory = async (projectId?: number) => {
+  const id = projectId || Number(route.params.id)
+  if (!id) return
+
+  historyLoading.value = true
+  try {
+    const response = await getProjectHistory(id)
+    historyList.value = response.list || []
+  } catch (error: any) {
+    console.error('加载历史记录失败:', error)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+// 判断历史记录是否有详情
+const hasHistoryDetails = (action: Action): boolean => {
+  return !!(action.histories && action.histories.length > 0) || !!action.comment
+}
+
+// 切换历史记录详情展开/收起
+const toggleHistoryDetail = (actionId: number) => {
+  const newSet = new Set(expandedHistoryIds.value)
+  if (newSet.has(actionId)) {
+    newSet.delete(actionId)
+  } else {
+    newSet.add(actionId)
+  }
+  expandedHistoryIds.value = newSet
+}
+
+// 获取字段显示名称
+const getFieldDisplayName = (fieldName: string): string => {
+  const fieldNames: Record<string, string> = {
+    name: '项目名称',
+    code: '项目编码',
+    description: '项目描述',
+    status: '状态',
+    start_date: '开始日期',
+    end_date: '结束日期',
+    tag_ids: '标签'
+  }
+  return fieldNames[fieldName] || fieldName
+}
+
+// 获取操作描述
+const getActionDescription = (action: Action): string => {
+  const actorName = action.actor
+    ? `${action.actor.username}${action.actor.nickname ? `(${action.actor.nickname})` : ''}`
+    : '系统'
+
+  switch (action.action) {
+    case 'created':
+      return `由 ${actorName} 创建。`
+    case 'edited':
+      return `由 ${actorName} 编辑。`
+    case 'commented':
+      return `由 ${actorName} 添加了备注：${action.comment || ''}`
+    default:
+      return `由 ${actorName} 执行了 ${action.action} 操作。`
+  }
+}
+
+// 添加备注
+const handleAddNote = () => {
+  if (!project.value) {
+    message.warning('项目信息未加载完成，请稍候再试')
+    return
+  }
+  noteFormData.comment = ''
+  noteModalVisible.value = true
+}
+
+// 提交备注
+const handleNoteSubmit = async () => {
+  if (!project.value) return
+  try {
+    await noteFormRef.value.validate()
+    await addProjectHistoryNote(project.value.id, { comment: noteFormData.comment })
+    message.success('添加备注成功')
+    noteModalVisible.value = false
+    await loadProjectHistory(project.value.id)
+  } catch (error: any) {
+    if (error.errorFields) {
+      return
+    }
+    message.error(error.message || '添加备注失败')
+  }
+}
+
+// 取消添加备注
+const handleNoteCancel = () => {
+  noteFormRef.value?.resetFields()
 }
 
 // 加载用户列表
@@ -578,11 +960,19 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.project-detail :deep(.ant-layout) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .content {
   flex: 1;
   padding: 24px;
   background: #f0f2f5;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .content-inner {

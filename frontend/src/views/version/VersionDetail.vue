@@ -145,29 +145,154 @@
         </div>
       </a-layout-content>
     </a-layout>
+
+    <!-- 版本编辑模态框 -->
+    <a-modal
+      v-model:open="editModalVisible"
+      title="编辑版本"
+      :width="800"
+      :mask-closable="false"
+      @ok="handleEditSubmit"
+      @cancel="handleEditCancel"
+    >
+      <a-form
+        ref="editFormRef"
+        :model="editFormData"
+        :rules="editFormRules"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="版本号" name="version_number">
+          <a-input v-model:value="editFormData.version_number" placeholder="请输入版本号" />
+        </a-form-item>
+        <a-form-item label="项目" name="project_id">
+          <a-select
+            v-model:value="editFormData.project_id"
+            placeholder="选择项目"
+            show-search
+            :filter-option="filterProjectOption"
+            :disabled="true"
+            @change="handleFormProjectChange"
+          >
+            <a-select-option
+              v-for="project in projects"
+              :key="project.id"
+              :value="project.id"
+            >
+              {{ project.name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="状态" name="status">
+          <a-select v-model:value="editFormData.status">
+            <a-select-option value="draft">草稿</a-select-option>
+            <a-select-option value="released">已发布</a-select-option>
+            <a-select-option value="archived">已归档</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="发布日期" name="release_date">
+          <a-date-picker
+            v-model:value="editFormData.release_date"
+            placeholder="选择发布日期"
+            style="width: 100%"
+            format="YYYY-MM-DD"
+          />
+        </a-form-item>
+        <a-form-item label="发布说明" name="release_notes">
+          <MarkdownEditor
+            ref="editReleaseNotesEditorRef"
+            v-model="editFormData.release_notes"
+            placeholder="请输入发布说明（支持Markdown）"
+            :rows="8"
+            :project-id="version?.project_id || 0"
+          />
+        </a-form-item>
+        <a-form-item label="关联需求" name="requirement_ids">
+          <a-select
+            v-model:value="editFormData.requirement_ids"
+            mode="multiple"
+            placeholder="选择需求（可选）"
+            show-search
+            :filter-option="filterRequirementOption"
+            style="width: 100%"
+          >
+            <a-select-option
+              v-for="requirement in availableRequirements"
+              :key="requirement.id"
+              :value="requirement.id"
+            >
+              {{ requirement.title }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="关联Bug" name="bug_ids">
+          <a-select
+            v-model:value="editFormData.bug_ids"
+            mode="multiple"
+            placeholder="选择Bug（可选）"
+            show-search
+            :filter-option="filterBugOption"
+            style="width: 100%"
+          >
+            <a-select-option
+              v-for="bug in availableBugs"
+              :key="bug.id"
+              :value="bug.id"
+            >
+              {{ bug.title }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
+import dayjs, { type Dayjs } from 'dayjs'
 import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {
   getVersion,
+  updateVersion,
   updateVersionStatus,
   deleteVersion,
   releaseVersion,
-  type Version
+  type Version,
+  type UpdateVersionRequest
 } from '@/api/version'
+import { getProjects, type Project } from '@/api/project'
+import { getRequirements, type Requirement } from '@/api/requirement'
+import { getBugs, type Bug } from '@/api/bug'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const version = ref<Version | null>(null)
+const projects = ref<Project[]>([])
+const availableRequirements = ref<Requirement[]>([])
+const availableBugs = ref<Bug[]>([])
+
+// 编辑模态框相关
+const editModalVisible = ref(false)
+const editFormRef = ref()
+const editReleaseNotesEditorRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
+const editFormData = reactive<Omit<UpdateVersionRequest, 'release_date'> & { release_date?: Dayjs | undefined; requirement_ids?: number[]; bug_ids?: number[] }>({
+  version_number: '',
+  release_notes: '',
+  status: 'draft',
+  release_date: undefined,
+  requirement_ids: [],
+  bug_ids: []
+})
+const editFormRules = {
+  version_number: [{ required: true, message: '请输入版本号', trigger: 'blur' }]
+}
 
 // 加载版本详情
 const loadVersion = async () => {
@@ -191,10 +316,128 @@ const loadVersion = async () => {
 }
 
 // 编辑
-const handleEdit = () => {
-  if (version.value) {
-    router.push(`/version?edit=${version.value.id}`)
+const handleEdit = async () => {
+  if (!version.value) return
+  
+  editFormData.version_number = version.value.version_number
+  editFormData.release_notes = version.value.release_notes || ''
+  // 转换状态值：wait -> draft, normal -> released, fail/terminate -> archived
+  const statusMap: Record<string, 'draft' | 'released' | 'archived'> = {
+    wait: 'draft',
+    normal: 'released',
+    fail: 'archived',
+    terminate: 'archived'
   }
+  editFormData.status = statusMap[version.value.status] || 'draft'
+  editFormData.release_date = version.value.release_date ? dayjs(version.value.release_date) : undefined
+  editFormData.requirement_ids = version.value.requirements?.map((r: any) => r.id) || []
+  editFormData.bug_ids = version.value.bugs?.map((b: any) => b.id) || []
+  
+  editModalVisible.value = true
+  if (projects.value.length === 0) {
+    await loadProjects()
+  }
+  await loadAvailableRequirementsAndBugs()
+}
+
+// 编辑提交
+const handleEditSubmit = async () => {
+  if (!version.value) return
+  
+  try {
+    await editFormRef.value.validate()
+    
+    // 获取最新的发布说明内容
+    let releaseNotes = editFormData.release_notes || ''
+    
+    // 如果有项目ID，尝试上传本地图片（如果有的话）
+    if (editReleaseNotesEditorRef.value && version.value.project_id) {
+      try {
+        const uploadedReleaseNotes = await editReleaseNotesEditorRef.value.uploadLocalImages(async (file: File, projectId: number) => {
+          const { uploadFile } = await import('@/api/attachment')
+          const attachment = await uploadFile(file, projectId)
+          return attachment
+        })
+        releaseNotes = uploadedReleaseNotes
+      } catch (error: any) {
+        console.error('上传图片失败:', error)
+        message.warning('部分图片上传失败，请检查')
+        releaseNotes = editFormData.release_notes || ''
+      }
+    }
+    
+    const updateData: UpdateVersionRequest = {
+      version_number: editFormData.version_number,
+      release_notes: releaseNotes,
+      status: editFormData.status,
+      release_date: editFormData.release_date && editFormData.release_date.isValid() ? editFormData.release_date.format('YYYY-MM-DD') : undefined,
+      requirement_ids: editFormData.requirement_ids || [],
+      bug_ids: editFormData.bug_ids || []
+    }
+    
+    await updateVersion(version.value.id, updateData)
+    
+    message.success('更新成功')
+    editModalVisible.value = false
+    await loadVersion() // 重新加载版本详情
+  } catch (error: any) {
+    if (error.errorFields) {
+      return
+    }
+    message.error(error.response?.data?.message || '更新失败')
+  }
+}
+
+// 编辑取消
+const handleEditCancel = () => {
+  editFormRef.value?.resetFields()
+}
+
+// 加载项目列表
+const loadProjects = async () => {
+  try {
+    const res = await getProjects({ page: 1, size: 1000 })
+    projects.value = res.list
+  } catch (error: any) {
+    console.error('加载项目列表失败:', error)
+  }
+}
+
+// 加载可用的需求和Bug列表
+const loadAvailableRequirementsAndBugs = async () => {
+  if (!version.value?.project_id) return
+  
+  try {
+    // 加载需求列表
+    const requirementsRes = await getRequirements({ project_id: version.value.project_id, size: 1000 })
+    availableRequirements.value = requirementsRes.list || []
+    
+    // 加载Bug列表
+    const bugsRes = await getBugs({ project_id: version.value.project_id, size: 1000 })
+    availableBugs.value = bugsRes.list || []
+  } catch (error: any) {
+    console.error('加载需求和Bug列表失败:', error)
+  }
+}
+
+// 项目筛选
+const filterProjectOption = (input: string, option: any) => {
+  return option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+}
+
+// 需求筛选
+const filterRequirementOption = (input: string, option: any) => {
+  return option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+}
+
+// Bug筛选
+const filterBugOption = (input: string, option: any) => {
+  return option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+}
+
+// 表单项目选择改变
+const handleFormProjectChange = () => {
+  loadAvailableRequirementsAndBugs()
 }
 
 // 删除
@@ -344,16 +587,34 @@ onMounted(() => {
 
 <style scoped>
 .version-detail {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+
+.version-detail :deep(.ant-layout) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .content {
+  flex: 1;
   padding: 24px;
+  background: #f0f2f5;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
+
 .content-inner {
   max-width: 100%;
   width: 100%;
   margin: 0 auto;
+  min-height: fit-content;
 }
+
 .markdown-content {
   padding: 16px 0;
 }
