@@ -29,6 +29,9 @@ type Migrator struct {
 	requirementIDMap map[int]uint
 	moduleIDMap      map[int]uint
 	versionIDMap     map[int]uint
+	taskIDMap        map[int]uint // 任务ID映射
+	bugIDMap         map[int]uint // Bug ID映射
+	actionIDMap      map[int]uint // Action ID映射
 
 	// 统计信息
 	stats struct {
@@ -37,6 +40,8 @@ type Migrator struct {
 		projectMemberCount int
 		moduleCount        int
 		versionCount       int
+		actionCount        int
+		historyCount       int
 	}
 }
 
@@ -50,6 +55,9 @@ func NewMigrator(config *MigrateConfig) (*Migrator, error) {
 		requirementIDMap: make(map[int]uint),
 		moduleIDMap:      make(map[int]uint),
 		versionIDMap:     make(map[int]uint),
+		taskIDMap:        make(map[int]uint),
+		bugIDMap:         make(map[int]uint),
+		actionIDMap:      make(map[int]uint),
 	}
 
 	// 连接zentao数据库
@@ -139,6 +147,16 @@ func (m *Migrator) MigrateAll() error {
 		return fmt.Errorf("迁移项目成员失败: %w", err)
 	}
 
+	// 11. 迁移操作历史记录（需要在所有实体迁移完成后）
+	if err := m.MigrateActions(); err != nil {
+		return fmt.Errorf("迁移操作历史记录失败: %w", err)
+	}
+
+	// 12. 迁移字段变更历史记录（需要在操作历史记录迁移完成后）
+	if err := m.MigrateHistories(); err != nil {
+		return fmt.Errorf("迁移字段变更历史记录失败: %w", err)
+	}
+
 	log.Println("==========================================")
 	log.Println("数据迁移完成！")
 	log.Println("==========================================")
@@ -153,6 +171,8 @@ func (m *Migrator) MigrateAll() error {
 	log.Printf("  - 项目成员: %d 个", m.stats.projectMemberCount)
 	log.Printf("  - 项目模块: %d 个", m.stats.moduleCount)
 	log.Printf("  - 版本: %d 个", m.stats.versionCount)
+	log.Printf("  - 操作历史记录: %d 条", m.stats.actionCount)
+	log.Printf("  - 字段变更历史记录: %d 条", m.stats.historyCount)
 	log.Println("==========================================")
 
 	// 更新初始化状态为已初始化
@@ -1051,6 +1071,7 @@ func (m *Migrator) MigrateTasks() error {
 			continue
 		}
 
+		m.taskIDMap[zt.ID] = task.ID
 		m.stats.taskCount++
 		log.Printf("迁移任务: %s (ID: %d -> %d)", task.Title, zt.ID, task.ID)
 	}
@@ -1140,6 +1161,8 @@ func (m *Migrator) MigrateBugs() error {
 			log.Printf("创建Bug失败: %s, 错误: %v", bug.Title, err)
 			continue
 		}
+
+		m.bugIDMap[zb.ID] = bug.ID
 
 		// 处理分配者（多对多关系）
 		if zb.AssignedTo != "" {
@@ -1481,5 +1504,224 @@ func (m *Migrator) migrateProjectMembersFromInference() error {
 	}
 
 	log.Printf("从推断方式迁移项目成员完成，共找到 %d 个成员，成功迁移 %d 个成员", totalMembers, m.stats.projectMemberCount)
+	return nil
+}
+
+// MigrateActions 迁移操作历史记录
+func (m *Migrator) MigrateActions() error {
+	log.Println("开始迁移操作历史记录...")
+
+	type ZenTaoAction struct {
+		ID         int    `gorm:"column:id"`
+		ObjectType string `gorm:"column:objectType"`
+		ObjectID   int    `gorm:"column:objectID"`
+		Actor      string `gorm:"column:actor"`
+		Action     string `gorm:"column:action"`
+		Date       string `gorm:"column:date"`
+		Comment    string `gorm:"column:comment"`
+		Extra      string `gorm:"column:extra"`
+	}
+
+	var zentaoActions []ZenTaoAction
+	// 只迁移支持的对象类型
+	query := m.zenTaoDB.Table("zt_action").Where("objectType IN (?)", []string{"story", "task", "bug", "project", "build"})
+	if err := query.Order("date ASC").Find(&zentaoActions).Error; err != nil {
+		return err
+	}
+
+	log.Printf("找到 %d 条操作记录", len(zentaoActions))
+
+	for _, za := range zentaoActions {
+		// 转换对象类型
+		objectType := ConvertZenTaoObjectType(za.ObjectType)
+
+		// 获取对象ID（需要映射）
+		var objectID uint
+		switch objectType {
+		case "requirement":
+			if newID, ok := m.requirementIDMap[za.ObjectID]; ok {
+				objectID = newID
+			} else {
+				log.Printf("操作记录 %d 的需求ID %d 不存在，跳过", za.ID, za.ObjectID)
+				continue
+			}
+		case "task":
+			if newID, ok := m.taskIDMap[za.ObjectID]; ok {
+				objectID = newID
+			} else {
+				log.Printf("操作记录 %d 的任务ID %d 不存在，跳过", za.ID, za.ObjectID)
+				continue
+			}
+		case "bug":
+			if newID, ok := m.bugIDMap[za.ObjectID]; ok {
+				objectID = newID
+			} else {
+				log.Printf("操作记录 %d 的Bug ID %d 不存在，跳过", za.ID, za.ObjectID)
+				continue
+			}
+		case "project":
+			if newID, ok := m.projectIDMap[za.ObjectID]; ok {
+				objectID = newID
+			} else {
+				log.Printf("操作记录 %d 的项目ID %d 不存在，跳过", za.ID, za.ObjectID)
+				continue
+			}
+		case "version":
+			if newID, ok := m.versionIDMap[za.ObjectID]; ok {
+				objectID = newID
+			} else {
+				log.Printf("操作记录 %d 的版本ID %d 不存在，跳过", za.ID, za.ObjectID)
+				continue
+			}
+		default:
+			log.Printf("不支持的对象类型: %s，跳过操作记录 %d", objectType, za.ID)
+			continue
+		}
+
+		// 获取操作人ID
+		var actorID uint
+		if za.Actor != "" {
+			type ZenTaoUserID struct {
+				ID int `gorm:"column:id"`
+			}
+			var userIDRecord ZenTaoUserID
+			if err := m.zenTaoDB.Table("zt_user").Where("account = ?", za.Actor).First(&userIDRecord).Error; err == nil {
+				if newID, ok := m.userIDMap[userIDRecord.ID]; ok {
+					actorID = newID
+				}
+			}
+		}
+
+		if actorID == 0 {
+			log.Printf("操作记录 %d 的操作人 %s 不存在，跳过", za.ID, za.Actor)
+			continue
+		}
+
+		// 获取项目ID（用于快速查询）
+		var projectID uint
+		switch objectType {
+		case "requirement":
+			var requirement model.Requirement
+			if err := m.goProjectDB.First(&requirement, objectID).Error; err == nil {
+				projectID = requirement.ProjectID
+			}
+		case "task":
+			var task model.Task
+			if err := m.goProjectDB.First(&task, objectID).Error; err == nil {
+				projectID = task.ProjectID
+			}
+		case "bug":
+			var bug model.Bug
+			if err := m.goProjectDB.First(&bug, objectID).Error; err == nil {
+				projectID = bug.ProjectID
+			}
+		case "project":
+			projectID = objectID
+		case "version":
+			var version model.Version
+			if err := m.goProjectDB.First(&version, objectID).Error; err == nil {
+				projectID = version.ProjectID
+			}
+		}
+
+		// 转换操作类型
+		actionType := ConvertZenTaoAction(za.Action)
+
+		// 解析日期
+		actionDate := time.Now()
+		if za.Date != "" {
+			if parsedDate := ParseDateTime(za.Date); parsedDate != nil {
+				actionDate = *parsedDate
+			}
+		}
+
+		action := model.Action{
+			ObjectType: objectType,
+			ObjectID:   objectID,
+			ProjectID:  projectID,
+			ActorID:    actorID,
+			Action:     actionType,
+			Date:       actionDate,
+			Comment:    za.Comment,
+			Extra:      za.Extra,
+		}
+
+		// 检查是否已存在（基于对象类型、对象ID、操作类型、操作时间）
+		var existing model.Action
+		if err := m.goProjectDB.Where("object_type = ? AND object_id = ? AND action = ? AND date = ?",
+			action.ObjectType, action.ObjectID, action.Action, action.Date).First(&existing).Error; err == nil {
+			m.actionIDMap[za.ID] = existing.ID
+			log.Printf("操作记录已存在: %s %d (ID: %d -> %d)", action.ObjectType, action.ObjectID, za.ID, existing.ID)
+			continue
+		}
+
+		if err := m.goProjectDB.Create(&action).Error; err != nil {
+			log.Printf("创建操作记录失败: %s %d, 错误: %v", action.ObjectType, action.ObjectID, err)
+			continue
+		}
+
+		m.actionIDMap[za.ID] = action.ID
+		m.stats.actionCount++
+		log.Printf("迁移操作记录: %s %d (ID: %d -> %d, action: %s)", action.ObjectType, action.ObjectID, za.ID, action.ID, action.Action)
+	}
+
+	log.Printf("操作历史记录迁移完成，共迁移 %d 条记录", m.stats.actionCount)
+	return nil
+}
+
+// MigrateHistories 迁移字段变更历史记录
+func (m *Migrator) MigrateHistories() error {
+	log.Println("开始迁移字段变更历史记录...")
+
+	type ZenTaoHistory struct {
+		ID     int    `gorm:"column:id"`
+		Action int    `gorm:"column:action"` // 关联的zt_action ID
+		Field  string `gorm:"column:field"`
+		Old    string `gorm:"column:old"`
+		New    string `gorm:"column:new"`
+	}
+
+	var zentaoHistories []ZenTaoHistory
+	if err := m.zenTaoDB.Table("zt_history").Order("id ASC").Find(&zentaoHistories).Error; err != nil {
+		return err
+	}
+
+	log.Printf("找到 %d 条字段变更记录", len(zentaoHistories))
+
+	for _, zh := range zentaoHistories {
+		// 获取对应的Action ID
+		actionID, ok := m.actionIDMap[zh.Action]
+		if !ok {
+			log.Printf("字段变更记录 %d 的操作记录 %d 不存在，跳过", zh.ID, zh.Action)
+			continue
+		}
+
+		history := model.History{
+			ActionID: actionID,
+			Field:    zh.Field,
+			Old:      zh.Old,
+			New:      zh.New,
+		}
+
+		// 检查是否已存在
+		var existing model.History
+		if err := m.goProjectDB.Where("action_id = ? AND field = ? AND old = ? AND new = ?",
+			history.ActionID, history.Field, history.Old, history.New).First(&existing).Error; err == nil {
+			log.Printf("字段变更记录已存在: Action %d, Field %s (ID: %d -> %d)", actionID, history.Field, zh.ID, existing.ID)
+			continue
+		}
+
+		// 使用ProcessHistory处理字段值转换
+		processedHistory := utils.ProcessHistory(m.goProjectDB, &history)
+		if err := m.goProjectDB.Create(processedHistory).Error; err != nil {
+			log.Printf("创建字段变更记录失败: Action %d, Field %s, 错误: %v", actionID, history.Field, err)
+			continue
+		}
+
+		m.stats.historyCount++
+		log.Printf("迁移字段变更记录: Action %d, Field %s (ID: %d -> %d)", actionID, history.Field, zh.ID, processedHistory.ID)
+	}
+
+	log.Printf("字段变更历史记录迁移完成，共迁移 %d 条记录", m.stats.historyCount)
 	return nil
 }

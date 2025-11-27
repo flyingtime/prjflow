@@ -13,6 +13,8 @@
 - 需求 (zt_story -> requirements)
 - 任务 (zt_task -> tasks)
 - Bug (zt_bug -> bugs)
+- 操作历史记录 (zt_action -> actions)
+- 字段变更历史记录 (zt_history -> histories)
 
 ## 使用方法
 
@@ -61,6 +63,8 @@ go build -o migrate cmd/migrate/main.go
 7. 需求（依赖项目和用户）
 8. 任务（依赖项目、需求和用户）
 9. Bug（依赖项目、需求和用户）
+10. 操作历史记录（依赖所有实体和用户）
+11. 字段变更历史记录（依赖操作历史记录）
 
 ## 数据映射规则
 
@@ -137,6 +141,23 @@ go build -o migrate cmd/migrate/main.go
 - `pri`: 转换（1->urgent, 2->high, 3->medium, 4->low）
 - `resolution` -> `solution`
 - `resolvedBuild` -> `solution_note`
+
+### 操作历史记录映射
+- `objectType`: 转换（story->requirement, task->task, bug->bug, project->project, build->version）
+- `objectID`: 通过ID映射表转换
+- `actor`: 通过用户账号查找用户ID
+- `action`: 转换（opened/created->created, edited/changed->edited, assigned->assigned, resolved->resolved, closed->closed, confirmed->confirmed, commented->commented）
+- `date` -> `date`
+- `comment` -> `comment`
+- `extra` -> `extra`
+- 只迁移支持的对象类型（story, task, bug, project, build）
+
+### 字段变更历史记录映射
+- `action`: 通过Action ID映射表转换
+- `field` -> `field`
+- `old` -> `old`
+- `new` -> `new`
+- 使用 `ProcessHistory` 函数处理字段值转换（用户ID转用户名、枚举值转显示文本等）
 
 ## 注意事项
 

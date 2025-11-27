@@ -413,3 +413,56 @@ func DaysToHours(days float64) *float64 {
 	return &hours
 }
 
+// ConvertZenTaoObjectType 转换禅道对象类型到goproject对象类型
+func ConvertZenTaoObjectType(zenTaoType string) string {
+	zenTaoType = strings.ToLower(zenTaoType)
+	switch zenTaoType {
+	case "story":
+		return "requirement"
+	case "task":
+		return "task"
+	case "bug":
+		return "bug"
+	case "project":
+		return "project"
+	case "build":
+		return "version"
+	default:
+		return zenTaoType
+	}
+}
+
+// ConvertZenTaoAction 转换禅道操作类型到goproject操作类型
+func ConvertZenTaoAction(zenTaoAction string) string {
+	zenTaoAction = strings.ToLower(zenTaoAction)
+	switch zenTaoAction {
+	case "opened", "created":
+		return "created"
+	case "edited", "changed":
+		return "edited"
+	case "assigned":
+		return "assigned"
+	case "resolved":
+		return "resolved"
+	case "closed":
+		return "closed"
+	case "confirmed":
+		return "confirmed"
+	case "commented":
+		return "commented"
+	default:
+		// 如果包含特定关键词，进行映射
+		if strings.Contains(zenTaoAction, "comment") {
+			return "commented"
+		}
+		if strings.Contains(zenTaoAction, "edit") || strings.Contains(zenTaoAction, "change") {
+			return "edited"
+		}
+		if strings.Contains(zenTaoAction, "assign") {
+			return "assigned"
+		}
+		// 默认返回edited
+		return "edited"
+	}
+}
+
