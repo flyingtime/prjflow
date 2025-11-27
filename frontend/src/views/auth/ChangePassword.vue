@@ -136,7 +136,7 @@ const changePasswordRules = {
 // 检查用户是否已有密码
 const checkUserPassword = async () => {
   try {
-    const userInfo = await getUserInfo()
+    await getUserInfo() // 验证用户已登录
     // 如果用户有密码，后端会在GetUserInfo中返回相关信息
     // 这里我们通过尝试修改密码时的错误来判断
     // 但为了简化，我们可以假设首次登录的用户没有密码
