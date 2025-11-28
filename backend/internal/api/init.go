@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strings"
+
 	"project-management/internal/config"
 	"project-management/internal/model"
 	"project-management/internal/utils"
@@ -120,17 +122,38 @@ func (h *InitHandler) InitSystem(c *gin.Context) {
 
 	// 获取微信配置
 	var wechatAppSecretConfig model.SystemConfig
-	h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig)
+	if err := h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig).Error; err != nil {
+		utils.Error(c, 400, "微信AppSecret配置不存在，请先保存微信配置")
+		return
+	}
 
-	// 临时设置WeChatClient配置
-	h.wechatClient.AppID = wechatAppIDConfig.Value
-	h.wechatClient.AppSecret = wechatAppSecretConfig.Value
-	// 确保使用配置文件中的 account_type
-	h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
+	// 临时设置WeChatClient配置，去除首尾空格
+	h.wechatClient.AppID = strings.TrimSpace(wechatAppIDConfig.Value)
+	h.wechatClient.AppSecret = strings.TrimSpace(wechatAppSecretConfig.Value)
+	
+	// 验证配置是否为空
+	if h.wechatClient.AppID == "" || h.wechatClient.AppSecret == "" {
+		utils.Error(c, 400, "微信AppID或AppSecret配置为空，请检查配置")
+		return
+	}
+	
+	// 设置AccountType和Scope（优先从数据库读取，其次从配置文件，最后使用默认值）
+	var accountTypeConfig model.SystemConfig
+	if err := h.db.Where("key = ?", "wechat_account_type").First(&accountTypeConfig).Error; err == nil {
+		h.wechatClient.AccountType = strings.TrimSpace(accountTypeConfig.Value)
+	} else {
+		h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
+	}
 	if h.wechatClient.AccountType == "" {
 		h.wechatClient.AccountType = "open_platform" // 默认使用开放平台
 	}
-	h.wechatClient.Scope = config.AppConfig.WeChat.Scope
+	
+	var scopeConfig model.SystemConfig
+	if err := h.db.Where("key = ?", "wechat_scope").First(&scopeConfig).Error; err == nil {
+		h.wechatClient.Scope = strings.TrimSpace(scopeConfig.Value)
+	} else {
+		h.wechatClient.Scope = config.AppConfig.WeChat.Scope
+	}
 	if h.wechatClient.Scope == "" {
 		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
 	}
@@ -260,11 +283,21 @@ func (h *InitHandler) GetInitQRCode(c *gin.Context) {
 
 	// 获取微信配置
 	var wechatAppSecretConfig model.SystemConfig
-	h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig)
+	if err := h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig).Error; err != nil {
+		utils.Error(c, 400, "微信AppSecret配置不存在，请先保存微信配置")
+		return
+	}
 
-	// 临时设置WeChatClient配置
-	h.wechatClient.AppID = wechatAppIDConfig.Value
-	h.wechatClient.AppSecret = wechatAppSecretConfig.Value
+	// 临时设置WeChatClient配置，去除首尾空格
+	h.wechatClient.AppID = strings.TrimSpace(wechatAppIDConfig.Value)
+	h.wechatClient.AppSecret = strings.TrimSpace(wechatAppSecretConfig.Value)
+	
+	// 验证配置是否为空
+	if h.wechatClient.AppID == "" || h.wechatClient.AppSecret == "" {
+		utils.Error(c, 400, "微信AppID或AppSecret配置为空，请检查配置")
+		return
+	}
+	
 	// 确保使用配置文件中的 account_type（如果未配置，默认使用 open_platform）
 	h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
 	if h.wechatClient.AccountType == "" {

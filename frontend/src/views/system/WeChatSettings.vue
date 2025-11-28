@@ -24,7 +24,7 @@
               
               <a-alert
                 message="配置说明"
-                description="请填写微信开放平台的AppID和AppSecret。如果使用公众号，请填写公众号的AppID和AppSecret。"
+                description="请填写微信开放平台的AppID和AppSecret。如果使用公众号，请填写公众号的AppID和AppSecret，并选择对应的账号类型。"
                 type="info"
                 show-icon
                 style="margin-bottom: 24px"
@@ -44,6 +44,40 @@
                   placeholder="请输入微信开放平台AppSecret或公众号AppSecret"
                   size="large"
                 />
+              </a-form-item>
+
+              <a-form-item label="账号类型" name="account_type">
+                <a-select
+                  v-model:value="wechatConfig.account_type"
+                  placeholder="请选择账号类型"
+                  size="large"
+                  allow-clear
+                >
+                  <a-select-option value="open_platform">开放平台网站应用</a-select-option>
+                  <a-select-option value="official_account">公众号</a-select-option>
+                </a-select>
+                <div style="margin-top: 8px; color: #999; font-size: 12px;">
+                  如果使用公众号，必须选择"公众号"；如果使用开放平台网站应用，选择"开放平台网站应用"
+                </div>
+              </a-form-item>
+
+              <a-form-item 
+                v-if="wechatConfig.account_type === 'official_account'"
+                label="授权范围" 
+                name="scope"
+              >
+                <a-select
+                  v-model:value="wechatConfig.scope"
+                  placeholder="请选择授权范围"
+                  size="large"
+                  allow-clear
+                >
+                  <a-select-option value="snsapi_base">静默授权（只能获取openid）</a-select-option>
+                  <a-select-option value="snsapi_userinfo">需要用户确认（可获取用户信息）</a-select-option>
+                </a-select>
+                <div style="margin-top: 8px; color: #999; font-size: 12px;">
+                  仅当账号类型为"公众号"时有效
+                </div>
               </a-form-item>
 
               <a-form-item>
@@ -79,7 +113,9 @@ const loading = ref(false)
 
 const wechatConfig = ref<WeChatConfigRequest>({
   wechat_app_id: '',
-  wechat_app_secret: ''
+  wechat_app_secret: '',
+  account_type: '',
+  scope: ''
 })
 
 // 验证微信AppID格式
@@ -158,7 +194,9 @@ const loadWeChatConfig = async () => {
     const config = await getWeChatConfig()
     wechatConfig.value = {
       wechat_app_id: config.wechat_app_id || '',
-      wechat_app_secret: config.wechat_app_secret || ''
+      wechat_app_secret: config.wechat_app_secret || '',
+      account_type: config.account_type || '',
+      scope: config.scope || ''
     }
   } catch (error: any) {
     // 如果配置不存在，使用空值（允许创建新配置）
@@ -175,9 +213,17 @@ const handleSave = async () => {
   loading.value = true
   try {
     // 去除空格后保存
-    const configToSave = {
+    const configToSave: WeChatConfigRequest = {
       wechat_app_id: wechatConfig.value.wechat_app_id.trim(),
       wechat_app_secret: wechatConfig.value.wechat_app_secret.trim()
+    }
+    // 如果选择了账号类型，也保存
+    if (wechatConfig.value.account_type) {
+      configToSave.account_type = wechatConfig.value.account_type
+    }
+    // 如果选择了授权范围，也保存
+    if (wechatConfig.value.scope) {
+      configToSave.scope = wechatConfig.value.scope
     }
     await saveWeChatConfig(configToSave)
     message.success('微信配置保存成功')

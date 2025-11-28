@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"project-management/internal/config"
 	"project-management/internal/model"
@@ -33,7 +34,7 @@ func (h *AuthHandler) GetQRCode(c *gin.Context) {
 	var wechatAppIDConfig model.SystemConfig
 	if err := h.db.Where("key = ?", "wechat_app_id").First(&wechatAppIDConfig).Error; err != nil {
 		// 如果数据库中没有配置，尝试使用配置文件中的配置
-		if config.AppConfig.WeChat.AppID == "" {
+		if config.AppConfig.WeChat.AppID == "" || config.AppConfig.WeChat.AppSecret == "" {
 			utils.Error(c, 400, "请先配置微信AppID和AppSecret")
 			return
 		}
@@ -42,9 +43,45 @@ func (h *AuthHandler) GetQRCode(c *gin.Context) {
 	} else {
 		// 从数据库读取配置
 		var wechatAppSecretConfig model.SystemConfig
-		h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig)
-		h.wechatClient.AppID = wechatAppIDConfig.Value
-		h.wechatClient.AppSecret = wechatAppSecretConfig.Value
+		if err := h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig).Error; err != nil {
+			// 如果数据库中没有AppSecret，尝试使用配置文件中的配置
+			if config.AppConfig.WeChat.AppSecret == "" {
+				utils.Error(c, 400, "请先配置微信AppSecret")
+				return
+			}
+			h.wechatClient.AppID = wechatAppIDConfig.Value
+			h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
+		} else {
+			// 从数据库读取配置，去除首尾空格
+			h.wechatClient.AppID = strings.TrimSpace(wechatAppIDConfig.Value)
+			h.wechatClient.AppSecret = strings.TrimSpace(wechatAppSecretConfig.Value)
+		}
+		// 验证配置是否为空
+		if h.wechatClient.AppID == "" || h.wechatClient.AppSecret == "" {
+			utils.Error(c, 400, "微信AppID或AppSecret配置为空，请检查配置")
+			return
+		}
+	}
+	
+	// 设置AccountType和Scope（优先从数据库读取，其次从配置文件，最后使用默认值）
+	var accountTypeConfig model.SystemConfig
+	if err := h.db.Where("key = ?", "wechat_account_type").First(&accountTypeConfig).Error; err == nil {
+		h.wechatClient.AccountType = strings.TrimSpace(accountTypeConfig.Value)
+	} else {
+		h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
+	}
+	if h.wechatClient.AccountType == "" {
+		h.wechatClient.AccountType = "open_platform" // 默认使用开放平台
+	}
+	
+	var scopeConfig model.SystemConfig
+	if err := h.db.Where("key = ?", "wechat_scope").First(&scopeConfig).Error; err == nil {
+		h.wechatClient.Scope = strings.TrimSpace(scopeConfig.Value)
+	} else {
+		h.wechatClient.Scope = config.AppConfig.WeChat.Scope
+	}
+	if h.wechatClient.Scope == "" {
+		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
 	}
 
 	// 获取回调地址（前端地址）
@@ -279,7 +316,7 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 	var wechatAppIDConfig model.SystemConfig
 	if err := h.db.Where("key = ?", "wechat_app_id").First(&wechatAppIDConfig).Error; err != nil {
 		// 如果数据库中没有配置，尝试使用配置文件中的配置
-		if config.AppConfig.WeChat.AppID == "" {
+		if config.AppConfig.WeChat.AppID == "" || config.AppConfig.WeChat.AppSecret == "" {
 			utils.Error(c, 400, "请先配置微信AppID和AppSecret")
 			return
 		}
@@ -288,9 +325,45 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 	} else {
 		// 从数据库读取配置
 		var wechatAppSecretConfig model.SystemConfig
-		h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig)
-		h.wechatClient.AppID = wechatAppIDConfig.Value
-		h.wechatClient.AppSecret = wechatAppSecretConfig.Value
+		if err := h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig).Error; err != nil {
+			// 如果数据库中没有AppSecret，尝试使用配置文件中的配置
+			if config.AppConfig.WeChat.AppSecret == "" {
+				utils.Error(c, 400, "请先配置微信AppSecret")
+				return
+			}
+			h.wechatClient.AppID = wechatAppIDConfig.Value
+			h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
+		} else {
+			// 从数据库读取配置，去除首尾空格
+			h.wechatClient.AppID = strings.TrimSpace(wechatAppIDConfig.Value)
+			h.wechatClient.AppSecret = strings.TrimSpace(wechatAppSecretConfig.Value)
+		}
+		// 验证配置是否为空
+		if h.wechatClient.AppID == "" || h.wechatClient.AppSecret == "" {
+			utils.Error(c, 400, "微信AppID或AppSecret配置为空，请检查配置")
+			return
+		}
+	}
+	
+	// 设置AccountType和Scope（优先从数据库读取，其次从配置文件，最后使用默认值）
+	var accountTypeConfig model.SystemConfig
+	if err := h.db.Where("key = ?", "wechat_account_type").First(&accountTypeConfig).Error; err == nil {
+		h.wechatClient.AccountType = strings.TrimSpace(accountTypeConfig.Value)
+	} else {
+		h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
+	}
+	if h.wechatClient.AccountType == "" {
+		h.wechatClient.AccountType = "open_platform" // 默认使用开放平台
+	}
+	
+	var scopeConfig model.SystemConfig
+	if err := h.db.Where("key = ?", "wechat_scope").First(&scopeConfig).Error; err == nil {
+		h.wechatClient.Scope = strings.TrimSpace(scopeConfig.Value)
+	} else {
+		h.wechatClient.Scope = config.AppConfig.WeChat.Scope
+	}
+	if h.wechatClient.Scope == "" {
+		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
 	}
 
 	// 从state中提取ticket（如果存在）
@@ -311,11 +384,12 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 	// 获取access_token
 	accessTokenResp, err := h.wechatClient.GetAccessToken(req.Code)
 	if err != nil {
+		errorMsg := "获取access_token失败: " + err.Error()
 		// 如果存在ticket，通知错误
 		if ticket != "" {
-			websocket.GetHub().SendMessage(ticket, "error", nil, "获取access_token失败")
+			websocket.GetHub().SendMessage(ticket, "error", nil, errorMsg)
 		}
-		utils.Error(c, utils.CodeError, "获取access_token失败")
+		utils.Error(c, utils.CodeError, errorMsg)
 		return
 	}
 
@@ -327,11 +401,12 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 	// 获取用户信息
 	userInfo, err := h.wechatClient.GetUserInfo(accessTokenResp.AccessToken, accessTokenResp.OpenID)
 	if err != nil {
+		errorMsg := "获取用户信息失败: " + err.Error()
 		// 如果存在ticket，通知错误
 		if ticket != "" {
-			websocket.GetHub().SendMessage(ticket, "error", nil, "获取用户信息失败")
+			websocket.GetHub().SendMessage(ticket, "error", nil, errorMsg)
 		}
-		utils.Error(c, utils.CodeError, "获取用户信息失败")
+		utils.Error(c, utils.CodeError, errorMsg)
 		return
 	}
 
@@ -659,7 +734,7 @@ func (h *AuthHandler) GetWeChatBindQRCode(c *gin.Context) {
 	var wechatAppIDConfig model.SystemConfig
 	if err := h.db.Where("key = ?", "wechat_app_id").First(&wechatAppIDConfig).Error; err != nil {
 		// 如果数据库中没有配置，尝试使用配置文件中的配置
-		if config.AppConfig.WeChat.AppID == "" {
+		if config.AppConfig.WeChat.AppID == "" || config.AppConfig.WeChat.AppSecret == "" {
 			utils.Error(c, 400, "请先配置微信AppID和AppSecret")
 			return
 		}
@@ -668,9 +743,45 @@ func (h *AuthHandler) GetWeChatBindQRCode(c *gin.Context) {
 	} else {
 		// 从数据库读取配置
 		var wechatAppSecretConfig model.SystemConfig
-		h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig)
-		h.wechatClient.AppID = wechatAppIDConfig.Value
-		h.wechatClient.AppSecret = wechatAppSecretConfig.Value
+		if err := h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig).Error; err != nil {
+			// 如果数据库中没有AppSecret，尝试使用配置文件中的配置
+			if config.AppConfig.WeChat.AppSecret == "" {
+				utils.Error(c, 400, "请先配置微信AppSecret")
+				return
+			}
+			h.wechatClient.AppID = wechatAppIDConfig.Value
+			h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
+		} else {
+			// 从数据库读取配置，去除首尾空格
+			h.wechatClient.AppID = strings.TrimSpace(wechatAppIDConfig.Value)
+			h.wechatClient.AppSecret = strings.TrimSpace(wechatAppSecretConfig.Value)
+		}
+		// 验证配置是否为空
+		if h.wechatClient.AppID == "" || h.wechatClient.AppSecret == "" {
+			utils.Error(c, 400, "微信AppID或AppSecret配置为空，请检查配置")
+			return
+		}
+	}
+	
+	// 设置AccountType和Scope（优先从数据库读取，其次从配置文件，最后使用默认值）
+	var accountTypeConfig model.SystemConfig
+	if err := h.db.Where("key = ?", "wechat_account_type").First(&accountTypeConfig).Error; err == nil {
+		h.wechatClient.AccountType = strings.TrimSpace(accountTypeConfig.Value)
+	} else {
+		h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
+	}
+	if h.wechatClient.AccountType == "" {
+		h.wechatClient.AccountType = "open_platform" // 默认使用开放平台
+	}
+	
+	var scopeConfig model.SystemConfig
+	if err := h.db.Where("key = ?", "wechat_scope").First(&scopeConfig).Error; err == nil {
+		h.wechatClient.Scope = strings.TrimSpace(scopeConfig.Value)
+	} else {
+		h.wechatClient.Scope = config.AppConfig.WeChat.Scope
+	}
+	if h.wechatClient.Scope == "" {
+		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
 	}
 
 	// 获取回调地址（指向绑定回调接口）
@@ -803,10 +914,36 @@ func (h *BindCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{}, 
 		return nil, &CallbackError{Message: "用户不存在", Err: err}
 	}
 
-	// 检查该微信OpenID是否已被其他用户绑定
+	// 检查该微信OpenID是否已被其他用户绑定（包括软删除的用户）
 	var existingUser model.User
-	if err := ctx.DB.Where("wechat_open_id = ? AND id != ?", ctx.UserInfo.OpenID, user.ID).First(&existingUser).Error; err == nil {
-		return nil, &CallbackError{Message: "该微信已被其他用户绑定"}
+	if err := ctx.DB.Unscoped().Where("wechat_open_id = ? AND id != ?", ctx.UserInfo.OpenID, user.ID).First(&existingUser).Error; err == nil {
+		// 如果找到的用户是软删除的，先清理它的 wechat_open_id
+		if existingUser.DeletedAt.Valid {
+			// 软删除的用户，清理其 wechat_open_id
+			if err := ctx.DB.Unscoped().Model(&existingUser).Update("wechat_open_id", nil).Error; err != nil {
+				return nil, &CallbackError{Message: "清理已删除用户的微信绑定失败", Err: err}
+			}
+		} else {
+			// 正常用户，不能重复绑定
+			return nil, &CallbackError{Message: fmt.Sprintf("该微信已被用户 %s 绑定，无法重复绑定", existingUser.Username)}
+		}
+	} else if err != gorm.ErrRecordNotFound {
+		return nil, &CallbackError{Message: "查询用户失败", Err: err}
+	}
+
+	// 再次检查该微信OpenID是否已被其他用户绑定（防止并发问题，包括软删除的用户）
+	var checkUser model.User
+	if err := ctx.DB.Unscoped().Where("wechat_open_id = ? AND id != ?", ctx.UserInfo.OpenID, user.ID).First(&checkUser).Error; err == nil {
+		// 如果找到的用户是软删除的，先清理它的 wechat_open_id
+		if checkUser.DeletedAt.Valid {
+			// 软删除的用户，清理其 wechat_open_id
+			if err := ctx.DB.Unscoped().Model(&checkUser).Update("wechat_open_id", nil).Error; err != nil {
+				return nil, &CallbackError{Message: "清理已删除用户的微信绑定失败", Err: err}
+			}
+		} else {
+			// 正常用户，不能重复绑定
+			return nil, &CallbackError{Message: fmt.Sprintf("该微信已被用户 %s 绑定，无法重复绑定", checkUser.Username)}
+		}
 	} else if err != gorm.ErrRecordNotFound {
 		return nil, &CallbackError{Message: "查询用户失败", Err: err}
 	}
@@ -819,7 +956,33 @@ func (h *BindCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{}, 
 		user.Avatar = ctx.UserInfo.HeadImgURL
 	}
 	if err := ctx.DB.Save(&user).Error; err != nil {
-		return nil, &CallbackError{Message: "绑定失败", Err: err}
+		// 检查是否是唯一约束错误
+		if utils.IsUniqueConstraintOnField(err, "wechat_open_id") {
+			// 再次查询，找出是哪个用户绑定了这个微信（包括软删除的用户）
+			var conflictUser model.User
+			if queryErr := ctx.DB.Unscoped().Where("wechat_open_id = ?", ctx.UserInfo.OpenID).First(&conflictUser).Error; queryErr == nil {
+				// 如果是软删除的用户，清理它的 wechat_open_id 并重试
+				if conflictUser.DeletedAt.Valid {
+					// 清理软删除用户的 wechat_open_id
+					if updateErr := ctx.DB.Unscoped().Model(&conflictUser).Update("wechat_open_id", nil).Error; updateErr != nil {
+						return nil, &CallbackError{Message: "清理已删除用户的微信绑定失败", Err: updateErr}
+					}
+					// 重试保存
+					if retryErr := ctx.DB.Save(&user).Error; retryErr != nil {
+						return nil, &CallbackError{Message: "绑定失败", Err: retryErr}
+					}
+					// 保存成功，继续后续流程
+				} else {
+					// 正常用户，不能重复绑定
+					return nil, &CallbackError{Message: fmt.Sprintf("该微信已被用户 %s 绑定，无法重复绑定", conflictUser.Username)}
+				}
+			} else {
+				return nil, &CallbackError{Message: "该微信已被其他用户绑定，无法重复绑定"}
+			}
+		} else {
+			// 不是唯一约束错误，返回原始错误
+			return nil, &CallbackError{Message: "绑定失败", Err: err}
+		}
 	}
 
 	// 通过WebSocket通知PC前端绑定成功

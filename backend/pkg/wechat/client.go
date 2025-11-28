@@ -165,12 +165,15 @@ func (c *WeChatClient) GetAccessToken(code string) (*AccessTokenResponse, error)
 	if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.ErrCode != 0 {
 		// 根据错误码提供更详细的错误信息
 		switch errorResp.ErrCode {
+		case 40013:
+			// invalid appsecret
+			return nil, fmt.Errorf("AppSecret无效。请检查：1) AppID和AppSecret是否匹配（必须来自同一个微信应用）；2) AppSecret是否正确（注意不要有多余的空格）；3) 如果重置过AppSecret，请使用最新的AppSecret；4) 确认使用的是公众号AppSecret还是开放平台AppSecret: %s", errorResp.ErrMsg)
 		case 40029:
 			return nil, fmt.Errorf("code已过期或已使用，请重新扫码: %s", errorResp.ErrMsg)
 		case 40163:
 			return nil, fmt.Errorf("code已被使用，请重新扫码: %s", errorResp.ErrMsg)
 		case 40125:
-			return nil, fmt.Errorf("scope参数错误或没有scope权限。请检查：1) 授权回调域名是否正确配置（只填写域名，不包含协议和端口）；2) 是否使用了正确的AppID类型（开放平台网站应用使用 open_platform，公众号使用 official_account）；3) 是否已申请微信登录接口权限: %s", errorResp.ErrMsg)
+			return nil, fmt.Errorf("scope参数错误或没有scope权限。请检查：1) 授权回调域名是否正确配置（只填写域名，不包含协议和端口）；2) 是否使用了正确的AppID类型（开放平台网站应用使用 open_platform，公众号使用 official_account）；3) 是否已申请微信登录接口权限；4) AppID和AppSecret是否匹配: %s", errorResp.ErrMsg)
 		default:
 			return nil, fmt.Errorf("微信接口错误 (errcode: %d): %s", errorResp.ErrCode, errorResp.ErrMsg)
 		}

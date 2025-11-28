@@ -25,9 +25,13 @@ func NewWeChatHandler(db *gorm.DB) *WeChatHandler {
 func (h *WeChatHandler) GetWeChatConfig(c *gin.Context) {
 	var wechatAppIDConfig model.SystemConfig
 	var wechatAppSecretConfig model.SystemConfig
+	var accountTypeConfig model.SystemConfig
+	var scopeConfig model.SystemConfig
 
 	wechatAppID := ""
 	wechatAppSecret := ""
+	accountType := ""
+	scope := ""
 
 	// 从数据库读取微信配置
 	if err := h.db.Where("key = ?", "wechat_app_id").First(&wechatAppIDConfig).Error; err == nil {
@@ -38,9 +42,19 @@ func (h *WeChatHandler) GetWeChatConfig(c *gin.Context) {
 		wechatAppSecret = wechatAppSecretConfig.Value
 	}
 
+	if err := h.db.Where("key = ?", "wechat_account_type").First(&accountTypeConfig).Error; err == nil {
+		accountType = accountTypeConfig.Value
+	}
+
+	if err := h.db.Where("key = ?", "wechat_scope").First(&scopeConfig).Error; err == nil {
+		scope = scopeConfig.Value
+	}
+
 	utils.Success(c, gin.H{
 		"wechat_app_id":     wechatAppID,
 		"wechat_app_secret": wechatAppSecret,
+		"account_type":      accountType,
+		"scope":             scope,
 	})
 }
 
@@ -49,6 +63,8 @@ func (h *WeChatHandler) SaveWeChatConfig(c *gin.Context) {
 	var req struct {
 		WeChatAppID     string `json:"wechat_app_id" binding:"required"`
 		WeChatAppSecret string `json:"wechat_app_secret" binding:"required"`
+		AccountType     string `json:"account_type"` // 可选：open_platform 或 official_account
+		Scope           string `json:"scope"`         // 可选：snsapi_base 或 snsapi_userinfo
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -75,6 +91,32 @@ func (h *WeChatHandler) SaveWeChatConfig(c *gin.Context) {
 	if err := h.db.Where("key = ?", "wechat_app_secret").Assign(model.SystemConfig{Value: req.WeChatAppSecret, Type: "string"}).FirstOrCreate(&wechatAppSecretConfig).Error; err != nil {
 		utils.Error(c, utils.CodeError, "保存微信AppSecret失败")
 		return
+	}
+
+	// 保存AccountType（如果提供）
+	if req.AccountType != "" {
+		accountTypeConfig := model.SystemConfig{
+			Key:   "wechat_account_type",
+			Value: req.AccountType,
+			Type:  "string",
+		}
+		if err := h.db.Where("key = ?", "wechat_account_type").Assign(model.SystemConfig{Value: req.AccountType, Type: "string"}).FirstOrCreate(&accountTypeConfig).Error; err != nil {
+			utils.Error(c, utils.CodeError, "保存微信AccountType失败")
+			return
+		}
+	}
+
+	// 保存Scope（如果提供）
+	if req.Scope != "" {
+		scopeConfig := model.SystemConfig{
+			Key:   "wechat_scope",
+			Value: req.Scope,
+			Type:  "string",
+		}
+		if err := h.db.Where("key = ?", "wechat_scope").Assign(model.SystemConfig{Value: req.Scope, Type: "string"}).FirstOrCreate(&scopeConfig).Error; err != nil {
+			utils.Error(c, utils.CodeError, "保存微信Scope失败")
+			return
+		}
 	}
 
 	utils.Success(c, gin.H{

@@ -3,11 +3,15 @@ import request from '../utils/request'
 export interface WeChatConfig {
   wechat_app_id: string
   wechat_app_secret: string
+  account_type?: string
+  scope?: string
 }
 
 export interface WeChatConfigRequest {
   wechat_app_id: string
   wechat_app_secret: string
+  account_type?: string
+  scope?: string
 }
 
 // 获取微信配置
