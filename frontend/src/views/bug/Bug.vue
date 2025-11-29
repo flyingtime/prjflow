@@ -650,7 +650,7 @@ import {
   type CreateBugRequest,
   type BugStatistics
 } from '@/api/bug'
-import { getProjects, type Project } from '@/api/project'
+import { getProjects, getProjectMembers, type Project } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
 import { getRequirements, type Requirement } from '@/api/requirement'
 import { getModules, type Module } from '@/api/module'
@@ -893,14 +893,33 @@ const handleSearch = () => {
 }
 
 // 指派给我复选框改变
-const handleAssignToMeChange = (e: any) => {
+const handleAssignToMeChange = async (e: any) => {
   const checked = e.target.checked
   if (checked && authStore.user) {
     const currentUserId = Number(authStore.user.id)
     
     if (searchForm.project_id) {
-      // 设置 assignee_id 为当前用户ID（组件会自动加载成员列表并选中）
-      searchForm.assignee_id = currentUserId
+      try {
+        // 先加载成员列表，确保当前用户在成员列表中
+        const members = await getProjectMembers(searchForm.project_id)
+        const currentUserInMembers = members.some(m => m.user_id === currentUserId)
+        
+        if (currentUserInMembers) {
+          // 直接设置 assignee_id 为当前用户ID
+          // ProjectMemberSelect 组件会通过内部状态管理确保正确显示
+          searchForm.assignee_id = currentUserId
+        } else {
+          // 如果当前用户不在项目成员中，提示用户
+          message.warning('您不是该项目的成员')
+          searchForm.assignToMe = false
+          searchForm.assignee_id = undefined
+        }
+      } catch (error: any) {
+        console.error('加载项目成员失败:', error)
+        message.error('加载项目成员失败')
+        searchForm.assignToMe = false
+        searchForm.assignee_id = undefined
+      }
     } else {
       // 如果没有选择项目，提示用户先选择项目
       message.warning('请先选择项目')
