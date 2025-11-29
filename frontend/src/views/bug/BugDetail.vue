@@ -185,25 +185,14 @@
         :wrapper-col="{ span: 18 }"
       >
         <a-form-item label="指派给" name="assignee_ids">
-          <a-select
-            v-model:value="assignFormData.assignee_ids"
-            mode="multiple"
+          <ProjectMemberSelect
+            v-model="assignFormData.assignee_ids"
+            :project-id="bug?.project_id"
+            :multiple="true"
             placeholder="选择指派给"
-            show-search
-            :filter-option="filterProjectMemberOption"
-            :loading="projectMembersLoading"
-          >
-            <a-select-option
-              v-for="member in projectMembers"
-              :key="member.user_id"
-              :value="member.user_id"
-            >
-              {{ member.user?.username || '' }}{{ member.user?.nickname ? `(${member.user.nickname})` : '' }}
-              <span v-if="member.role" style="color: #999; margin-left: 4px">
-                ({{ member.role === 'owner' ? '负责人' : member.role === 'member' ? '成员' : '查看者' }})
-              </span>
-            </a-select-option>
-          </a-select>
+            :show-role="true"
+          />
+        </a-form-item>
           <div v-if="!bug?.project_id" style="color: #999; margin-top: 4px">
             请先选择项目
           </div>
@@ -417,22 +406,13 @@
           </a-select>
         </a-form-item>
         <a-form-item label="指派给" name="assignee_ids">
-          <a-select
-            v-model:value="editFormData.assignee_ids"
-            mode="multiple"
+          <ProjectMemberSelect
+            v-model="editFormData.assignee_ids"
+            :project-id="editFormData.project_id"
+            :multiple="true"
             placeholder="选择指派给（可选）"
-            allow-clear
-            show-search
-            :filter-option="filterUserOption"
-          >
-            <a-select-option
-              v-for="user in users"
-              :key="user.id"
-              :value="user.id"
-            >
-              {{ user.username }}{{ user.nickname ? `(${user.nickname})` : '' }}
-            </a-select-option>
-          </a-select>
+            :show-role="true"
+          />
         </a-form-item>
         <a-form-item label="预估工时" name="estimated_hours">
           <a-input-number
@@ -509,6 +489,7 @@ import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
+import ProjectMemberSelect from '@/components/ProjectMemberSelect.vue'
 import {
   getBug,
   updateBug,
@@ -523,7 +504,6 @@ import {
   type CreateBugRequest
 } from '@/api/bug'
 import { getUsers, type User } from '@/api/user'
-import { getProjectMembers, type ProjectMember } from '@/api/project'
 import { getVersions, type Version } from '@/api/version'
 import { getProjects, type Project } from '@/api/project'
 import { getRequirements, type Requirement } from '@/api/requirement'
@@ -537,8 +517,6 @@ const router = useRouter()
 const loading = ref(false)
 const bug = ref<Bug | null>(null)
 const users = ref<User[]>([])
-const projectMembers = ref<ProjectMember[]>([]) // 用于指派窗口的项目成员列表
-const projectMembersLoading = ref(false) // 项目成员加载状态
 const projects = ref<Project[]>([])
 const requirements = ref<Requirement[]>([])
 const requirementLoading = ref(false)
@@ -830,30 +808,10 @@ const handleEditFormProjectChange = () => {
   // watch会自动处理
 }
 
-// 加载项目成员（用于指派窗口）
-const loadProjectMembersForAssign = async (projectId: number) => {
-  if (!projectId) {
-    projectMembers.value = []
-    projectMembersLoading.value = false
-    return
-  }
-  projectMembersLoading.value = true
-  try {
-    projectMembers.value = await getProjectMembers(projectId)
-  } catch (error: any) {
-    console.error('加载项目成员失败:', error)
-    projectMembers.value = []
-  } finally {
-    projectMembersLoading.value = false
-  }
-}
-
 // 指派
-const handleAssign = async () => {
+const handleAssign = () => {
   if (!bug.value) return
   assignFormData.assignee_ids = bug.value.assignees?.map(a => a.id) || []
-  // 加载项目成员列表
-  await loadProjectMembersForAssign(bug.value.project_id)
   assignModalVisible.value = true
 }
 
@@ -1070,27 +1028,7 @@ const getSeverityText = (severity: string) => {
   return texts[severity] || severity
 }
 
-// 用户筛选
-const filterUserOption = (input: string, option: any) => {
-  const user = users.value.find(u => u.id === option.value)
-  if (!user) return false
-  const searchText = input.toLowerCase()
-  return (
-    user.username.toLowerCase().includes(searchText) ||
-    (user.nickname && user.nickname.toLowerCase().includes(searchText))
-  )
-}
 
-// 项目成员筛选（用于指派窗口）
-const filterProjectMemberOption = (input: string, option: any) => {
-  const member = projectMembers.value.find(m => m.user_id === option.value)
-  if (!member || !member.user) return false
-  const searchText = input.toLowerCase()
-  return (
-    member.user.username.toLowerCase().includes(searchText) ||
-    (member.user.nickname && member.user.nickname.toLowerCase().includes(searchText))
-  )
-}
 
 // 获取操作描述
 const getActionDescription = (action: Action): string => {

@@ -207,32 +207,18 @@
                     <a-col :span="12">
                       <a-form-item label="指派给">
                         <a-space direction="vertical" style="width: 100%">
-                          <a-select
-                            v-model:value="searchForm.assignee_id"
-                            placeholder="选择指派给"
-                            allow-clear
-                            show-search
-                            :filter-option="filterSearchMemberOption"
-                            :loading="searchProjectMembersLoading"
-                            @change="handleAssigneeChange"
-                          >
-                            <a-select-option
-                              v-for="member in searchProjectMembers"
-                              :key="member.user_id"
-                              :value="member.user_id"
-                            >
-                              {{ member.user?.username || '' }}{{ member.user?.nickname ? `(${member.user.nickname})` : '' }}
-                              <span v-if="member.role" style="color: #999; margin-left: 4px">
-                                ({{ member.role === 'owner' ? '负责人' : member.role === 'member' ? '成员' : '查看者' }})
-                              </span>
-                            </a-select-option>
-                          </a-select>
                           <a-checkbox v-model:checked="searchForm.assignToMe" @change="handleAssignToMeChange">
                             指派给我
                           </a-checkbox>
-                          <div v-if="!searchForm.project_id && !searchForm.assignToMe" style="color: #999; margin-top: 4px; font-size: 12px">
-                            请先选择项目
-                          </div>
+                          <ProjectMemberSelect
+                            v-model="searchForm.assignee_id"
+                            :project-id="searchForm.project_id"
+                            :multiple="false"
+                            placeholder="选择指派给"
+                            :show-role="true"
+                            :show-hint="!searchForm.assignToMe"
+                            @change="handleAssigneeChange"
+                          />
                         </a-space>
                       </a-form-item>
                     </a-col>
@@ -455,22 +441,13 @@
           </a-select>
         </a-form-item>
         <a-form-item label="指派给" name="assignee_ids">
-          <a-select
-            v-model:value="formData.assignee_ids"
-            mode="multiple"
+          <ProjectMemberSelect
+            v-model="formData.assignee_ids"
+            :project-id="formData.project_id"
+            :multiple="true"
             placeholder="选择指派给（可选）"
-            allow-clear
-            show-search
-            :filter-option="filterUserOption"
-          >
-            <a-select-option
-              v-for="user in users"
-              :key="user.id"
-              :value="user.id"
-            >
-              {{ user.username }}{{ user.nickname ? `(${user.nickname})` : '' }}
-            </a-select-option>
-          </a-select>
+            :show-role="true"
+          />
         </a-form-item>
         <a-form-item label="预估工时" name="estimated_hours">
           <a-input-number
@@ -528,28 +505,13 @@
         :wrapper-col="{ span: 18 }"
       >
         <a-form-item label="指派给" name="assignee_ids">
-          <a-select
-            v-model:value="assignFormData.assignee_ids"
-            mode="multiple"
+          <ProjectMemberSelect
+            v-model="assignFormData.assignee_ids"
+            :project-id="assignFormData.project_id"
+            :multiple="true"
             placeholder="选择指派给"
-            show-search
-            :filter-option="filterProjectMemberOption"
-            :loading="projectMembersLoading"
-          >
-            <a-select-option
-              v-for="member in projectMembers"
-              :key="member.user_id"
-              :value="member.user_id"
-            >
-              {{ member.user?.username || '' }}{{ member.user?.nickname ? `(${member.user.nickname})` : '' }}
-              <span v-if="member.role" style="color: #999; margin-left: 4px">
-                ({{ member.role === 'owner' ? '负责人' : member.role === 'member' ? '成员' : '查看者' }})
-              </span>
-            </a-select-option>
-          </a-select>
-          <div v-if="!assignFormData.project_id" style="color: #999; margin-top: 4px">
-            请先选择项目
-          </div>
+            :show-role="true"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -673,6 +635,7 @@ import { PlusOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
+import ProjectMemberSelect from '@/components/ProjectMemberSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getBugs,
@@ -689,7 +652,6 @@ import {
 } from '@/api/bug'
 import { getProjects, type Project } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
-import { getProjectMembers, type ProjectMember } from '@/api/project'
 import { getRequirements, type Requirement } from '@/api/requirement'
 import { getModules, type Module } from '@/api/module'
 import { getVersions, type Version } from '@/api/version'
@@ -702,10 +664,6 @@ const loading = ref(false)
 const bugs = ref<Bug[]>([])
 const projects = ref<Project[]>([])
 const users = ref<User[]>([])
-const projectMembers = ref<ProjectMember[]>([]) // 用于指派窗口的项目成员列表
-const projectMembersLoading = ref(false) // 项目成员加载状态
-const searchProjectMembers = ref<ProjectMember[]>([]) // 用于搜索条件的项目成员列表
-const searchProjectMembersLoading = ref(false) // 搜索项目成员加载状态
 const requirements = ref<Requirement[]>([])
 const requirementLoading = ref(false)
 const modules = ref<Module[]>([])
@@ -924,6 +882,7 @@ watch(() => formData.project_id, () => {
     loadRequirementsForProject()
   } else {
     requirements.value = []
+    formData.assignee_ids = []
   }
 })
 
@@ -933,52 +892,15 @@ const handleSearch = () => {
   loadBugs()
 }
 
-// 加载搜索用的项目成员列表
-const loadSearchProjectMembers = async (projectId: number | undefined) => {
-  if (!projectId) {
-    searchProjectMembers.value = []
-    searchProjectMembersLoading.value = false
-    // 只有在没有选中"指派给我"时才清空指派给的选择
-    if (!searchForm.assignToMe) {
-      searchForm.assignee_id = undefined
-    }
-    return
-  }
-  searchProjectMembersLoading.value = true
-  try {
-    searchProjectMembers.value = await getProjectMembers(projectId)
-  } catch (error: any) {
-    console.error('加载项目成员失败:', error)
-    searchProjectMembers.value = []
-  } finally {
-    searchProjectMembersLoading.value = false
-  }
-}
-
 // 指派给我复选框改变
-const handleAssignToMeChange = async (e: any) => {
+const handleAssignToMeChange = (e: any) => {
   const checked = e.target.checked
   if (checked && authStore.user) {
     const currentUserId = Number(authStore.user.id)
     
-    // 选中时，如果已选择项目，需要先加载项目成员列表
     if (searchForm.project_id) {
-      await loadSearchProjectMembers(searchForm.project_id)
-      
-      // 等待项目成员列表加载完成后，检查当前用户是否在成员列表中
-      // 使用 nextTick 确保列表已更新
-      await nextTick()
-      
-      const isMember = searchProjectMembers.value.some(m => Number(m.user_id) === currentUserId)
-      if (isMember) {
-        // 设置 assignee_id 为当前用户ID（相当于在下拉框中选中自己）
-        searchForm.assignee_id = currentUserId
-      } else {
-        // 如果当前用户不在项目成员列表中，提示用户
-        message.warning('当前用户不是该项目的成员')
-        searchForm.assignToMe = false
-        searchForm.assignee_id = undefined
-      }
+      // 设置 assignee_id 为当前用户ID（组件会自动加载成员列表并选中）
+      searchForm.assignee_id = currentUserId
     } else {
       // 如果没有选择项目，提示用户先选择项目
       message.warning('请先选择项目')
@@ -992,26 +914,26 @@ const handleAssignToMeChange = async (e: any) => {
 }
 
 // 指派给下拉框改变
-const handleAssigneeChange = (value: number | undefined) => {
+const handleAssigneeChange = (value: number | number[] | undefined) => {
+  // 组件是单选模式，所以 value 应该是 number | undefined
+  const assigneeId = Array.isArray(value) ? value[0] : value
   // 如果清空了选择，同时取消"指派给我"
-  if (!value && searchForm.assignToMe) {
+  if (!assigneeId && searchForm.assignToMe) {
     searchForm.assignToMe = false
   }
   // 如果选择了其他用户，取消"指派给我"
-  if (value && authStore.user && value !== authStore.user.id && searchForm.assignToMe) {
+  if (assigneeId && authStore.user && assigneeId !== authStore.user.id && searchForm.assignToMe) {
     searchForm.assignToMe = false
   }
   // 如果选择了自己，选中"指派给我"
-  if (value && authStore.user && value === authStore.user.id && !searchForm.assignToMe) {
+  if (assigneeId && authStore.user && assigneeId === authStore.user.id && !searchForm.assignToMe) {
     searchForm.assignToMe = true
   }
 }
 
 // 搜索表单项目选择改变
-const handleSearchProjectChange = async (value: number | undefined) => {
+const handleSearchProjectChange = (value: number | undefined) => {
   saveLastSelected('last_selected_bug_project_search', value)
-  // 当项目改变时，重新加载项目成员列表
-  await loadSearchProjectMembers(value)
   // 只有在没有选中"指派给我"时才清空指派给的选择
   if (!searchForm.assignToMe) {
     searchForm.assignee_id = undefined
@@ -1032,7 +954,6 @@ const handleReset = () => {
   searchForm.severity = undefined
   searchForm.assignee_id = undefined
   searchForm.assignToMe = false // 重置"指派给我"
-  searchProjectMembers.value = [] // 清空项目成员列表
   pagination.current = 1
   // 清除保存的搜索项目选择
   saveLastSelected('last_selected_bug_project_search', undefined)
@@ -1335,31 +1256,11 @@ const filterVersionOption = (input: string, option: any) => {
   return version.version_number.toLowerCase().includes(searchText)
 }
 
-// 加载项目成员（用于指派窗口）
-const loadProjectMembersForAssign = async (projectId: number) => {
-  if (!projectId) {
-    projectMembers.value = []
-    projectMembersLoading.value = false
-    return
-  }
-  projectMembersLoading.value = true
-  try {
-    projectMembers.value = await getProjectMembers(projectId)
-  } catch (error: any) {
-    console.error('加载项目成员失败:', error)
-    projectMembers.value = []
-  } finally {
-    projectMembersLoading.value = false
-  }
-}
-
 // 指派
-const handleAssign = async (record: Bug) => {
+const handleAssign = (record: Bug) => {
   assignFormData.bug_id = record.id
   assignFormData.project_id = record.project_id
   assignFormData.assignee_ids = record.assignees?.map(a => a.id) || []
-  // 加载项目成员列表
-  await loadProjectMembersForAssign(record.project_id)
   assignModalVisible.value = true
 }
 
@@ -1487,39 +1388,6 @@ const filterModuleOption = (input: string, option: any) => {
     (module.code && module.code.toLowerCase().includes(searchText))
 }
 
-// 用户筛选
-const filterUserOption = (input: string, option: any) => {
-  const user = users.value.find(u => u.id === option.value)
-  if (!user) return false
-  const searchText = input.toLowerCase()
-  return (
-    user.username.toLowerCase().includes(searchText) ||
-    (user.nickname && user.nickname.toLowerCase().includes(searchText))
-  )
-}
-
-// 项目成员筛选（用于指派窗口）
-const filterProjectMemberOption = (input: string, option: any) => {
-  const member = projectMembers.value.find(m => m.user_id === option.value)
-  if (!member || !member.user) return false
-  const searchText = input.toLowerCase()
-  return (
-    member.user.username.toLowerCase().includes(searchText) ||
-    (member.user.nickname && member.user.nickname.toLowerCase().includes(searchText))
-  )
-}
-
-// 搜索项目成员筛选（用于搜索条件）
-const filterSearchMemberOption = (input: string, option: any) => {
-  const member = searchProjectMembers.value.find(m => m.user_id === option.value)
-  if (!member || !member.user) return false
-  const searchText = input.toLowerCase()
-  return (
-    member.user.username.toLowerCase().includes(searchText) ||
-    (member.user.nickname && member.user.nickname.toLowerCase().includes(searchText))
-  )
-}
-
 // 监听 tab 切换，切换到统计 tab 时加载统计信息
 watch(activeTab, (newTab) => {
   if (newTab === 'statistics') {
@@ -1553,11 +1421,7 @@ onMounted(async () => {
   }
   
   // 使用 nextTick 确保项目列表已渲染后再加载Bug
-  nextTick(async () => {
-    // 如果有保存的项目ID，加载对应的项目成员列表
-    if (searchForm.project_id) {
-      await loadSearchProjectMembers(searchForm.project_id)
-    }
+  nextTick(() => {
     loadBugs()
   })
 })
