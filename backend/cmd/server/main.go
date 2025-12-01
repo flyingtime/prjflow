@@ -11,8 +11,10 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -360,6 +362,162 @@ func formatSize(size int64) string {
 	return fmt.Sprintf("%.2f %s", fsize, unit)
 }
 
+// findProcessByPort 通过端口查找进程ID
+func findProcessByPort(port int) (int, error) {
+	// 尝试使用 lsof 命令
+	cmd := exec.Command("lsof", "-t", fmt.Sprintf("-i:%d", port))
+	output, err := cmd.Output()
+	if err == nil {
+		pidStr := strings.TrimSpace(string(output))
+		if pidStr != "" {
+			pid, err := strconv.Atoi(pidStr)
+			if err == nil {
+				return pid, nil
+			}
+		}
+	}
+
+	// 尝试使用 ss 命令
+	cmd = exec.Command("ss", "-tlnp")
+	output, err = cmd.Output()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, fmt.Sprintf(":%d", port)) {
+				// 尝试从输出中提取 PID
+				// ss 输出格式: LISTEN 0 128 *:8080 *:* users:(("server",pid=12345,fd=3))
+				parts := strings.Split(line, "pid=")
+				if len(parts) > 1 {
+					pidPart := strings.Split(parts[1], ",")[0]
+					pid, err := strconv.Atoi(pidPart)
+					if err == nil {
+						return pid, nil
+					}
+				}
+			}
+		}
+	}
+
+	// 尝试使用 netstat 命令（如果可用）
+	cmd = exec.Command("netstat", "-tlnp")
+	output, err = cmd.Output()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, fmt.Sprintf(":%d", port)) {
+				// netstat 输出格式可能不同，尝试提取 PID
+				fields := strings.Fields(line)
+				for _, field := range fields {
+					if strings.Contains(field, "/") {
+						parts := strings.Split(field, "/")
+						if len(parts) > 0 {
+							pid, err := strconv.Atoi(parts[0])
+							if err == nil {
+								return pid, nil
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("process not found on port %d", port)
+}
+
+// stopServer 停止正在运行的服务器
+func stopServer(port int) error {
+	pid, err := findProcessByPort(port)
+	if err != nil {
+		return fmt.Errorf("server not running on port %d: %w", port, err)
+	}
+
+	log.Printf("Found server process: PID %d", pid)
+
+	// 检查进程是否存在
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("process %d not found: %w", pid, err)
+	}
+
+	// 发送 SIGTERM 信号（优雅关闭）
+	log.Printf("Sending SIGTERM to process %d...", pid)
+	if err := process.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("failed to send signal to process %d: %w", pid, err)
+	}
+
+	// 等待进程退出（最多等待10秒）
+	log.Printf("Waiting for process %d to exit...", pid)
+	for i := 0; i < 20; i++ {
+		// 检查进程是否还在运行
+		if err := process.Signal(syscall.Signal(0)); err != nil {
+			// 进程已退出
+			log.Printf("Process %d has exited", pid)
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// 如果进程还在运行，发送 SIGKILL
+	log.Printf("Process %d did not exit, sending SIGKILL...", pid)
+	if err := process.Signal(syscall.SIGKILL); err != nil {
+		return fmt.Errorf("failed to kill process %d: %w", pid, err)
+	}
+
+	// 再等待一下
+	time.Sleep(1 * time.Second)
+	if err := process.Signal(syscall.Signal(0)); err != nil {
+		log.Printf("Process %d has been killed", pid)
+		return nil
+	}
+
+	return fmt.Errorf("failed to stop process %d", pid)
+}
+
+// restartServer 重启服务器
+func restartServer() error {
+	// 加载配置以获取端口
+	if err := config.LoadConfig(""); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	port := config.AppConfig.Server.Port
+	log.Printf("Restarting server on port %d...", port)
+
+	// 停止现有服务器
+	if err := stopServer(port); err != nil {
+		// 如果服务器没有运行，这不是错误，继续启动
+		log.Printf("Warning: %v", err)
+	}
+
+	// 等待一下确保端口释放
+	time.Sleep(1 * time.Second)
+
+	// 获取可执行文件路径
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// 获取可执行文件所在目录
+	exeDir := filepath.Dir(exePath)
+
+	// 启动新服务器（在后台）
+	log.Printf("Starting new server: %s", exePath)
+	cmd := exec.Command(exePath)
+	cmd.Dir = exeDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// 在后台启动
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+
+	log.Printf("Server restarted successfully (PID: %d)", cmd.Process.Pid)
+	return nil
+}
+
 func main() {
 	// 检查命令行参数
 	if len(os.Args) > 1 {
@@ -369,6 +527,12 @@ func main() {
 				log.Fatalf("Backup failed: %v", err)
 			}
 			log.Println("Backup completed successfully")
+			os.Exit(0)
+		}
+		if arg == "--restart" || arg == "-restart" || arg == "restart" {
+			if err := restartServer(); err != nil {
+				log.Fatalf("Restart failed: %v", err)
+			}
 			os.Exit(0)
 		}
 	}
@@ -499,9 +663,9 @@ func main() {
 		userGroup.POST("/wechat/add", middleware.RequirePermission(db, "user:create"), userHandler.AddUserByWeChat) // 扫码添加用户需要权限
 		// 注意：绑定微信接口需要在 /:id 之前，避免路由冲突
 		userGroup.GET("/:id/wechat/bind/qrcode", middleware.RequirePermission(db, "user:update"), userHandler.GetUserWeChatBindQRCode) // 获取用户绑定微信二维码（管理员操作）
-		userGroup.GET("/:id", middleware.RequirePermission(db, "user:read"), userHandler.GetUser)                   // 查看用户详情
-		userGroup.PUT("/:id", middleware.RequirePermission(db, "user:update"), userHandler.UpdateUser)              // 更新用户需要权限
-		userGroup.DELETE("/:id", middleware.RequirePermission(db, "user:delete"), userHandler.DeleteUser)           // 删除用户需要权限
+		userGroup.GET("/:id", middleware.RequirePermission(db, "user:read"), userHandler.GetUser)                                      // 查看用户详情
+		userGroup.PUT("/:id", middleware.RequirePermission(db, "user:update"), userHandler.UpdateUser)                                 // 更新用户需要权限
+		userGroup.DELETE("/:id", middleware.RequirePermission(db, "user:delete"), userHandler.DeleteUser)                              // 删除用户需要权限
 	}
 
 	// 部门管理路由
