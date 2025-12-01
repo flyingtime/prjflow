@@ -104,6 +104,9 @@
                     <a-button type="link" size="small" @click="handleEdit(record)">
                       编辑
                     </a-button>
+                    <a-button type="link" size="small" @click="handleChangePassword(record)">
+                      修改密码
+                    </a-button>
                     <a-button type="link" size="small" @click="handleAssignRoles(record)">
                       分配角色
                     </a-button>
@@ -248,6 +251,45 @@
         </a-form-item>
         <a-form-item label="昵称" name="nickname">
           <a-input v-model:value="nicknameFormData.nickname" placeholder="请输入昵称（必填，用于前端显示）" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 修改密码对话框 -->
+    <a-modal
+      v-model:open="changePasswordModalVisible"
+      title="修改密码"
+      :mask-closable="false"
+      @ok="handleChangePasswordSubmit"
+      @cancel="handleChangePasswordCancel"
+      :confirm-loading="changePasswordSubmitting"
+    >
+      <a-form
+        ref="changePasswordFormRef"
+        :model="changePasswordFormData"
+        :rules="changePasswordFormRules"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="用户名" name="username">
+          <a-input v-model:value="changePasswordFormData.username" disabled />
+        </a-form-item>
+        <a-form-item label="新密码" name="password" required>
+          <a-input-password 
+            v-model:value="changePasswordFormData.password" 
+            placeholder="请输入新密码（需包含大小写字母和数字）" 
+          />
+          <template #help>
+            <div style="font-size: 12px; color: #999;">
+              密码要求：至少6位，必须包含大写字母、小写字母和数字
+            </div>
+          </template>
+        </a-form-item>
+        <a-form-item label="确认密码" name="confirmPassword" required>
+          <a-input-password 
+            v-model:value="changePasswordFormData.confirmPassword" 
+            placeholder="请再次输入新密码" 
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -426,6 +468,36 @@ const nicknameFormData = reactive({
 })
 const nicknameFormRules = {
   nickname: [{ required: true, message: '请输入昵称（不能为空）', trigger: 'blur' }]
+}
+
+const changePasswordModalVisible = ref(false)
+const changePasswordSubmitting = ref(false)
+const changePasswordFormRef = ref()
+const changePasswordFormData = reactive({
+  id: 0,
+  username: '',
+  nickname: '',
+  password: '',
+  confirmPassword: ''
+})
+
+// 验证确认密码
+const validateConfirmPassword = (_rule: any, value: string) => {
+  if (!value) {
+    return Promise.reject('请再次输入新密码')
+  }
+  if (value !== changePasswordFormData.password) {
+    return Promise.reject('两次输入的密码不一致')
+  }
+  return Promise.resolve()
+}
+
+const changePasswordFormRules = {
+  password: passwordRules,
+  confirmPassword: [
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    { validator: validateConfirmPassword, trigger: 'blur' }
+  ]
 }
 
 // 加载用户列表
@@ -680,6 +752,47 @@ const handleNicknameCancel = () => {
   nicknameFormRef.value?.resetFields()
   // 即使取消，也刷新列表，因为用户已经创建了
   loadUsers()
+}
+
+// 修改密码
+const handleChangePassword = (record: User) => {
+  changePasswordFormData.id = record.id
+  changePasswordFormData.username = record.username
+  changePasswordFormData.nickname = record.nickname || ''
+  changePasswordFormData.password = ''
+  changePasswordFormData.confirmPassword = ''
+  changePasswordModalVisible.value = true
+}
+
+// 提交密码修改
+const handleChangePasswordSubmit = async () => {
+  try {
+    await changePasswordFormRef.value.validate()
+    changePasswordSubmitting.value = true
+    
+    // 后端要求nickname是必填的，所以需要一起传递
+    await updateUser(changePasswordFormData.id, {
+      nickname: changePasswordFormData.nickname,
+      password: changePasswordFormData.password
+    })
+    
+    message.success('密码修改成功')
+    changePasswordModalVisible.value = false
+    changePasswordFormRef.value?.resetFields()
+  } catch (error: any) {
+    if (error.errorFields) {
+      return
+    }
+    message.error(error.message || '密码修改失败')
+  } finally {
+    changePasswordSubmitting.value = false
+  }
+}
+
+// 取消密码修改
+const handleChangePasswordCancel = () => {
+  changePasswordModalVisible.value = false
+  changePasswordFormRef.value?.resetFields()
 }
 
 onMounted(() => {
