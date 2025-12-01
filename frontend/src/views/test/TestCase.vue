@@ -230,6 +230,10 @@
                   :scroll="{ x: 'max-content', y: tableScrollHeight }"
                   row-key="id"
                   @change="handleTableChange"
+                  :custom-row="(record: TestCase) => ({
+                    onClick: () => handleView(record),
+                    class: 'table-row-clickable'
+                  })"
                 >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'status'">
@@ -264,8 +268,8 @@
                   {{ formatDateTime(record.created_at) }}
                 </template>
                 <template v-else-if="column.key === 'action'">
-                  <a-space>
-                    <a-button type="link" size="small" @click="handleEdit(record)">
+                  <a-space @click.stop>
+                    <a-button type="link" size="small" @click.stop="handleEdit(record)">
                       编辑
                     </a-button>
                     <a-dropdown>
@@ -386,13 +390,139 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 测试单详情弹窗 -->
+    <a-modal
+      v-model:open="detailModalVisible"
+      :title="detailTestCase?.name || '测试单详情'"
+      :width="1200"
+      :mask-closable="true"
+      :footer="null"
+      @cancel="handleDetailCancel"
+    >
+      <a-spin :spinning="detailLoading">
+        <div v-if="detailTestCase" style="max-height: 70vh; overflow-y: auto">
+          <!-- 操作按钮 -->
+          <div style="margin-bottom: 16px; text-align: right">
+            <a-space>
+              <a-button @click="handleDetailEdit">编辑</a-button>
+              <a-dropdown>
+                <a-button>
+                  状态 <DownOutlined />
+                </a-button>
+                <template #overlay>
+                  <a-menu @click="(e: any) => handleDetailStatusChange(e.key as string)">
+                    <a-menu-item key="pending">待测试</a-menu-item>
+                    <a-menu-item key="running">测试中</a-menu-item>
+                    <a-menu-item key="passed">通过</a-menu-item>
+                    <a-menu-item key="failed">失败</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+              <a-popconfirm
+                title="确定要删除这个测试单吗？"
+                @confirm="handleDetailDelete"
+              >
+                <a-button danger>删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </div>
+
+          <!-- 基本信息 -->
+          <a-card title="基本信息" :bordered="false" style="margin-bottom: 16px">
+            <a-descriptions :column="2" bordered>
+              <a-descriptions-item label="测试单名称">{{ detailTestCase.name }}</a-descriptions-item>
+              <a-descriptions-item label="状态">
+                <a-tag :color="getStatusColor(detailTestCase.status || '')">
+                  {{ getStatusText(detailTestCase.status || '') }}
+                </a-tag>
+              </a-descriptions-item>
+              <a-descriptions-item label="测试类型" :span="2">
+                <a-space>
+                  <a-tag v-for="type in detailTestCase.types || []" :key="type">
+                    {{ getTypeText(type) }}
+                  </a-tag>
+                  <span v-if="!detailTestCase.types || detailTestCase.types.length === 0">-</span>
+                </a-space>
+              </a-descriptions-item>
+              <a-descriptions-item label="项目">
+                {{ detailTestCase.project?.name || '-' }}
+              </a-descriptions-item>
+              <a-descriptions-item label="创建人">
+                {{ detailTestCase.creator ? `${detailTestCase.creator.username}${detailTestCase.creator.nickname ? `(${detailTestCase.creator.nickname})` : ''}` : '-' }}
+              </a-descriptions-item>
+              <a-descriptions-item label="创建时间">
+                {{ formatDateTime(detailTestCase.created_at) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="更新时间">
+                {{ formatDateTime(detailTestCase.updated_at) }}
+              </a-descriptions-item>
+            </a-descriptions>
+          </a-card>
+
+          <!-- 测试单描述 -->
+          <a-card title="测试单描述" :bordered="false" style="margin-bottom: 16px">
+            <div v-if="detailTestCase.description" class="markdown-content">
+              <MarkdownEditor
+                :model-value="detailTestCase.description"
+                :readonly="true"
+              />
+            </div>
+            <a-empty v-else description="暂无描述" />
+          </a-card>
+
+          <!-- 测试步骤 -->
+          <a-card title="测试步骤" :bordered="false" style="margin-bottom: 16px">
+            <div v-if="detailTestCase.test_steps" class="markdown-content">
+              <MarkdownEditor
+                :model-value="detailTestCase.test_steps"
+                :readonly="true"
+              />
+            </div>
+            <a-empty v-else description="暂无测试步骤" />
+          </a-card>
+
+          <!-- 关联Bug -->
+          <a-card title="关联Bug" :bordered="false">
+            <a-list
+              v-if="detailTestCase.bugs && detailTestCase.bugs.length > 0"
+              :data-source="detailTestCase.bugs"
+              :pagination="false"
+            >
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-list-item-meta>
+                    <template #title>
+                      <a type="link" @click="router.push(`/bug/${item.id}`)" style="cursor: pointer">
+                        {{ item.title }}
+                      </a>
+                    </template>
+                    <template #description>
+                      <a-space>
+                        <a-tag :color="getBugStatusColor(item.status)">
+                          {{ getBugStatusText(item.status) }}
+                        </a-tag>
+                        <a-tag :color="getPriorityColor(item.priority)">
+                          {{ getPriorityText(item.priority) }}
+                        </a-tag>
+                      </a-space>
+                    </template>
+                  </a-list-item-meta>
+                </a-list-item>
+              </template>
+            </a-list>
+            <a-empty v-else description="暂无关联Bug" />
+          </a-card>
+        </div>
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { saveLastSelected, getLastSelected } from '@/utils/storage'
-// import { useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined, UpOutlined } from '@ant-design/icons-vue'
 import { formatDateTime } from '@/utils/date'
@@ -400,6 +530,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import {
   getTestCases,
+  getTestCase,
   createTestCase,
   updateTestCase,
   deleteTestCase,
@@ -412,7 +543,7 @@ import {
 import { getProjects, type Project } from '@/api/project'
 import { getBugs, type Bug } from '@/api/bug'
 
-// const router = useRouter()
+const router = useRouter()
 const loading = ref(false)
 const testCases = ref<TestCase[]>([])
 const projects = ref<Project[]>([])
@@ -420,6 +551,12 @@ const availableBugs = ref<Bug[]>([])
 const statistics = ref<TestCaseStatistics | null>(null)
 const activeTab = ref<string>('list')
 const searchFormVisible = ref(false) // 搜索栏显示/隐藏状态，默认折叠
+
+// 详情弹窗相关
+const detailModalVisible = ref(false)
+const detailLoading = ref(false)
+const detailTestCase = ref<TestCase | null>(null)
+const shouldKeepDetailOpen = ref(false)
 
 const searchForm = reactive({
   keyword: '',
@@ -686,24 +823,147 @@ const handleStatusChange = async (id: number, status: string) => {
   }
 }
 
+// 查看详情
+const handleView = async (record: TestCase) => {
+  detailModalVisible.value = true
+  await loadTestCaseDetail(record.id)
+}
+
+// 加载测试单详情
+const loadTestCaseDetail = async (testCaseId: number) => {
+  detailLoading.value = true
+  try {
+    detailTestCase.value = await getTestCase(testCaseId)
+  } catch (error: any) {
+    message.error(error.message || '加载测试单详情失败')
+    detailModalVisible.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+// 详情弹窗取消
+const handleDetailCancel = () => {
+  detailTestCase.value = null
+}
+
+// 详情页编辑
+const handleDetailEdit = async () => {
+  if (!detailTestCase.value) return
+  shouldKeepDetailOpen.value = true
+  detailModalVisible.value = false
+  await nextTick()
+  handleEdit(detailTestCase.value)
+}
+
+// 详情页状态变更
+const handleDetailStatusChange = async (status: string) => {
+  if (!detailTestCase.value) return
+  try {
+    await updateTestCaseStatus(detailTestCase.value.id, status)
+    message.success('状态更新成功')
+    await loadTestCaseDetail(detailTestCase.value.id)
+    loadTestCases()
+  } catch (error: any) {
+    message.error(error.message || '状态更新失败')
+  }
+}
+
+// 详情页删除
+const handleDetailDelete = async () => {
+  if (!detailTestCase.value) return
+  try {
+    await deleteTestCase(detailTestCase.value.id)
+    message.success('删除成功')
+    detailModalVisible.value = false
+    loadTestCases()
+  } catch (error: any) {
+    message.error(error.message || '删除失败')
+  }
+}
+
+// Bug状态颜色
+const getBugStatusColor = (status: string) => {
+  const colors: Record<string, string> = {
+    active: 'orange',
+    resolved: 'green',
+    closed: 'default'
+  }
+  return colors[status] || 'default'
+}
+
+// Bug状态文本
+const getBugStatusText = (status: string) => {
+  const texts: Record<string, string> = {
+    active: '激活',
+    resolved: '已解决',
+    closed: '已关闭'
+  }
+  return texts[status] || status
+}
+
+// 优先级颜色
+const getPriorityColor = (priority: string) => {
+  const colors: Record<string, string> = {
+    low: 'default',
+    medium: 'blue',
+    high: 'orange',
+    urgent: 'red'
+  }
+  return colors[priority] || 'default'
+}
+
+// 优先级文本
+const getPriorityText = (priority: string) => {
+  const texts: Record<string, string> = {
+    low: '低',
+    medium: '中',
+    high: '高',
+    urgent: '紧急'
+  }
+  return texts[priority] || priority
+}
+
+// 监听编辑模态框关闭，重新打开详情弹窗
+watch(modalVisible, (visible, prevVisible) => {
+  if (prevVisible && !visible && shouldKeepDetailOpen.value && detailTestCase.value) {
+    shouldKeepDetailOpen.value = false
+    nextTick(() => {
+      detailModalVisible.value = true
+      loadTestCaseDetail(detailTestCase.value!.id)
+      loadTestCases()
+    })
+  }
+})
+
 // 状态颜色
 const getStatusColor = (status: string) => {
+  // 支持旧状态值（wait, normal, blocked, investigate）和新状态值（pending, running, passed, failed）
   const colors: Record<string, string> = {
     wait: 'orange',
+    pending: 'orange',
     normal: 'green',
+    passed: 'green',
     blocked: 'red',
-    investigate: 'purple'
+    failed: 'red',
+    investigate: 'purple',
+    running: 'blue'
   }
   return colors[status] || 'default'
 }
 
 // 状态文本
 const getStatusText = (status: string) => {
+  // 支持旧状态值（wait, normal, blocked, investigate）和新状态值（pending, running, passed, failed）
   const texts: Record<string, string> = {
-    wait: '待评审',
-    normal: '正常',
-    blocked: '被阻塞',
-    investigate: '研究中'
+    wait: '待测试',
+    pending: '待测试',
+    normal: '通过',
+    passed: '通过',
+    blocked: '失败',
+    failed: '失败',
+    investigate: '测试中',
+    running: '测试中'
   }
   return texts[status] || status
 }
@@ -863,6 +1123,19 @@ onMounted(() => {
 .content-inner :deep(.ant-tabs-tabpane) .ant-card {
   max-width: 100%;
   box-sizing: border-box;
+}
+/* 详情弹窗样式 */
+.markdown-content {
+  min-height: 200px;
+}
+
+/* 表格行可点击样式 */
+.table-card :deep(.ant-table-tbody > tr.table-row-clickable) {
+  cursor: pointer;
+}
+
+.table-card :deep(.ant-table-tbody > tr.table-row-clickable:hover) {
+  background-color: #f5f5f5;
 }
 </style>
 
