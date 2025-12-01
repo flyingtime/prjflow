@@ -567,11 +567,11 @@ func restartServer() error {
 func main() {
 	// 定义命令行参数
 	var (
-		backup   = flag.Bool("backup", false, "备份数据库")
-		stop     = flag.Bool("stop", false, "停止服务器")
-		restart  = flag.Bool("restart", false, "重启服务器")
-		version  = flag.Bool("version", false, "显示版本信息")
-		versionV = flag.Bool("v", false, "显示版本信息（简写）")
+		backup    = flag.Bool("backup", false, "备份数据库")
+		stop      = flag.Bool("stop", false, "停止服务器")
+		restart   = flag.Bool("restart", false, "重启服务器")
+		version   = flag.Bool("version", false, "显示版本信息")
+		versionV  = flag.Bool("v", false, "显示版本信息（简写）")
 		versionV2 = flag.Bool("V", false, "显示版本信息（简写）")
 	)
 
