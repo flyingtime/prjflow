@@ -58,6 +58,11 @@
               修改密码
             </a-menu-item>
             <a-menu-divider />
+            <a-menu-item key="about" @click="handleAbout">
+              <template #icon><InfoCircleOutlined /></template>
+              关于
+            </a-menu-item>
+            <a-menu-divider />
             <a-menu-item key="logout" @click="handleLogout">
               <template #icon><LogoutOutlined /></template>
               退出登录
@@ -117,6 +122,37 @@
         @error="handleWeChatBindError"
       />
     </a-modal>
+
+    <!-- 关于弹窗 -->
+    <a-modal
+      v-model:open="aboutVisible"
+      title="关于"
+      :footer="null"
+      :width="500"
+    >
+      <div v-if="versionInfo" class="about-content">
+        <a-descriptions :column="1" bordered>
+          <a-descriptions-item label="系统名称">
+            项目管理系统
+          </a-descriptions-item>
+          <a-descriptions-item label="版本号">
+            {{ versionInfo.version || '未知' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="构建时间" v-if="versionInfo.build_time && versionInfo.build_time !== 'unknown'">
+            {{ versionInfo.build_time }}
+          </a-descriptions-item>
+          <a-descriptions-item label="Git提交" v-if="versionInfo.git_commit && versionInfo.git_commit !== 'unknown'">
+            {{ versionInfo.git_commit }}
+          </a-descriptions-item>
+          <a-descriptions-item label="Go版本">
+            {{ versionInfo.go_version || '未知' }}
+          </a-descriptions-item>
+        </a-descriptions>
+      </div>
+      <a-spin v-else :spinning="versionLoading" style="width: 100%; padding: 20px; text-align: center;">
+        <div>加载中...</div>
+      </a-spin>
+    </a-modal>
   </a-layout-header>
 </template>
 
@@ -132,12 +168,14 @@ import {
   ProjectOutlined,
   TeamOutlined,
   SettingOutlined,
-  EditOutlined
+  EditOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePermissionStore } from '@/stores/permission'
 import { changePassword, getWeChatBindQRCode, unbindWeChat } from '@/api/auth'
 import { getMenus, type MenuItem } from '@/api/permission'
+import { getVersionInfo, type VersionInfo } from '@/api/version'
 import WeChatQRCode from './WeChatQRCode.vue'
 
 const route = useRoute()
@@ -329,6 +367,36 @@ const handleChangePasswordSubmit = async () => {
   }
 }
 
+// 关于相关
+const aboutVisible = ref(false)
+const versionInfo = ref<VersionInfo | null>(null)
+const versionLoading = ref(false)
+
+// 获取版本信息
+const loadVersionInfo = async () => {
+  versionLoading.value = true
+  try {
+    versionInfo.value = await getVersionInfo()
+  } catch (error) {
+    console.error('获取版本信息失败:', error)
+    // 如果获取失败，使用默认值
+    versionInfo.value = {
+      version: 'v0.4.9',
+      go_version: '未知'
+    }
+  } finally {
+    versionLoading.value = false
+  }
+}
+
+// 显示关于
+const handleAbout = () => {
+  aboutVisible.value = true
+  if (!versionInfo.value) {
+    loadVersionInfo()
+  }
+}
+
 // 退出登录
 const handleLogout = async () => {
   try {
@@ -390,6 +458,10 @@ onMounted(async () => {
 .username {
   color: white;
   margin-left: 8px;
+}
+
+.about-content {
+  padding: 10px 0;
 }
 
 .header-menu {

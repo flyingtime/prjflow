@@ -670,6 +670,16 @@ func main() {
 		})
 	})
 
+	// 版本信息接口（不需要认证）
+	r.GET("/api/version", func(c *gin.Context) {
+		utils.Success(c, gin.H{
+			"version":    Version,
+			"build_time": BuildTime,
+			"git_commit": GitCommit,
+			"go_version": runtime.Version(),
+		})
+	})
+
 	// WebSocket路由
 	r.GET("/ws", websocket.HandleWebSocket)
 
