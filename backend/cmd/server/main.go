@@ -500,6 +500,25 @@ func getGoVersion() string {
 	return runtime.Version()
 }
 
+// stopServerCommand 停止服务器（命令行参数）
+func stopServerCommand() error {
+	// 加载配置以获取端口
+	if err := config.LoadConfig(""); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	port := config.AppConfig.Server.Port
+	log.Printf("Stopping server on port %d...", port)
+
+	// 停止服务器
+	if err := stopServer(port); err != nil {
+		return err
+	}
+
+	log.Printf("Server stopped successfully")
+	return nil
+}
+
 // restartServer 重启服务器
 func restartServer() error {
 	// 加载配置以获取端口
@@ -553,6 +572,12 @@ func main() {
 				log.Fatalf("Backup failed: %v", err)
 			}
 			log.Println("Backup completed successfully")
+			os.Exit(0)
+		}
+		if arg == "--stop" || arg == "-stop" || arg == "stop" {
+			if err := stopServerCommand(); err != nil {
+				log.Fatalf("Stop failed: %v", err)
+			}
 			os.Exit(0)
 		}
 		if arg == "--restart" || arg == "-restart" || arg == "restart" {
