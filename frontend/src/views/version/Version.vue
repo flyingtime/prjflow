@@ -739,6 +739,12 @@ const filterBugOption = (input: string, option: any) => {
   return option.children[0].children.toLowerCase().indexOf(input.toLowerCase()) >= 0
 }
 
+// 查看详情
+const handleView = async (record: Version) => {
+  detailModalVisible.value = true
+  await loadVersionDetail(record.id)
+}
+
 // 加载版本详情
 const loadVersionDetail = async (versionId: number) => {
   detailLoading.value = true
