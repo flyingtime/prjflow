@@ -453,7 +453,7 @@
             v-model="formData.assignee_ids"
             :project-id="formData.project_id"
             :multiple="true"
-            placeholder="选择指派给（可选）"
+            placeholder="选择指派给"
             :show-role="true"
           />
         </a-form-item>
@@ -737,7 +737,22 @@ const bugAttachments = ref<Attachment[]>([]) // Bug附件列表
 
 const formRules = {
   title: [{ required: true, message: '请输入Bug标题', trigger: 'blur' }],
-  project_id: [{ required: true, message: '请选择项目', trigger: 'change' }]
+  description: [{ required: true, message: '请输入Bug描述', trigger: 'blur' }],
+  project_id: [{ required: true, message: '请选择项目', trigger: 'change' }],
+  priority: [{ required: true, message: '请选择优先级', trigger: 'change' }],
+  assignee_ids: [
+    {
+      required: true,
+      message: '请选择指派给',
+      trigger: 'change',
+      validator: (_rule: any, value: number[]) => {
+        if (!value || value.length === 0) {
+          return Promise.reject('请选择指派给')
+        }
+        return Promise.resolve()
+      }
+    }
+  ]
 }
 
 const assignModalVisible = ref(false)
