@@ -177,6 +177,10 @@
                   :scroll="{ x: 'max-content', y: tableScrollHeight }"
                   row-key="id"
                   @change="handleTableChange"
+                  :custom-row="(record: Requirement) => ({
+                    onClick: () => handleView(record),
+                    class: 'table-row-clickable'
+                  })"
                 >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'status'">
@@ -206,8 +210,8 @@
                   {{ formatDateTime(record.created_at) }}
                 </template>
                 <template v-else-if="column.key === 'action'">
-                  <a-space>
-                    <a-button type="link" size="small" @click="handleEdit(record)">
+                  <a-space @click.stop>
+                    <a-button type="link" size="small" @click.stop="handleEdit(record)">
                       编辑
                     </a-button>
                     <a-dropdown>
@@ -229,7 +233,7 @@
                       title="确定要删除这个需求吗？"
                       @confirm="handleDelete(record.id)"
                     >
-                      <a-button type="link" size="small" danger>删除</a-button>
+                      <a-button type="link" size="small" danger @click.stop>删除</a-button>
                     </a-popconfirm>
                   </a-space>
                 </template>
@@ -1403,6 +1407,15 @@ onMounted(async () => {
 /* 详情弹窗样式 */
 .markdown-content {
   min-height: 200px;
+}
+
+/* 表格行可点击样式 */
+.table-card :deep(.ant-table-tbody > tr.table-row-clickable) {
+  cursor: pointer;
+}
+
+.table-card :deep(.ant-table-tbody > tr.table-row-clickable:hover) {
+  background-color: #f5f5f5;
 }
 </style>
 
