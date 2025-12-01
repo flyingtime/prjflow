@@ -60,3 +60,4 @@ backend/cmd/server/frontend-dist/
 zentaopms/
 backend/migrate
 releases/
+data.db
