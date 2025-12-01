@@ -589,6 +589,29 @@
               <a-empty v-else description="暂无历史记录" />
             </a-spin>
           </a-card>
+
+          <!-- 依赖任务 -->
+          <a-card title="依赖任务" :bordered="false" v-if="detailTask.dependencies && detailTask.dependencies.length > 0">
+            <a-list :data-source="detailTask.dependencies" :bordered="false">
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-list-item-meta>
+                    <template #title>
+                      <a @click="router.push(`/task/${item.id}`)" style="cursor: pointer">
+                        {{ item.title }}
+                      </a>
+                    </template>
+                    <template #description>
+                      <a-tag :color="getStatusColor(item.status)">{{ getStatusText(item.status) }}</a-tag>
+                      <a-tag :color="getPriorityColor(item.priority)" style="margin-left: 8px">
+                        {{ getPriorityText(item.priority) }}
+                      </a-tag>
+                    </template>
+                  </a-list-item-meta>
+                </a-list-item>
+              </template>
+            </a-list>
+          </a-card>
         </div>
       </a-spin>
     </a-modal>
@@ -623,7 +646,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch, nextTick, computed } from 'vue'
 import { saveLastSelected, getLastSelected } from '@/utils/storage'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined, UpOutlined } from '@ant-design/icons-vue'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -653,6 +676,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getAttachments, attachToEntity, uploadFile, type Attachment } from '@/api/attachment'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const loading = ref(false)
 const tasks = ref<Task[]>([])

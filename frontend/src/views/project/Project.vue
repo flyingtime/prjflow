@@ -394,30 +394,19 @@
             <a-descriptions :column="2" bordered>
               <a-descriptions-item label="项目名称">{{ detailProject.name }}</a-descriptions-item>
               <a-descriptions-item label="项目编码">{{ detailProject.code || '-' }}</a-descriptions-item>
-              <a-descriptions-item label="状态">
-                <a-tag :color="getProjectStatusColor(detailProject.status)">
-                  {{ getProjectStatusText(detailProject.status) }}
-                </a-tag>
-              </a-descriptions-item>
               <a-descriptions-item label="开始日期">
                 {{ formatDate(detailProject.start_date) || '-' }}
               </a-descriptions-item>
               <a-descriptions-item label="结束日期">
                 {{ formatDate(detailProject.end_date) || '-' }}
               </a-descriptions-item>
-              <a-descriptions-item label="标签" :span="2">
-                <a-space>
-                  <a-tag
-                    v-for="tag in detailProject.tags || []"
-                    :key="tag.id"
-                    :color="tag.color || 'blue'"
-                  >
-                    {{ tag.name }}
-                  </a-tag>
-                  <span v-if="!detailProject.tags || detailProject.tags.length === 0">-</span>
-                </a-space>
+              <a-descriptions-item label="状态">
+                <a-tag :color="getProjectStatusColor(detailProject.status)">
+                  {{ getProjectStatusText(detailProject.status) }}
+                </a-tag>
               </a-descriptions-item>
-              <a-descriptions-item label="项目描述" :span="2">
+              <a-descriptions-item label="成员数">{{ detailStatistics?.total_members || 0 }} 人</a-descriptions-item>
+              <a-descriptions-item label="描述" :span="2">
                 <div v-if="detailProject.description" class="markdown-content">
                   <MarkdownEditor
                     :model-value="detailProject.description"
@@ -428,8 +417,270 @@
               </a-descriptions-item>
             </a-descriptions>
           </a-card>
+
+          <!-- 项目描述 -->
+          <a-card title="项目描述" :bordered="false" style="margin-bottom: 16px" v-if="detailProject.description">
+            <div class="markdown-content">
+              <MarkdownEditor
+                :model-value="detailProject.description"
+                :readonly="true"
+              />
+            </div>
+          </a-card>
+
+          <!-- 历史记录 -->
+          <a-card :bordered="false" style="margin-bottom: 16px">
+            <template #title>
+              <span>历史记录</span>
+              <a-button 
+                type="link" 
+                size="small"
+                @click.stop="handleAddNote" 
+                :disabled="historyLoading"
+                style="margin-left: 8px; padding: 0"
+              >
+                添加备注
+              </a-button>
+            </template>
+            <a-spin :spinning="historyLoading" :style="{ minHeight: '100px' }">
+              <a-timeline v-if="historyList.length > 0">
+                <a-timeline-item
+                  v-for="(action, index) in historyList"
+                  :key="action.id"
+                >
+                  <template #dot>
+                    <span style="font-weight: bold; color: #1890ff">{{ historyList.length - index }}</span>
+                  </template>
+                  <div>
+                    <div style="margin-bottom: 8px">
+                      <span style="color: #666; margin-right: 8px">{{ formatDateTime(action.date) }}</span>
+                      <span>{{ getActionDescription(action) }}</span>
+                      <a-button
+                        v-if="hasHistoryDetails(action)"
+                        type="link"
+                        size="small"
+                        @click="toggleHistoryDetail(action.id)"
+                        style="padding: 0; height: auto; margin-left: 8px"
+                      >
+                        {{ expandedHistoryIds.has(action.id) ? '收起' : '展开' }}
+                      </a-button>
+                    </div>
+                    <!-- 字段变更详情和备注内容（可折叠） -->
+                    <div
+                      v-show="expandedHistoryIds.has(action.id)"
+                      style="margin-left: 24px; margin-top: 8px"
+                    >
+                      <!-- 字段变更详情 -->
+                      <div v-if="action.histories && action.histories.length > 0">
+                        <div
+                          v-for="history in action.histories"
+                          :key="history.id"
+                          style="margin-bottom: 4px; color: #666"
+                        >
+                          修改了{{ getFieldDisplayName(history.field) }}, 旧值为"{{ history.old_value || history.old || '-' }}",新值为"{{ history.new_value || history.new || '-' }}"。
+                        </div>
+                      </div>
+                      <!-- 备注内容 -->
+                      <div v-if="action.comment" style="margin-top: 8px; color: #666">
+                        {{ action.comment }}
+                      </div>
+                    </div>
+                  </div>
+                </a-timeline-item>
+              </a-timeline>
+              <a-empty v-else description="暂无历史记录" />
+            </a-spin>
+          </a-card>
+
+          <!-- 统计概览 -->
+          <a-row :gutter="16" style="margin-bottom: 16px">
+            <a-col :span="6">
+              <a-card :bordered="false">
+                <a-statistic
+                  title="总任务数"
+                  :value="detailStatistics?.total_tasks || 0"
+                  :value-style="{ color: '#1890ff' }"
+                />
+              </a-card>
+            </a-col>
+            <a-col :span="6">
+              <a-card :bordered="false">
+                <a-statistic
+                  title="总Bug数"
+                  :value="detailStatistics?.total_bugs || 0"
+                  :value-style="{ color: '#ff4d4f' }"
+                />
+              </a-card>
+            </a-col>
+            <a-col :span="6">
+              <a-card :bordered="false">
+                <a-statistic
+                  title="总需求数"
+                  :value="detailStatistics?.total_requirements || 0"
+                  :value-style="{ color: '#52c41a' }"
+                />
+              </a-card>
+            </a-col>
+            <a-col :span="6">
+              <a-card :bordered="false">
+                <a-statistic
+                  title="项目成员"
+                  :value="detailStatistics?.total_members || 0"
+                  suffix="人"
+                  :value-style="{ color: '#722ed1' }"
+                />
+              </a-card>
+            </a-col>
+          </a-row>
+
+          <!-- 任务统计 -->
+          <a-card title="任务统计" :bordered="false" style="margin-bottom: 16px">
+            <a-row :gutter="16">
+              <a-col :span="8">
+                <a-card class="stat-card" @click="goToTasks('todo')">
+                  <a-statistic
+                    title="待办"
+                    :value="detailStatistics?.todo_tasks || 0"
+                    :value-style="{ color: '#1890ff' }"
+                  />
+                </a-card>
+              </a-col>
+              <a-col :span="8">
+                <a-card class="stat-card" @click="goToTasks('in_progress')">
+                  <a-statistic
+                    title="进行中"
+                    :value="detailStatistics?.in_progress_tasks || 0"
+                    :value-style="{ color: '#faad14' }"
+                  />
+                </a-card>
+              </a-col>
+              <a-col :span="8">
+                <a-card class="stat-card" @click="goToTasks('done')">
+                  <a-statistic
+                    title="已完成"
+                    :value="detailStatistics?.done_tasks || 0"
+                    :value-style="{ color: '#52c41a' }"
+                  />
+                </a-card>
+              </a-col>
+            </a-row>
+          </a-card>
+
+          <!-- Bug统计 -->
+          <a-card title="Bug统计" :bordered="false" style="margin-bottom: 16px">
+            <a-row :gutter="16">
+              <a-col :span="8">
+                <a-card class="stat-card" @click="goToBugs('open')">
+                  <a-statistic
+                    title="待处理"
+                    :value="detailStatistics?.open_bugs || 0"
+                    :value-style="{ color: '#ff4d4f' }"
+                  />
+                </a-card>
+              </a-col>
+              <a-col :span="8">
+                <a-card class="stat-card" @click="goToBugs('in_progress')">
+                  <a-statistic
+                    title="处理中"
+                    :value="detailStatistics?.in_progress_bugs || 0"
+                    :value-style="{ color: '#faad14' }"
+                  />
+                </a-card>
+              </a-col>
+              <a-col :span="8">
+                <a-card class="stat-card" @click="goToBugs('resolved')">
+                  <a-statistic
+                    title="已解决"
+                    :value="detailStatistics?.resolved_bugs || 0"
+                    :value-style="{ color: '#52c41a' }"
+                  />
+                </a-card>
+              </a-col>
+            </a-row>
+          </a-card>
+
+          <!-- 需求统计 -->
+          <a-card title="需求统计" :bordered="false" style="margin-bottom: 16px">
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-card class="stat-card" @click="goToRequirements('in_progress')">
+                  <a-statistic
+                    title="进行中"
+                    :value="detailStatistics?.in_progress_requirements || 0"
+                    :value-style="{ color: '#faad14' }"
+                  />
+                </a-card>
+              </a-col>
+              <a-col :span="12">
+                <a-card class="stat-card" @click="goToRequirements('completed')">
+                  <a-statistic
+                    title="已完成"
+                    :value="detailStatistics?.completed_requirements || 0"
+                    :value-style="{ color: '#52c41a' }"
+                  />
+                </a-card>
+              </a-col>
+            </a-row>
+          </a-card>
+
+          <!-- 项目成员 -->
+          <a-card title="项目成员" :bordered="false">
+            <template #extra>
+              <a-button type="link" @click="handleDetailManageMembers">成员管理</a-button>
+            </template>
+            <a-list
+              :data-source="detailProject.members || []"
+              :loading="detailLoading"
+            >
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-list-item-meta>
+                    <template #avatar>
+                      <a-avatar :src="item.user?.avatar">
+                        {{ (item.user?.nickname || item.user?.username)?.charAt(0).toUpperCase() }}
+                      </a-avatar>
+                    </template>
+                    <template #title>
+                      {{ item.user?.username }}{{ item.user?.nickname ? `(${item.user.nickname})` : '' }}
+                    </template>
+                    <template #description>
+                      <a-tag>{{ item.role }}</a-tag>
+                      <span v-if="item.user?.department" style="margin-left: 8px; color: #999">
+                        {{ item.user.department.name }}
+                      </span>
+                    </template>
+                  </a-list-item-meta>
+                </a-list-item>
+              </template>
+            </a-list>
+          </a-card>
         </div>
       </a-spin>
+    </a-modal>
+
+    <!-- 添加备注模态框 -->
+    <a-modal
+      v-model:open="noteModalVisible"
+      title="添加备注"
+      :mask-closable="true"
+      @ok="handleNoteSubmit"
+      @cancel="handleNoteCancel"
+    >
+      <a-form
+        ref="noteFormRef"
+        :model="noteFormData"
+        :rules="noteFormRules"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="备注" name="comment">
+          <a-textarea
+            v-model:value="noteFormData.comment"
+            placeholder="请输入备注"
+            :rows="4"
+          />
+        </a-form-item>
+      </a-form>
     </a-modal>
   </div>
 </template>
@@ -444,7 +695,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
-import { formatDate } from '@/utils/date'
+import { formatDate, formatDateTime } from '@/utils/date'
 import {
   getProjects,
   getProject,
@@ -455,9 +706,13 @@ import {
   addProjectMembers,
   updateProjectMember,
   removeProjectMember,
+  getProjectHistory,
+  addProjectHistoryNote,
   type Project,
   type ProjectMember,
-  type CreateProjectRequest
+  type CreateProjectRequest,
+  type ProjectStatistics,
+  type Action
 } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
 import { getTags, createTag, type Tag } from '@/api/tag'
@@ -556,7 +811,21 @@ const tagSubmitting = ref(false)
 const detailModalVisible = ref(false)
 const detailLoading = ref(false)
 const detailProject = ref<Project | null>(null)
+const detailStatistics = ref<ProjectStatistics | null>(null)
 const shouldKeepDetailOpen = ref(false)
+
+// 历史记录相关
+const historyLoading = ref(false)
+const historyList = ref<Action[]>([])
+const expandedHistoryIds = ref<Set<number>>(new Set())
+const noteModalVisible = ref(false)
+const noteFormRef = ref()
+const noteFormData = reactive({
+  comment: ''
+})
+const noteFormRules = {
+  comment: [{ required: true, message: '请输入备注', trigger: 'blur' }]
+}
 const tagFormRef = ref()
 const tagFormData = reactive({
   name: '',
@@ -1132,6 +1401,8 @@ const loadProjectDetail = async (projectId: number) => {
     const response = await getProject(projectId)
     // getProject 返回 ProjectDetailResponse，包含 project 和 statistics
     detailProject.value = response.project
+    detailStatistics.value = response.statistics
+    await loadProjectHistory(projectId) // 加载历史记录
   } catch (error: any) {
     message.error(error.message || '加载项目详情失败')
     detailModalVisible.value = false
@@ -1140,9 +1411,135 @@ const loadProjectDetail = async (projectId: number) => {
   }
 }
 
+// 加载历史记录
+const loadProjectHistory = async (projectId: number) => {
+  historyLoading.value = true
+  try {
+    const response = await getProjectHistory(projectId)
+    historyList.value = response.list || []
+  } catch (error: any) {
+    console.error('加载历史记录失败:', error)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+// 判断历史记录是否有详情
+const hasHistoryDetails = (action: Action): boolean => {
+  return !!(action.histories && action.histories.length > 0) || !!action.comment
+}
+
+// 切换历史记录详情展开/收起
+const toggleHistoryDetail = (actionId: number) => {
+  const newSet = new Set(expandedHistoryIds.value)
+  if (newSet.has(actionId)) {
+    newSet.delete(actionId)
+  } else {
+    newSet.add(actionId)
+  }
+  expandedHistoryIds.value = newSet
+}
+
+// 获取字段显示名称
+const getFieldDisplayName = (fieldName: string): string => {
+  const fieldNames: Record<string, string> = {
+    name: '项目名称',
+    code: '项目编码',
+    description: '项目描述',
+    status: '状态',
+    start_date: '开始日期',
+    end_date: '结束日期',
+    tag_ids: '标签'
+  }
+  return fieldNames[fieldName] || fieldName
+}
+
+// 获取操作描述
+const getActionDescription = (action: Action): string => {
+  const actorName = action.actor
+    ? `${action.actor.username}${action.actor.nickname ? `(${action.actor.nickname})` : ''}`
+    : '系统'
+
+  switch (action.action) {
+    case 'created':
+      return `由 ${actorName} 创建。`
+    case 'edited':
+      return `由 ${actorName} 编辑。`
+    case 'commented':
+      return `由 ${actorName} 添加了备注：${action.comment || ''}`
+    default:
+      return `由 ${actorName} 执行了 ${action.action} 操作。`
+  }
+}
+
+// 添加备注
+const handleAddNote = () => {
+  if (!detailProject.value) {
+    message.warning('项目信息未加载完成，请稍候再试')
+    return
+  }
+  noteFormData.comment = ''
+  noteModalVisible.value = true
+}
+
+// 提交备注
+const handleNoteSubmit = async () => {
+  if (!detailProject.value) return
+  try {
+    await noteFormRef.value.validate()
+    await addProjectHistoryNote(detailProject.value.id, { comment: noteFormData.comment })
+    message.success('添加备注成功')
+    noteModalVisible.value = false
+    await loadProjectHistory(detailProject.value.id)
+  } catch (error: any) {
+    if (error.errorFields) {
+      return
+    }
+    message.error(error.message || '添加备注失败')
+  }
+}
+
+// 取消添加备注
+const handleNoteCancel = () => {
+  noteFormRef.value?.resetFields()
+}
+
+// 跳转到任务列表
+const goToTasks = (status: string) => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push({
+    path: '/task',
+    query: { status, project_id: detailProject.value.id }
+  })
+}
+
+// 跳转到Bug列表
+const goToBugs = (status: string) => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push({
+    path: '/bug',
+    query: { status, project_id: detailProject.value.id }
+  })
+}
+
+// 跳转到需求列表
+const goToRequirements = (status: string) => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push({
+    path: '/requirement',
+    query: { status, project_id: detailProject.value.id }
+  })
+}
+
 // 详情弹窗取消
 const handleDetailCancel = () => {
   detailProject.value = null
+  detailStatistics.value = null
+  historyList.value = []
+  expandedHistoryIds.value = new Set()
 }
 
 // 详情页编辑
@@ -1342,6 +1739,17 @@ onMounted(() => {
 /* 详情弹窗样式 */
 .markdown-content {
   min-height: 200px;
+}
+
+.stat-card {
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
 }
 
 /* 表格行可点击样式 */

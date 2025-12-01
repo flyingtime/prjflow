@@ -342,9 +342,9 @@
                 <a-list-item>
                   <a-list-item-meta>
                     <template #title>
-                      <a type="link" @click="router.push(`/requirement/${item.id}`)" style="cursor: pointer">
+                      <a-button type="link" @click="router.push(`/requirement/${item.id}`)">
                         {{ item.title }}
-                      </a>
+                      </a-button>
                     </template>
                     <template #description>
                       <a-space>
@@ -374,9 +374,9 @@
                 <a-list-item>
                   <a-list-item-meta>
                     <template #title>
-                      <a type="link" @click="router.push(`/bug/${item.id}`)" style="cursor: pointer">
+                      <a-button type="link" @click="router.push(`/bug/${item.id}`)">
                         {{ item.title }}
-                      </a>
+                      </a-button>
                     </template>
                     <template #description>
                       <a-space>
