@@ -10,16 +10,36 @@
             <!-- 统计概览 -->
             <a-row :gutter="16" class="stats-row">
               <a-col :span="6">
-                <a-statistic title="总任务数" :value="statistics.total_tasks" />
+                <a-card
+                  class="stat-card clickable-stat-card"
+                  @click="goToAllTasks"
+                >
+                  <a-statistic title="总任务数" :value="statistics.total_tasks" />
+                </a-card>
               </a-col>
               <a-col :span="6">
-                <a-statistic title="总Bug数" :value="statistics.total_bugs" />
+                <a-card
+                  class="stat-card clickable-stat-card"
+                  @click="goToAllBugs"
+                >
+                  <a-statistic title="总Bug数" :value="statistics.total_bugs" />
+                </a-card>
               </a-col>
               <a-col :span="6">
-                <a-statistic title="总需求数" :value="statistics.total_requirements" />
+                <a-card
+                  class="stat-card clickable-stat-card"
+                  @click="goToAllRequirements"
+                >
+                  <a-statistic title="总需求数" :value="statistics.total_requirements" />
+                </a-card>
               </a-col>
               <a-col :span="6">
-                <a-statistic title="参与项目" :value="statistics.total_projects" />
+                <a-card
+                  class="stat-card clickable-stat-card"
+                  @click="goToAllProjects"
+                >
+                  <a-statistic title="参与项目" :value="statistics.total_projects" />
+                </a-card>
               </a-col>
             </a-row>
 
@@ -290,6 +310,37 @@ const goToReports = (status: string) => {
   }
 }
 
+// 跳转到所有任务
+const goToAllTasks = () => {
+  router.push({
+    path: '/task',
+    query: { assignee: 'me' }
+  })
+}
+
+// 跳转到所有Bug
+const goToAllBugs = () => {
+  router.push({
+    path: '/bug',
+    query: { assignee: 'me' }
+  })
+}
+
+// 跳转到所有需求
+const goToAllRequirements = () => {
+  router.push({
+    path: '/requirement',
+    query: { assignee: 'me' }
+  })
+}
+
+// 跳转到所有项目
+const goToAllProjects = () => {
+  router.push({
+    path: '/project'
+  })
+}
+
 onMounted(() => {
   loadDashboard()
   // 加载用户信息
@@ -355,6 +406,17 @@ onMounted(() => {
 .stat-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
+}
+
+.clickable-stat-card {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.clickable-stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  border-color: #1890ff;
 }
 
 :deep(.ant-list-item) {
