@@ -363,6 +363,183 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 需求详情弹窗 -->
+    <a-modal
+      v-model:open="detailModalVisible"
+      :title="detailRequirement?.title || '需求详情'"
+      :width="1200"
+      :mask-closable="true"
+      :footer="null"
+      @cancel="handleDetailCancel"
+    >
+      <a-spin :spinning="detailLoading">
+        <div v-if="detailRequirement" style="max-height: 70vh; overflow-y: auto">
+          <!-- 操作按钮 -->
+          <div style="margin-bottom: 16px; text-align: right">
+            <a-space>
+              <a-button @click="handleDetailEdit">编辑</a-button>
+              <a-dropdown>
+                <a-button>
+                  状态 <DownOutlined />
+                </a-button>
+                <template #overlay>
+                  <a-menu @click="(e: any) => handleDetailStatusChange(e.key as string)">
+                    <a-menu-item key="pending">待处理</a-menu-item>
+                    <a-menu-item key="draft">草稿</a-menu-item>
+                    <a-menu-item key="reviewing">评审中</a-menu-item>
+                    <a-menu-item key="active">激活</a-menu-item>
+                    <a-menu-item key="changing">变更中</a-menu-item>
+                    <a-menu-item key="closed">已关闭</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+              <a-button @click="handleDetailConvertToBug">
+                需求转Bug
+              </a-button>
+              <a-popconfirm
+                title="确定要删除这个需求吗？"
+                @confirm="handleDetailDelete"
+              >
+                <a-button danger>删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </div>
+
+          <!-- 基本信息 -->
+          <a-card title="基本信息" :bordered="false" style="margin-bottom: 16px">
+            <a-descriptions :column="2" bordered>
+              <a-descriptions-item label="需求标题">{{ detailRequirement.title }}</a-descriptions-item>
+              <a-descriptions-item label="状态">
+                <a-tag :color="getStatusColor(detailRequirement.status || '')">
+                  {{ getStatusText(detailRequirement.status || '') }}
+                </a-tag>
+              </a-descriptions-item>
+              <a-descriptions-item label="优先级">
+                <a-tag :color="getPriorityColor(detailRequirement.priority || '')">
+                  {{ getPriorityText(detailRequirement.priority || '') }}
+                </a-tag>
+              </a-descriptions-item>
+              <a-descriptions-item label="项目">
+                {{ detailRequirement.project?.name || '-' }}
+              </a-descriptions-item>
+              <a-descriptions-item label="负责人">
+                {{ detailRequirement.assignee ? `${detailRequirement.assignee.username}${detailRequirement.assignee.nickname ? `(${detailRequirement.assignee.nickname})` : ''}` : '-' }}
+              </a-descriptions-item>
+              <a-descriptions-item label="创建人">
+                {{ detailRequirement.creator ? `${detailRequirement.creator.username}${detailRequirement.creator.nickname ? `(${detailRequirement.creator.nickname})` : ''}` : '-' }}
+              </a-descriptions-item>
+              <a-descriptions-item label="创建时间">
+                {{ formatDateTime(detailRequirement.created_at) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="更新时间">
+                {{ formatDateTime(detailRequirement.updated_at) }}
+              </a-descriptions-item>
+            </a-descriptions>
+          </a-card>
+
+          <!-- 需求描述 -->
+          <a-card title="需求描述" :bordered="false" style="margin-bottom: 16px">
+            <div v-if="detailRequirement.description" class="markdown-content">
+              <MarkdownEditor
+                :model-value="detailRequirement.description"
+                :readonly="true"
+              />
+            </div>
+            <a-empty v-else description="暂无描述" />
+          </a-card>
+
+          <!-- 历史记录 -->
+          <a-card :bordered="false" style="margin-bottom: 16px">
+            <template #title>
+              <span>历史记录</span>
+              <a-button 
+                type="link" 
+                size="small"
+                @click.stop="handleDetailAddNote" 
+                :disabled="detailHistoryLoading"
+                style="margin-left: 8px; padding: 0"
+              >
+                添加备注
+              </a-button>
+            </template>
+            <a-spin :spinning="detailHistoryLoading" :style="{ minHeight: '100px' }">
+              <a-timeline v-if="detailHistoryList.length > 0">
+                <a-timeline-item
+                  v-for="(action, index) in detailHistoryList"
+                  :key="action.id"
+                >
+                  <template #dot>
+                    <span style="font-weight: bold; color: #1890ff">{{ detailHistoryList.length - index }}</span>
+                  </template>
+                  <div>
+                    <div style="margin-bottom: 8px">
+                      <span style="color: #666; margin-right: 8px">{{ formatDateTime(action.date) }}</span>
+                      <span>{{ getDetailActionDescription(action) }}</span>
+                      <a-button
+                        v-if="hasDetailHistoryDetails(action)"
+                        type="link"
+                        size="small"
+                        @click="toggleDetailHistoryDetail(action.id)"
+                        style="padding: 0; height: auto; margin-left: 8px"
+                      >
+                        {{ detailExpandedHistoryIds.has(action.id) ? '收起' : '展开' }}
+                      </a-button>
+                    </div>
+                    <!-- 字段变更详情和备注内容（可折叠） -->
+                    <div
+                      v-show="detailExpandedHistoryIds.has(action.id)"
+                      style="margin-left: 24px; margin-top: 8px"
+                    >
+                      <!-- 字段变更详情 -->
+                      <div v-if="action.histories && action.histories.length > 0">
+                        <div
+                          v-for="history in action.histories"
+                          :key="history.id"
+                          style="margin-bottom: 4px; color: #666"
+                        >
+                          修改了{{ getDetailFieldDisplayName(history.field) }}, 旧值为"{{ history.old_value || history.old || '-' }}",新值为"{{ history.new_value || history.new || '-' }}"。
+                        </div>
+                      </div>
+                      <!-- 备注内容 -->
+                      <div v-if="action.comment" style="margin-top: 8px; color: #666">
+                        {{ action.comment }}
+                      </div>
+                    </div>
+                  </div>
+                </a-timeline-item>
+              </a-timeline>
+              <a-empty v-else description="暂无历史记录" />
+            </a-spin>
+          </a-card>
+        </div>
+      </a-spin>
+    </a-modal>
+
+    <!-- 详情页添加备注模态框 -->
+    <a-modal
+      v-model:open="detailNoteModalVisible"
+      title="添加备注"
+      :mask-closable="true"
+      @ok="handleDetailNoteSubmit"
+      @cancel="handleDetailNoteCancel"
+    >
+      <a-form
+        ref="detailNoteFormRef"
+        :model="detailNoteFormData"
+        :rules="detailNoteFormRules"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="备注" name="comment">
+          <a-textarea
+            v-model:value="detailNoteFormData.comment"
+            placeholder="请输入备注"
+            :rows="4"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -370,7 +547,7 @@
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined, UpOutlined } from '@ant-design/icons-vue'
 import { formatDateTime } from '@/utils/date'
 import { type Dayjs } from 'dayjs'
@@ -380,17 +557,22 @@ import AttachmentUpload from '@/components/AttachmentUpload.vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getRequirements,
+  getRequirement,
   createRequirement,
   updateRequirement,
   deleteRequirement,
   updateRequirementStatus,
   getRequirementStatistics,
+  getRequirementHistory,
+  addRequirementHistoryNote,
   type Requirement,
   type CreateRequirementRequest,
-  type RequirementStatistics
+  type RequirementStatistics,
+  type Action
 } from '@/api/requirement'
 import { getProjects, type Project } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
+import { createBug, type CreateBugRequest } from '@/api/bug'
 import { getAttachments, attachToEntity, uploadFile, type Attachment } from '@/api/attachment'
 
 const route = useRoute()
@@ -403,6 +585,23 @@ const users = ref<User[]>([])
 const statistics = ref<RequirementStatistics | null>(null)
 const activeTab = ref<string>('list')
 const searchFormVisible = ref(false) // 搜索栏显示/隐藏状态，默认折叠
+
+// 详情弹窗相关
+const detailModalVisible = ref(false)
+const detailLoading = ref(false)
+const detailRequirement = ref<Requirement | null>(null)
+const detailHistoryLoading = ref(false)
+const detailHistoryList = ref<Action[]>([])
+const detailExpandedHistoryIds = ref<Set<number>>(new Set())
+const detailNoteModalVisible = ref(false)
+const detailNoteFormRef = ref()
+const detailNoteFormData = reactive({
+  comment: ''
+})
+const detailNoteFormRules = {
+  comment: [{ required: true, message: '请输入备注', trigger: 'blur' }]
+}
+const shouldKeepDetailOpen = ref(false)
 
 const searchForm = reactive({
   keyword: '',
@@ -622,8 +821,9 @@ const handleEdit = async (record: Requirement) => {
 }
 
 // 查看详情
-const handleView = (record: Requirement) => {
-  router.push(`/requirement/${record.id}`)
+const handleView = async (record: Requirement) => {
+  detailModalVisible.value = true
+  await loadRequirementDetail(record.id)
 }
 
 // 提交
@@ -794,6 +994,221 @@ const filterProjectOption = (input: string, option: any) => {
     (project.code && project.code.toLowerCase().includes(searchText))
   )
 }
+
+// 加载需求详情
+const loadRequirementDetail = async (requirementId: number) => {
+  detailLoading.value = true
+  try {
+    detailRequirement.value = await getRequirement(requirementId)
+    await loadRequirementDetailHistory(requirementId)
+  } catch (error: any) {
+    message.error(error.message || '加载需求详情失败')
+    detailModalVisible.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+// 加载需求详情历史记录
+const loadRequirementDetailHistory = async (requirementId: number) => {
+  detailHistoryLoading.value = true
+  try {
+    const response = await getRequirementHistory(requirementId)
+    detailHistoryList.value = response.list || []
+  } catch (error: any) {
+    console.error('加载历史记录失败:', error)
+  } finally {
+    detailHistoryLoading.value = false
+  }
+}
+
+// 详情弹窗取消
+const handleDetailCancel = () => {
+  detailRequirement.value = null
+  detailHistoryList.value = []
+  detailExpandedHistoryIds.value = new Set()
+}
+
+// 详情页编辑
+const handleDetailEdit = async () => {
+  if (!detailRequirement.value) return
+  shouldKeepDetailOpen.value = true
+  detailModalVisible.value = false
+  await nextTick()
+  handleEdit(detailRequirement.value)
+}
+
+// 详情页状态变更
+const handleDetailStatusChange = async (status: string) => {
+  if (!detailRequirement.value) return
+  try {
+    await updateRequirementStatus(detailRequirement.value.id, { status: status as any })
+    message.success('状态更新成功')
+    await loadRequirementDetail(detailRequirement.value.id)
+    loadRequirements()
+  } catch (error: any) {
+    message.error(error.message || '状态更新失败')
+  }
+}
+
+// 详情页需求转Bug
+const handleDetailConvertToBug = async () => {
+  if (!detailRequirement.value) return
+  
+  const confirmed = await new Promise<boolean>((resolve) => {
+    const modal = Modal.confirm({
+      title: '确认转换',
+      content: '确定要将此需求转为Bug吗？转换后将创建新Bug，并将需求状态更新为"已关闭"。',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => {
+        resolve(true)
+        modal.destroy()
+      },
+      onCancel: () => {
+        resolve(false)
+        modal.destroy()
+      }
+    })
+  })
+  
+  if (!confirmed) return
+  
+  try {
+    const bugData: CreateBugRequest = {
+      title: `[需求转Bug] ${detailRequirement.value.title}`,
+      description: detailRequirement.value.description 
+        ? `${detailRequirement.value.description}\n\n---\n\n*由需求 #${detailRequirement.value.id}转换而来*`
+        : `*由需求 #${detailRequirement.value.id}转换而来*`,
+      project_id: detailRequirement.value.project_id,
+      priority: detailRequirement.value.priority,
+      status: 'active',
+      severity: 'medium',
+      assignee_ids: detailRequirement.value.assignee_id ? [detailRequirement.value.assignee_id] : [],
+      estimated_hours: detailRequirement.value.estimated_hours
+    }
+    
+    const bug = await createBug(bugData)
+    
+    await updateRequirementStatus(detailRequirement.value.id, {
+      status: 'closed'
+    })
+    
+    message.success(`转换成功，已创建Bug #${bug.id}`)
+    await loadRequirementDetail(detailRequirement.value.id)
+    loadRequirements()
+  } catch (error: any) {
+    message.error(error.message || '转换失败')
+  }
+}
+
+// 详情页删除
+const handleDetailDelete = async () => {
+  if (!detailRequirement.value) return
+  try {
+    await deleteRequirement(detailRequirement.value.id)
+    message.success('删除成功')
+    detailModalVisible.value = false
+    loadRequirements()
+  } catch (error: any) {
+    message.error(error.message || '删除失败')
+  }
+}
+
+// 详情页添加备注
+const handleDetailAddNote = () => {
+  if (!detailRequirement.value) {
+    message.warning('需求信息未加载完成，请稍候再试')
+    return
+  }
+  detailNoteFormData.comment = ''
+  detailNoteModalVisible.value = true
+}
+
+// 详情页提交备注
+const handleDetailNoteSubmit = async () => {
+  if (!detailRequirement.value) return
+  try {
+    await detailNoteFormRef.value.validate()
+    await addRequirementHistoryNote(detailRequirement.value.id, { comment: detailNoteFormData.comment })
+    message.success('添加备注成功')
+    detailNoteModalVisible.value = false
+    await loadRequirementDetailHistory(detailRequirement.value.id)
+  } catch (error: any) {
+    if (error.errorFields) {
+      return
+    }
+    message.error(error.message || '添加备注失败')
+  }
+}
+
+// 详情页取消添加备注
+const handleDetailNoteCancel = () => {
+  detailNoteFormRef.value?.resetFields()
+}
+
+// 获取详情页操作描述
+const getDetailActionDescription = (action: Action): string => {
+  const actorName = action.actor
+    ? `${action.actor.username}${action.actor.nickname ? `(${action.actor.nickname})` : ''}`
+    : '系统'
+
+  switch (action.action) {
+    case 'created':
+      return `由 ${actorName} 创建。`
+    case 'edited':
+      return `由 ${actorName} 编辑。`
+    case 'status_changed':
+      return `由 ${actorName} 变更状态。`
+    case 'commented':
+      return `由 ${actorName} 添加了备注：${action.comment || ''}`
+    default:
+      return `由 ${actorName} 执行了 ${action.action} 操作。`
+  }
+}
+
+// 获取详情页字段显示名称
+const getDetailFieldDisplayName = (fieldName: string): string => {
+  const fieldNames: Record<string, string> = {
+    title: '需求标题',
+    description: '需求描述',
+    status: '状态',
+    priority: '优先级',
+    project_id: '项目',
+    assignee_id: '负责人',
+    estimated_hours: '预估工时',
+    actual_hours: '实际工时'
+  }
+  return fieldNames[fieldName] || fieldName
+}
+
+// 判断详情页历史记录是否有详情
+const hasDetailHistoryDetails = (action: Action): boolean => {
+  return !!(action.histories && action.histories.length > 0) || !!action.comment
+}
+
+// 切换详情页历史记录详情展开/收起
+const toggleDetailHistoryDetail = (actionId: number) => {
+  const newSet = new Set(detailExpandedHistoryIds.value)
+  if (newSet.has(actionId)) {
+    newSet.delete(actionId)
+  } else {
+    newSet.add(actionId)
+  }
+  detailExpandedHistoryIds.value = newSet
+}
+
+// 监听编辑模态框关闭，重新打开详情弹窗
+watch(modalVisible, (visible, prevVisible) => {
+  if (prevVisible && !visible && shouldKeepDetailOpen.value && detailRequirement.value) {
+    shouldKeepDetailOpen.value = false
+    nextTick(() => {
+      detailModalVisible.value = true
+      loadRequirementDetail(detailRequirement.value!.id)
+      loadRequirements()
+    })
+  }
+})
 
 // 监听 tab 切换，切换到统计 tab 时加载统计信息
 watch(activeTab, (newTab) => {
@@ -988,5 +1403,9 @@ onMounted(async () => {
   padding-bottom: 16px;
 }
 
+/* 详情弹窗样式 */
+.markdown-content {
+  min-height: 200px;
+}
 </style>
 
