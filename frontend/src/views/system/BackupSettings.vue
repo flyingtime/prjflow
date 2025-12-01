@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs, { Dayjs } from 'dayjs'
 import { getBackupConfig, saveBackupConfig, triggerBackup, type BackupConfigRequest } from '@/api/system'
@@ -119,7 +119,11 @@ const backupTime = ref<Dayjs | null>(null)
 const updateBackupTime = () => {
   if (backupConfig.value.backup_time) {
     const [hour, minute] = backupConfig.value.backup_time.split(':')
-    backupTime.value = dayjs().hour(parseInt(hour)).minute(parseInt(minute)).second(0).millisecond(0)
+    if (hour && minute) {
+      backupTime.value = dayjs().hour(parseInt(hour)).minute(parseInt(minute)).second(0).millisecond(0)
+    } else {
+      backupTime.value = dayjs().hour(2).minute(0).second(0).millisecond(0)
+    }
   } else {
     backupTime.value = dayjs().hour(2).minute(0).second(0).millisecond(0)
   }
