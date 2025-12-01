@@ -377,9 +377,16 @@
           <!-- 操作按钮 -->
           <div style="margin-bottom: 16px; text-align: right">
             <a-space>
+              <a-button @click="handleDetailManageRequirements">需求管理</a-button>
+              <a-button @click="handleDetailManageTasks">任务管理</a-button>
+              <a-button @click="handleDetailManageBugs">Bug管理</a-button>
+              <a-button @click="handleDetailViewBoards">看板</a-button>
+              <a-button @click="handleDetailViewGantt">甘特图</a-button>
+              <a-button @click="handleDetailViewProgress">进度跟踪</a-button>
+              <a-button @click="handleDetailViewResourceStatistics">资源统计</a-button>
+              <a-button @click="handleDetailManageModules">功能模块</a-button>
               <a-button @click="handleDetailEdit">编辑</a-button>
               <a-button @click="handleDetailManageMembers">成员管理</a-button>
-              <a-button @click="handleDetailManageModules">模块管理</a-button>
               <a-popconfirm
                 title="确定要删除这个项目吗？"
                 @confirm="handleDetailDelete"
@@ -1563,6 +1570,67 @@ const handleDetailManageModules = () => {
   if (!detailProject.value) return
   detailModalVisible.value = false
   _handleManageModules(detailProject.value)
+}
+
+// 详情页需求管理
+const handleDetailManageRequirements = () => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push({
+    path: '/requirement',
+    query: { project_id: detailProject.value.id }
+  })
+}
+
+// 详情页任务管理
+const handleDetailManageTasks = () => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push({
+    path: '/task',
+    query: { project_id: detailProject.value.id }
+  })
+}
+
+// 详情页Bug管理
+const handleDetailManageBugs = () => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push({
+    path: '/bug',
+    query: { project_id: detailProject.value.id }
+  })
+}
+
+// 详情页查看看板
+const handleDetailViewBoards = () => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push(`/project/${detailProject.value.id}/boards`)
+}
+
+// 详情页查看甘特图
+const handleDetailViewGantt = () => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push(`/project/${detailProject.value.id}/gantt`)
+}
+
+// 详情页查看进度跟踪
+const handleDetailViewProgress = () => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push(`/project/${detailProject.value.id}/progress`)
+}
+
+// 详情页查看资源统计
+const handleDetailViewResourceStatistics = () => {
+  if (!detailProject.value) return
+  detailModalVisible.value = false
+  router.push({
+    path: '/resource/statistics',
+    query: { project_id: detailProject.value.id }
+  })
 }
 
 // 详情页删除
