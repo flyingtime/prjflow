@@ -720,18 +720,18 @@ const handleEditSubmit = async () => {
       work_date: editFormData.work_date && typeof editFormData.work_date !== 'string' && 'isValid' in editFormData.work_date && (editFormData.work_date as Dayjs).isValid() ? (editFormData.work_date as Dayjs).format('YYYY-MM-DD') : (typeof editFormData.work_date === 'string' ? editFormData.work_date : undefined)
     }
     
-    // 始终发送 requirement_id，如果为 undefined、null 或空字符串，发送 0 以清空关联需求（后端会将0转换为nil）
+    // 始终发送 requirement_id，如果为 undefined 或 null，发送 0 以清空关联需求（后端会将0转换为nil）
     // 注意：必须显式设置，不能依赖对象字面量，因为 undefined 值会被 JSON 序列化忽略
     const requirementIdValue = editFormData.requirement_id
-    if (requirementIdValue === undefined || requirementIdValue === null || requirementIdValue === '' || (typeof requirementIdValue === 'number' && isNaN(requirementIdValue))) {
+    if (requirementIdValue === undefined || requirementIdValue === null || (typeof requirementIdValue === 'number' && isNaN(requirementIdValue))) {
       data.requirement_id = 0
     } else {
       data.requirement_id = requirementIdValue
     }
     
-    // 始终发送 module_id，如果为 undefined、null 或空字符串，发送 0 以清空关联模块（后端会将0转换为nil）
+    // 始终发送 module_id，如果为 undefined 或 null，发送 0 以清空关联模块（后端会将0转换为nil）
     const moduleIdValue = editFormData.module_id
-    if (moduleIdValue === undefined || moduleIdValue === null || moduleIdValue === '' || (typeof moduleIdValue === 'number' && isNaN(moduleIdValue))) {
+    if (moduleIdValue === undefined || moduleIdValue === null || (typeof moduleIdValue === 'number' && isNaN(moduleIdValue))) {
       data.module_id = 0
     } else {
       data.module_id = moduleIdValue
