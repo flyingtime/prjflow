@@ -233,6 +233,8 @@
             v-model:value="statusFormData.solution"
             placeholder="选择解决方案（可选）"
             allow-clear
+            :getPopupContainer="getPopupContainer"
+            :dropdownStyle="{ zIndex: 2100 }"
           >
             <a-select-option value="设计如此">设计如此</a-select-option>
             <a-select-option value="重复Bug">重复Bug</a-select-option>
@@ -914,6 +916,11 @@ const filterVersionOption = (input: string, option: any) => {
   if (!version) return false
   const searchText = input.toLowerCase()
   return version.version_number.toLowerCase().includes(searchText)
+}
+
+// 获取下拉框容器（用于解决模态框中下拉框被遮挡的问题）
+const getPopupContainer = (triggerNode: HTMLElement): HTMLElement => {
+  return triggerNode.parentElement || document.body
 }
 
 // 解决提交
