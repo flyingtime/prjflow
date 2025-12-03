@@ -610,6 +610,8 @@
               :filter-option="filterVersionOption"
               :loading="versionLoading"
               :disabled="statusFormData.create_version"
+              :getPopupContainer="getPopupContainer"
+              :dropdownStyle="{ zIndex: 2100 }"
               @focus="() => loadVersionsForProject()"
             >
               <a-select-option
