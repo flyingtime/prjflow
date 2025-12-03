@@ -14,10 +14,49 @@
         </div>
       </a-tab-pane>
       <a-tab-pane key="preview" tab="预览">
-        <div class="markdown-preview" v-html="renderedMarkdown"></div>
+        <div 
+          ref="previewContainerRef" 
+          class="markdown-preview" 
+          v-html="renderedMarkdown"
+        ></div>
       </a-tab-pane>
     </a-tabs>
-    <div v-else class="markdown-preview" v-html="renderedMarkdown"></div>
+    <div 
+      v-else 
+      ref="previewContainerRef" 
+      class="markdown-preview" 
+      v-html="renderedMarkdown"
+    ></div>
+    
+    <!-- 图片预览模态框 -->
+    <a-modal
+      v-model:open="imagePreviewVisible"
+      :footer="null"
+      :width="'90%'"
+      :style="{ top: '20px' }"
+      :mask-closable="true"
+      @cancel="closeImagePreview"
+      class="image-preview-modal"
+    >
+      <div class="image-preview-container" @wheel.prevent="handleImageWheel">
+        <img
+          ref="previewImageRef"
+          :src="previewImageSrc"
+          :style="{
+            maxWidth: '100%',
+            maxHeight: '90vh',
+            width: imageScale + '%',
+            height: 'auto',
+            cursor: 'zoom-in',
+            transition: 'width 0.1s ease-out',
+            display: 'block',
+            margin: '0 auto'
+          }"
+          @click="closeImagePreview"
+          alt="预览图片"
+        />
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -51,6 +90,13 @@ const emit = defineEmits<{
 const activeTab = ref('edit')
 const textareaRef = ref<any>(null)
 const editorContainerRef = ref<HTMLElement | null>(null)
+const previewContainerRef = ref<HTMLElement | null>(null)
+const previewImageRef = ref<HTMLImageElement | null>(null)
+
+// 图片预览相关
+const imagePreviewVisible = ref(false)
+const previewImageSrc = ref('')
+const imageScale = ref(100) // 图片缩放比例，默认100%
 
 // 存储本地预览的图片映射（blob URL -> File）
 const localImages = new Map<string, File>()
@@ -76,7 +122,14 @@ const renderedMarkdown = computed(() => {
   if (!props.modelValue || props.modelValue.trim() === '') {
     return '<p class="empty-text">暂无内容</p>'
   }
-  const html = marked.parse(props.modelValue)
+  let html = marked.parse(props.modelValue) as string
+  
+  // 为所有图片添加点击事件
+  html = html.replace(/<img([^>]*)\ssrc=["']([^"']+)["']([^>]*)>/gi, (match, before, src, after) => {
+    // 添加点击事件和样式
+    return `<img${before} src="${src}"${after} class="markdown-image-clickable" data-image-src="${src}" style="cursor: pointer;">`
+  })
+  
   // 调试：在只读模式下检查图片URL
   if (props.readonly) {
     const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
@@ -207,10 +260,74 @@ defineExpose({
   getCurrentContent: () => props.modelValue || '' // 获取当前编辑器内容
 })
 
-// 挂载时添加粘贴事件监听
+// 打开图片预览
+const openImagePreview = (imageSrc: string) => {
+  previewImageSrc.value = imageSrc
+  imageScale.value = 100 // 重置缩放
+  imagePreviewVisible.value = true
+}
+
+// 关闭图片预览
+const closeImagePreview = () => {
+  imagePreviewVisible.value = false
+  imageScale.value = 100 // 重置缩放
+}
+
+// 处理图片滚轮缩放
+const handleImageWheel = (e: WheelEvent) => {
+  e.preventDefault()
+  const delta = e.deltaY > 0 ? -10 : 10 // 向下滚动缩小，向上滚动放大
+  const newScale = Math.max(50, Math.min(500, imageScale.value + delta)) // 限制在50%-500%之间
+  imageScale.value = newScale
+}
+
+// 处理图片点击事件
+const handleImageClick = (e: Event) => {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'IMG' && target.classList.contains('markdown-image-clickable')) {
+    const imageSrc = target.getAttribute('data-image-src') || target.getAttribute('src') || ''
+    if (imageSrc) {
+      openImagePreview(imageSrc)
+    }
+  }
+}
+
+// 绑定图片点击事件
+const bindImageClickHandler = () => {
+  if (previewContainerRef.value) {
+    // 移除旧的事件监听器（如果存在）
+    previewContainerRef.value.removeEventListener('click', handleImageClick)
+    // 添加新的事件监听器
+    previewContainerRef.value.addEventListener('click', handleImageClick)
+  }
+}
+
+// 挂载时添加粘贴事件监听和图片点击事件监听
 onMounted(() => {
   if (!props.readonly && editorContainerRef.value) {
     editorContainerRef.value.addEventListener('paste', handlePaste as unknown as EventListener)
+  }
+  
+  // 使用事件委托，在预览容器上监听所有图片点击事件
+  // 这样即使内容动态更新，也不需要重新绑定事件
+  // 延迟绑定，确保DOM已渲染
+  setTimeout(bindImageClickHandler, 100)
+})
+
+// 监听activeTab变化，当切换到预览标签页时重新绑定事件
+watch(() => activeTab.value, (newTab) => {
+  if (newTab === 'preview') {
+    // 切换到预览标签页时，延迟绑定事件以确保DOM已渲染
+    setTimeout(bindImageClickHandler, 100)
+  }
+})
+
+// 监听renderedMarkdown变化，确保新渲染的图片也能点击
+watch(() => renderedMarkdown.value, () => {
+  // 由于使用了事件委托，不需要重新绑定事件
+  // 但如果预览容器还没有绑定事件，则绑定一次
+  if (previewContainerRef.value) {
+    setTimeout(bindImageClickHandler, 100)
   }
 })
 
@@ -218,6 +335,9 @@ onMounted(() => {
 onUnmounted(() => {
   if (editorContainerRef.value) {
     editorContainerRef.value.removeEventListener('paste', handlePaste as unknown as EventListener)
+  }
+  if (previewContainerRef.value) {
+    previewContainerRef.value.removeEventListener('click', handleImageClick)
   }
   localImages.forEach((_, blobUrl) => {
     URL.revokeObjectURL(blobUrl)
@@ -370,6 +490,32 @@ watch(() => props.modelValue, () => {
   display: block;
   margin: 16px 0;
   border-radius: 4px;
+}
+
+.markdown-preview :deep(img.markdown-image-clickable) {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.markdown-preview :deep(img.markdown-image-clickable:hover) {
+  opacity: 0.8;
+}
+
+/* 图片预览模态框样式 */
+.image-preview-modal :deep(.ant-modal-body) {
+  padding: 0;
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.85);
+}
+
+.image-preview-container {
+  width: 100%;
+  height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 20px;
 }
 
 .markdown-preview :deep(hr) {

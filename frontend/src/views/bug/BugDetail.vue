@@ -218,6 +218,7 @@
       title="解决Bug"
       :width="600"
       :mask-closable="true"
+      :z-index="2000"
       @ok="handleStatusSubmit"
       @cancel="handleStatusCancel"
     >

@@ -530,6 +530,7 @@
       title="更新Bug状态"
       :width="600"
       :mask-closable="true"
+      :z-index="2000"
       @ok="handleStatusSubmit"
       @cancel="handleStatusCancel"
     >
@@ -607,7 +608,7 @@
               :filter-option="filterVersionOption"
               :loading="versionLoading"
               :disabled="statusFormData.create_version"
-              @focus="loadVersionsForProject"
+              @focus="() => loadVersionsForProject()"
             >
               <a-select-option
                 v-for="version in versions"
@@ -1447,6 +1448,9 @@ const handleOpenStatusModal = (record: Bug, status: string) => {
   // 加载项目下的版本列表
   if (record.project_id) {
     loadVersionsForProject(record.project_id)
+  } else {
+    // 如果没有project_id，清空版本列表
+    versions.value = []
   }
   statusModalVisible.value = true
 }
@@ -1466,8 +1470,13 @@ const loadVersionsForProject = async (projectId?: number) => {
     versionLoading.value = true
     const response = await getVersions({ project_id: pid, size: 1000 })
     versions.value = response.list || []
+    if (versions.value.length === 0) {
+      console.warn(`项目 ${pid} 下没有版本`)
+    }
   } catch (error: any) {
     console.error('加载版本列表失败:', error)
+    message.error('加载版本列表失败: ' + (error.message || '未知错误'))
+    versions.value = []
   } finally {
     versionLoading.value = false
   }

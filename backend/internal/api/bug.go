@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"project-management/internal/model"
@@ -761,6 +763,38 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 		bug.Confirmed = true
 	}
 
+	// 禅道逻辑：当状态变为resolved且当前没有分配人时，自动指派
+	// 优先指回给最后一个被分配的用户（测试员），如果没有则指派给创建者
+	if req.Status == "resolved" && currentStatus != "resolved" {
+		// 加载当前分配人信息
+		h.db.Preload("Assignees").First(&bug, bug.ID)
+		
+		// 如果当前没有分配人，自动指派
+		if len(bug.Assignees) == 0 {
+			// 查找最后一个被分配的用户ID列表
+			lastAssignedUserIDs := h.getLastAssignedUserIDs(bug.ID)
+			
+			var assigneeIDs []uint
+			if len(lastAssignedUserIDs) > 0 {
+				// 找到了最后一个被分配的用户，使用这些用户
+				assigneeIDs = lastAssignedUserIDs
+			} else {
+				// 没找到，指派给创建者
+				assigneeIDs = []uint{bug.CreatorID}
+			}
+			
+			// 验证用户是否存在
+			var assignees []model.User
+			if err := h.db.Where("id IN ?", assigneeIDs).Find(&assignees).Error; err == nil && len(assignees) > 0 {
+				// 自动指派
+				if err := h.db.Model(&bug).Association("Assignees").Replace(assignees); err == nil {
+					// 重新加载分配人信息
+					h.db.Preload("Assignees").First(&bug, bug.ID)
+				}
+			}
+		}
+	}
+
 	// 处理版本号
 	var resolvedVersionID *uint
 	if req.CreateVersion != nil && *req.CreateVersion && req.VersionNumber != nil && *req.VersionNumber != "" {
@@ -1029,6 +1063,61 @@ func formatUintSlice(ids []uint) string {
 		str += fmt.Sprintf(",%d", ids[i])
 	}
 	return str
+}
+
+// parseUintSlice 解析逗号分隔的用户ID字符串为uint切片
+func parseUintSlice(idsStr string) []uint {
+	if idsStr == "" {
+		return nil
+	}
+	parts := strings.Split(idsStr, ",")
+	var ids []uint
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseUint(part, 10, 32)
+		if err == nil && id > 0 {
+			ids = append(ids, uint(id))
+		}
+	}
+	return ids
+}
+
+// getLastAssignedUserIDs 从历史记录中查找最后一个被分配的用户ID列表
+func (h *BugHandler) getLastAssignedUserIDs(bugID uint) []uint {
+	// 查询该bug的所有操作记录
+	var actions []model.Action
+	if err := h.db.Where("object_type = ? AND object_id = ?", "bug", bugID).
+		Order("date DESC").
+		Find(&actions).Error; err != nil {
+		return nil
+	}
+
+	// 遍历操作记录，查找assignee_ids字段的变更
+	for _, action := range actions {
+		var history model.History
+		if err := h.db.Where("action_id = ? AND field = ? AND new != ''", action.ID, "assignee_ids").
+			First(&history).Error; err == nil {
+			// 找到第一个非空的assignee_ids变更记录
+			userIDs := parseUintSlice(history.New)
+			if len(userIDs) > 0 {
+				// 验证这些用户是否还存在
+				var validUsers []model.User
+				if err := h.db.Where("id IN ?", userIDs).Find(&validUsers).Error; err == nil && len(validUsers) > 0 {
+					// 返回有效的用户ID列表
+					validIDs := make([]uint, 0, len(validUsers))
+					for _, user := range validUsers {
+						validIDs = append(validIDs, user.ID)
+					}
+					return validIDs
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // ConfirmBug 确认Bug
