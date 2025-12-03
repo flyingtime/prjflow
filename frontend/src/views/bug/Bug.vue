@@ -10,7 +10,7 @@
               <!-- 统计概览 -->
               <a-row :gutter="16" style="margin-bottom: 16px">
             <a-col :span="6">
-              <a-card :bordered="false">
+              <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick()">
                 <a-statistic
                   title="总Bug数"
                   :value="statistics?.total || 0"
@@ -19,7 +19,7 @@
               </a-card>
             </a-col>
             <a-col :span="6">
-              <a-card :bordered="false">
+              <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick('active')">
                 <a-statistic
                   title="激活"
                   :value="statistics?.active || 0"
@@ -28,7 +28,7 @@
               </a-card>
             </a-col>
             <a-col :span="6">
-              <a-card :bordered="false">
+              <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick('resolved')">
                 <a-statistic
                   title="已解决"
                   :value="statistics?.resolved || 0"
@@ -37,7 +37,7 @@
               </a-card>
             </a-col>
             <a-col :span="6">
-              <a-card :bordered="false">
+              <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick('closed')">
                 <a-statistic
                   title="已关闭"
                   :value="statistics?.closed || 0"
@@ -53,32 +53,40 @@
               <a-card title="优先级统计" :bordered="false">
                 <a-row :gutter="16">
                   <a-col :span="6">
-                    <a-statistic
-                      title="低"
-                      :value="statistics?.low_priority || 0"
-                      :value-style="{ color: '#8c8c8c' }"
-                    />
+                    <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick(undefined, 'low')">
+                      <a-statistic
+                        title="低"
+                        :value="statistics?.low_priority || 0"
+                        :value-style="{ color: '#8c8c8c' }"
+                      />
+                    </a-card>
                   </a-col>
                   <a-col :span="6">
-                    <a-statistic
-                      title="中"
-                      :value="statistics?.medium_priority || 0"
-                      :value-style="{ color: '#1890ff' }"
-                    />
+                    <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick(undefined, 'medium')">
+                      <a-statistic
+                        title="中"
+                        :value="statistics?.medium_priority || 0"
+                        :value-style="{ color: '#1890ff' }"
+                      />
+                    </a-card>
                   </a-col>
                   <a-col :span="6">
-                    <a-statistic
-                      title="高"
-                      :value="statistics?.high_priority || 0"
-                      :value-style="{ color: '#faad14' }"
-                    />
+                    <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick(undefined, 'high')">
+                      <a-statistic
+                        title="高"
+                        :value="statistics?.high_priority || 0"
+                        :value-style="{ color: '#faad14' }"
+                      />
+                    </a-card>
                   </a-col>
                   <a-col :span="6">
-                    <a-statistic
-                      title="紧急"
-                      :value="statistics?.urgent_priority || 0"
-                      :value-style="{ color: '#ff4d4f' }"
-                    />
+                    <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick(undefined, 'urgent')">
+                      <a-statistic
+                        title="紧急"
+                        :value="statistics?.urgent_priority || 0"
+                        :value-style="{ color: '#ff4d4f' }"
+                      />
+                    </a-card>
                   </a-col>
                 </a-row>
               </a-card>
@@ -87,32 +95,40 @@
               <a-card title="严重程度统计" :bordered="false">
                 <a-row :gutter="16">
                   <a-col :span="6">
-                    <a-statistic
-                      title="低"
-                      :value="statistics?.low_severity || 0"
-                      :value-style="{ color: '#8c8c8c' }"
-                    />
+                    <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick(undefined, undefined, 'low')">
+                      <a-statistic
+                        title="低"
+                        :value="statistics?.low_severity || 0"
+                        :value-style="{ color: '#8c8c8c' }"
+                      />
+                    </a-card>
                   </a-col>
                   <a-col :span="6">
-                    <a-statistic
-                      title="中"
-                      :value="statistics?.medium_severity || 0"
-                      :value-style="{ color: '#1890ff' }"
-                    />
+                    <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick(undefined, undefined, 'medium')">
+                      <a-statistic
+                        title="中"
+                        :value="statistics?.medium_severity || 0"
+                        :value-style="{ color: '#1890ff' }"
+                      />
+                    </a-card>
                   </a-col>
                   <a-col :span="6">
-                    <a-statistic
-                      title="高"
-                      :value="statistics?.high_severity || 0"
-                      :value-style="{ color: '#faad14' }"
-                    />
+                    <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick(undefined, undefined, 'high')">
+                      <a-statistic
+                        title="高"
+                        :value="statistics?.high_severity || 0"
+                        :value-style="{ color: '#faad14' }"
+                      />
+                    </a-card>
                   </a-col>
                   <a-col :span="6">
-                    <a-statistic
-                      title="严重"
-                      :value="statistics?.critical_severity || 0"
-                      :value-style="{ color: '#ff4d4f' }"
-                    />
+                    <a-card :bordered="false" class="statistic-card-clickable" @click="handleStatisticClick(undefined, undefined, 'critical')">
+                      <a-statistic
+                        title="严重"
+                        :value="statistics?.critical_severity || 0"
+                        :value-style="{ color: '#ff4d4f' }"
+                      />
+                    </a-card>
                   </a-col>
                 </a-row>
               </a-card>
@@ -1147,6 +1163,38 @@ const toggleSearchForm = () => {
   searchFormVisible.value = !searchFormVisible.value
 }
 
+// 统计项点击处理
+const handleStatisticClick = (status?: string, priority?: string, severity?: string) => {
+  // 切换到列表标签页
+  activeTab.value = 'list'
+  
+  // 设置筛选条件
+  if (status) {
+    searchForm.status = status
+  } else {
+    searchForm.status = undefined
+  }
+  
+  if (priority) {
+    searchForm.priority = priority
+  } else {
+    searchForm.priority = undefined
+  }
+  
+  if (severity) {
+    searchForm.severity = severity
+  } else {
+    searchForm.severity = undefined
+  }
+  
+  // 展开搜索表单
+  searchFormVisible.value = true
+  
+  // 重置分页并加载Bug列表
+  pagination.current = 1
+  loadBugs()
+}
+
 // 搜索
 const handleSearch = () => {
   pagination.current = 1
@@ -2057,6 +2105,22 @@ onMounted(async () => {
 
 .content-inner :deep(.ant-tabs-tabpane) > .ant-card:first-child .ant-card-body {
   padding-bottom: 0;
+}
+
+/* 统计卡片可点击样式 */
+.statistic-card-clickable {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.statistic-card-clickable:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* 嵌套卡片样式优化 */
+.statistic-card-clickable :deep(.ant-card-body) {
+  padding: 16px;
 }
 
 .table-card {
