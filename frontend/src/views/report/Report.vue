@@ -62,7 +62,10 @@
                   :pagination="dailyPagination"
                   row-key="id"
                   @change="handleDailyTableChange"
-                  @row-click="(record: DailyReport) => handleDailyView(record)"
+                  :custom-row="(record: DailyReport) => ({
+                    onClick: () => handleDailyView(record),
+                    class: 'table-row-clickable'
+                  })"
                 >
                   <template #bodyCell="{ column, record }">
                     <template v-if="column.key === 'status'">
@@ -170,7 +173,10 @@
                   :pagination="weeklyPagination"
                   row-key="id"
                   @change="handleWeeklyTableChange"
-                  @row-click="(record: WeeklyReport) => handleWeeklyView(record)"
+                  :custom-row="(record: WeeklyReport) => ({
+                    onClick: () => handleWeeklyView(record),
+                    class: 'table-row-clickable'
+                  })"
                 >
                   <template #bodyCell="{ column, record }">
                     <template v-if="column.key === 'status'">
@@ -666,13 +672,19 @@
       :footer="null"
       @cancel="handleDailyDetailCancel"
     >
-      <a-spin :spinning="dailyDetailLoading" v-if="dailyDetailData">
+      <a-spin :spinning="dailyDetailLoading">
+        <div v-if="dailyDetailData">
         <a-descriptions :column="1" bordered>
           <a-descriptions-item label="日期">
             {{ formatDate(dailyDetailData.date) }}
           </a-descriptions-item>
           <a-descriptions-item label="工作内容">
-            <div v-html="renderMarkdown(dailyDetailData.content || '')" style="max-height: 400px; overflow-y: auto; border: 1px solid #d9d9d9; padding: 12px; border-radius: 4px;"></div>
+            <div style="max-height: 400px; overflow-y: auto;">
+              <MarkdownEditor
+                :model-value="dailyDetailData.content || ''"
+                :readonly="true"
+              />
+            </div>
           </a-descriptions-item>
           <a-descriptions-item label="状态">
             <a-tag :color="getStatusColor(dailyDetailData.status)">
@@ -722,6 +734,10 @@
             {{ formatDateTime(dailyDetailData.updated_at) }}
           </a-descriptions-item>
         </a-descriptions>
+        </div>
+        <div v-else-if="!dailyDetailLoading" style="text-align: center; padding: 40px;">
+          <a-empty description="加载失败" />
+        </div>
       </a-spin>
     </a-modal>
 
@@ -734,16 +750,27 @@
       :footer="null"
       @cancel="handleWeeklyDetailCancel"
     >
-      <a-spin :spinning="weeklyDetailLoading" v-if="weeklyDetailData">
+      <a-spin :spinning="weeklyDetailLoading">
+        <div v-if="weeklyDetailData">
         <a-descriptions :column="1" bordered>
           <a-descriptions-item label="周期">
             {{ formatDate(weeklyDetailData.week_start) }} 至 {{ formatDate(weeklyDetailData.week_end) }}
           </a-descriptions-item>
           <a-descriptions-item label="工作总结">
-            <div v-html="renderMarkdown(weeklyDetailData.summary || '')" style="max-height: 300px; overflow-y: auto; border: 1px solid #d9d9d9; padding: 12px; border-radius: 4px;"></div>
+            <div style="max-height: 300px; overflow-y: auto;">
+              <MarkdownEditor
+                :model-value="weeklyDetailData.summary || ''"
+                :readonly="true"
+              />
+            </div>
           </a-descriptions-item>
           <a-descriptions-item label="下周计划">
-            <div v-html="renderMarkdown(weeklyDetailData.next_week_plan || '')" style="max-height: 300px; overflow-y: auto; border: 1px solid #d9d9d9; padding: 12px; border-radius: 4px;"></div>
+            <div style="max-height: 300px; overflow-y: auto;">
+              <MarkdownEditor
+                :model-value="weeklyDetailData.next_week_plan || ''"
+                :readonly="true"
+              />
+            </div>
           </a-descriptions-item>
           <a-descriptions-item label="状态">
             <a-tag :color="getStatusColor(weeklyDetailData.status)">
@@ -793,6 +820,10 @@
             {{ formatDateTime(weeklyDetailData.updated_at) }}
           </a-descriptions-item>
         </a-descriptions>
+        </div>
+        <div v-else-if="!weeklyDetailLoading" style="text-align: center; padding: 40px;">
+          <a-empty description="加载失败" />
+        </div>
       </a-spin>
     </a-modal>
   </div>
@@ -2186,6 +2217,15 @@ div[v-html] {
   padding-left: 0.5em;
   border-left: 2px solid #ddd;
   display: inline;
+}
+
+/* 表格行可点击样式 */
+.table-card :deep(.ant-table-tbody > tr.table-row-clickable) {
+  cursor: pointer;
+}
+
+.table-card :deep(.ant-table-tbody > tr.table-row-clickable:hover) {
+  background-color: #f5f5f5;
 }
 </style>
 
