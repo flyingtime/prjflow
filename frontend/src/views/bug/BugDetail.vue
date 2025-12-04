@@ -9,178 +9,65 @@
             @back="() => router.push('/bug')"
           >
             <template #extra>
-              <a-space>
-                <a-button @click="handleEdit">编辑</a-button>
-                <a-button @click="handleAssign">指派</a-button>
-                <a-button
-                  v-if="bug?.status === 'active' && !bug?.confirmed"
-                  @click="handleConfirm"
-                >
-                  确认
-                </a-button>
-                <a-button
-                  v-if="bug?.status === 'active'"
-                  @click="handleResolve"
-                >
-                  解决
-                </a-button>
-                <a-button
-                  @click="handleClose"
-                  :disabled="bug?.status !== 'resolved'"
-                >
-                  关闭
-                </a-button>
-                <a-button
-                  v-if="bug?.status === 'active'"
-                  @click="handleConvertToRequirement"
-                >
-                  Bug转需求
-                </a-button>
-                <a-popconfirm
-                  title="确定要删除这个Bug吗？"
-                  @confirm="handleDelete"
-                >
-                  <a-button danger>删除</a-button>
-                </a-popconfirm>
-              </a-space>
+              <div style="display: flex; align-items: center; gap: 8px">
+                <a-space>
+                  <a-button
+                    :disabled="!prevBugId || bugListLoading"
+                    @click="handleNavigateToPrev"
+                  >
+                    ← 上一个
+                  </a-button>
+                  <a-button
+                    :disabled="!nextBugId || bugListLoading"
+                    @click="handleNavigateToNext"
+                  >
+                    下一个 →
+                  </a-button>
+                </a-space>
+                <a-space>
+                  <a-button @click="handleEdit">编辑</a-button>
+                  <a-button @click="handleAssign">指派</a-button>
+                  <a-button
+                    v-if="bug?.status === 'active' && !bug?.confirmed"
+                    @click="handleConfirm"
+                  >
+                    确认
+                  </a-button>
+                  <a-button
+                    v-if="bug?.status === 'active'"
+                    @click="handleResolve"
+                  >
+                    解决
+                  </a-button>
+                  <a-button
+                    @click="handleClose"
+                    :disabled="bug?.status !== 'resolved'"
+                  >
+                    关闭
+                  </a-button>
+                  <a-button
+                    v-if="bug?.status === 'active'"
+                    @click="handleConvertToRequirement"
+                  >
+                    Bug转需求
+                  </a-button>
+                  <a-popconfirm
+                    title="确定要删除这个Bug吗？"
+                    @confirm="handleDelete"
+                  >
+                    <a-button danger>删除</a-button>
+                  </a-popconfirm>
+                </a-space>
+              </div>
             </template>
           </a-page-header>
 
-          <a-spin :spinning="loading">
-            <!-- 基本信息 -->
-            <a-card title="基本信息" :bordered="false" style="margin-bottom: 16px">
-              <a-descriptions :column="2" bordered>
-                <a-descriptions-item label="Bug标题">{{ bug?.title }}</a-descriptions-item>
-                <a-descriptions-item label="状态">
-                  <a-space>
-                    <a-tag :color="getStatusColor(bug?.status || '')">
-                      {{ getStatusText(bug?.status || '') }}
-                    </a-tag>
-                    <a-tag v-if="bug?.confirmed" color="green">已确认</a-tag>
-                    <a-tag v-else-if="bug?.status === 'active'" color="orange">未确认</a-tag>
-                  </a-space>
-                </a-descriptions-item>
-                <a-descriptions-item label="优先级">
-                  <a-tag :color="getPriorityColor(bug?.priority || '')">
-                    {{ getPriorityText(bug?.priority || '') }}
-                  </a-tag>
-                </a-descriptions-item>
-                <a-descriptions-item label="严重程度">
-                  <a-tag :color="getSeverityColor(bug?.severity || '')">
-                    {{ getSeverityText(bug?.severity || '') }}
-                  </a-tag>
-                </a-descriptions-item>
-                <a-descriptions-item label="项目">
-                  {{ bug?.project?.name || '-' }}
-                </a-descriptions-item>
-                <a-descriptions-item label="关联需求">
-                  <a v-if="bug?.requirement" @click="router.push(`/requirement/${bug.requirement.id}`)" style="cursor: pointer">
-                    {{ bug.requirement.title }}
-                  </a>
-                  <span v-else>-</span>
-                </a-descriptions-item>
-                <a-descriptions-item label="指派给">
-                  <a-space>
-                    <a-tag
-                      v-for="assignee in bug?.assignees || []"
-                      :key="assignee.id"
-                    >
-                      {{ assignee.username }}{{ assignee.nickname ? `(${assignee.nickname})` : '' }}
-                    </a-tag>
-                    <span v-if="!bug?.assignees || bug.assignees.length === 0">-</span>
-                  </a-space>
-                </a-descriptions-item>
-                <a-descriptions-item label="创建人">
-                  {{ bug?.creator ? `${bug.creator.username}${bug.creator.nickname ? `(${bug.creator.nickname})` : ''}` : '-' }}
-                </a-descriptions-item>
-                <a-descriptions-item label="创建时间">
-                  {{ formatDateTime(bug?.created_at) }}
-                </a-descriptions-item>
-                <a-descriptions-item label="更新时间">
-                  {{ formatDateTime(bug?.updated_at) }}
-                </a-descriptions-item>
-              </a-descriptions>
-            </a-card>
-
-            <!-- Bug描述 -->
-            <a-card title="Bug描述" :bordered="false" style="margin-bottom: 16px">
-              <div v-if="bug?.description" class="markdown-content">
-                <MarkdownEditor
-                  :model-value="bug.description"
-                  :readonly="true"
-                />
-              </div>
-              <a-empty v-else description="暂无描述" />
-            </a-card>
-
-            <!-- 历史记录 -->
-            <a-card :bordered="false" style="margin-bottom: 16px">
-              <template #title>
-                <span>历史记录</span>
-                <a-button 
-                  type="link" 
-                  size="small"
-                  @click.stop="handleAddNote" 
-                  :disabled="historyLoading"
-                  style="margin-left: 8px; padding: 0"
-                >
-                  添加备注
-                </a-button>
-              </template>
-              <a-spin :spinning="historyLoading" :style="{ minHeight: '100px' }">
-                <a-timeline v-if="historyList.length > 0">
-                  <a-timeline-item
-                    v-for="(action, index) in historyList"
-                    :key="action.id"
-                  >
-                    <template #dot>
-                      <span style="font-weight: bold; color: #1890ff">{{ historyList.length - index }}</span>
-                    </template>
-                    <div>
-                      <div style="margin-bottom: 8px">
-                        <span style="color: #666; margin-right: 8px">{{ formatDateTime(action.date) }}</span>
-                        <span>{{ getActionDescription(action) }}</span>
-                        <a-button
-                          v-if="hasHistoryDetails(action)"
-                          type="link"
-                          size="small"
-                          @click="toggleHistoryDetail(action.id)"
-                          style="padding: 0; height: auto; margin-left: 8px"
-                        >
-                          {{ expandedHistoryIds.has(action.id) ? '收起' : '展开' }}
-                        </a-button>
-                      </div>
-                      <!-- 字段变更详情和备注内容（可折叠） -->
-                      <div
-                        v-show="expandedHistoryIds.has(action.id)"
-                        style="margin-left: 24px; margin-top: 8px"
-                      >
-                        <!-- 字段变更详情 -->
-                        <div v-if="action.histories && action.histories.length > 0">
-                          <div
-                            v-for="history in action.histories"
-                            :key="history.id"
-                            style="margin-bottom: 8px; color: #666"
-                          >
-                            <div>修改了{{ getFieldDisplayName(history.field) }}</div>
-                            <div style="margin-left: 16px; margin-top: 4px;">
-                              <div>旧值："{{ history.old_value || history.old || '-' }}"</div>
-                              <div>新值："{{ history.new_value || history.new || '-' }}"</div>
-                            </div>
-                          </div>
-                        </div>
-                        <!-- 备注内容 -->
-                        <div v-if="action.comment" style="margin-top: 8px; color: #666">
-                          {{ action.comment }}
-                        </div>
-                      </div>
-                    </div>
-                  </a-timeline-item>
-                </a-timeline>
-                <a-empty v-else description="暂无历史记录" />
-              </a-spin>
-            </a-card>
-          </a-spin>
+          <BugDetailContent
+            :bug="bug"
+            :loading="loading"
+            @refresh="handleRefresh"
+            @requirement-click="handleRequirementClick"
+          />
         </div>
       </a-layout-content>
     </a-layout>
@@ -471,30 +358,6 @@
       </a-form>
     </a-modal>
 
-    <!-- 添加备注模态框 -->
-    <a-modal
-      v-model:open="noteModalVisible"
-      title="添加备注"
-      :mask-closable="true"
-      @ok="handleNoteSubmit"
-      @cancel="handleNoteCancel"
-    >
-      <a-form
-        ref="noteFormRef"
-        :model="noteFormData"
-        :rules="noteFormRules"
-        :label-col="{ span: 6 }"
-        :wrapper-col="{ span: 18 }"
-      >
-        <a-form-item label="备注" name="comment">
-          <a-textarea
-            v-model:value="noteFormData.comment"
-            placeholder="请输入备注"
-            :rows="4"
-          />
-        </a-form-item>
-      </a-form>
-    </a-modal>
   </div>
 </template>
 
@@ -502,22 +365,19 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
-import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import BugDetailContent from '@/components/BugDetailContent.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
 import ProjectMemberSelect from '@/components/ProjectMemberSelect.vue'
 import {
   getBug,
+  getBugs,
   updateBug,
   updateBugStatus,
   deleteBug,
   assignBug,
   confirmBug,
-  getBugHistory,
-  addBugHistoryNote,
   type Bug,
-  type Action,
   type CreateBugRequest
 } from '@/api/bug'
 import { getUsers, type User } from '@/api/user'
@@ -539,24 +399,17 @@ const requirements = ref<Requirement[]>([])
 const requirementLoading = ref(false)
 const modules = ref<Module[]>([])
 const moduleLoading = ref(false)
+
+// 上一个/下一个bug导航
+const prevBugId = ref<number | null>(null)
+const nextBugId = ref<number | null>(null)
+const bugListLoading = ref(false)
 const assignModalVisible = ref(false)
 const assignFormRef = ref()
 const assignFormData = reactive({
   assignee_ids: [] as number[]
 })
 
-// 历史记录相关
-const historyLoading = ref(false)
-const historyList = ref<Action[]>([])
-const expandedHistoryIds = ref<Set<number>>(new Set()) // 展开的历史记录ID集合
-const noteModalVisible = ref(false)
-const noteFormRef = ref()
-const noteFormData = reactive({
-  comment: ''
-})
-const noteFormRules = {
-  comment: [{ required: true, message: '请输入备注', trigger: 'blur' }]
-}
 
 // 解决对话框相关
 const statusModalVisible = ref(false)
@@ -591,30 +444,166 @@ const loadBug = async (bugId?: number) => {
   loading.value = true
   try {
     bug.value = await getBug(id)
-    // 加载历史记录
-    await loadBugHistory(id)
   } catch (error: any) {
     message.error(error.message || '加载Bug详情失败')
     router.push('/bug')
   } finally {
     loading.value = false
   }
+  
+  // 异步加载相邻bug信息，不阻塞主流程
+  loadAdjacentBugs(id).catch(err => {
+    console.error('加载相邻bug失败:', err)
+  })
 }
 
-// 加载历史记录
-const loadBugHistory = async (bugId?: number) => {
-  const id = bugId || Number(route.params.id)
-  if (!id) return
-
-  historyLoading.value = true
+// 加载相邻bug（上一个和下一个）
+const loadAdjacentBugs = async (currentBugId: number) => {
+  if (!currentBugId) return
+  
+  bugListLoading.value = true
+  prevBugId.value = null
+  nextBugId.value = null
+  
   try {
-    const response = await getBugHistory(id)
-    historyList.value = response.list || []
+    // 从URL查询参数获取筛选条件（如果存在）
+    const baseParams: any = {}
+    if (route.query.keyword) {
+      baseParams.keyword = route.query.keyword as string
+    }
+    if (route.query.project_id) {
+      baseParams.project_id = Number(route.query.project_id)
+    }
+    if (route.query.status) {
+      baseParams.status = route.query.status as string
+    }
+    if (route.query.priority) {
+      baseParams.priority = route.query.priority as string
+    }
+    if (route.query.severity) {
+      baseParams.severity = route.query.severity as string
+    }
+    if (route.query.assignee_id) {
+      baseParams.assignee_id = Number(route.query.assignee_id)
+    }
+    
+    // 先获取总数，确定需要查询多少页
+    const totalParams = { ...baseParams, page: 1, size: 100 }
+    const totalResponse = await getBugs(totalParams)
+    const total = totalResponse.total || 0
+    const pageSize = 100 // 后端最大限制
+    
+    if (total === 0) {
+      return
+    }
+    
+    // 通过分页查询找到当前bug所在的页
+    let currentPage = -1
+    let currentIndex = -1
+    const maxPages = Math.ceil(total / pageSize)
+    
+    // 线性查找当前bug所在的页
+    for (let page = 1; page <= maxPages; page++) {
+      const params = { ...baseParams, page, size: pageSize }
+      const response = await getBugs(params)
+      const bugs = response.list || []
+      const index = bugs.findIndex(b => b.id === currentBugId)
+      if (index !== -1) {
+        currentPage = page
+        currentIndex = index
+        break
+      }
+    }
+    
+    if (currentPage === -1 || currentIndex === -1) {
+      console.warn('当前bug不在列表中，ID:', currentBugId)
+      return
+    }
+    
+    // 获取当前页的bug列表
+    const currentPageParams = { ...baseParams, page: currentPage, size: pageSize }
+    const currentPageResponse = await getBugs(currentPageParams)
+    const currentPageBugs = currentPageResponse.list || []
+    
+    // 获取上一个bug
+    if (currentIndex > 0) {
+      // 在当前页的前一个
+      const prevBug = currentPageBugs[currentIndex - 1]
+      if (prevBug) {
+        prevBugId.value = prevBug.id
+      }
+    } else if (currentPage > 1) {
+      // 在前一页的最后一个
+      const prevPageParams = { ...baseParams, page: currentPage - 1, size: pageSize }
+      const prevPageResponse = await getBugs(prevPageParams)
+      const prevPageBugs = prevPageResponse.list || []
+      if (prevPageBugs.length > 0) {
+        const lastBug = prevPageBugs[prevPageBugs.length - 1]
+        if (lastBug) {
+          prevBugId.value = lastBug.id
+        }
+      }
+    }
+    
+    // 获取下一个bug
+    if (currentIndex < currentPageBugs.length - 1) {
+      // 在当前页的下一个
+      const nextBug = currentPageBugs[currentIndex + 1]
+      if (nextBug) {
+        nextBugId.value = nextBug.id
+      }
+    } else if (currentPage < maxPages) {
+      // 在下一页的第一个
+      const nextPageParams = { ...baseParams, page: currentPage + 1, size: pageSize }
+      const nextPageResponse = await getBugs(nextPageParams)
+      const nextPageBugs = nextPageResponse.list || []
+      if (nextPageBugs.length > 0) {
+        const firstBug = nextPageBugs[0]
+        if (firstBug) {
+          nextBugId.value = firstBug.id
+        }
+      }
+    }
   } catch (error: any) {
-    console.error('加载历史记录失败:', error)
+    console.error('加载相邻bug失败:', error)
+    message.error('加载相邻bug失败: ' + (error.message || '未知错误'))
   } finally {
-    historyLoading.value = false
+    bugListLoading.value = false
   }
+}
+
+// 导航到上一个bug
+const handleNavigateToPrev = () => {
+  if (!prevBugId.value) {
+    message.warning('没有上一个bug')
+    return
+  }
+  // 保持当前的查询参数
+  const query = { ...route.query }
+  router.push({ path: `/bug/${prevBugId.value}`, query })
+}
+
+// 导航到下一个bug
+const handleNavigateToNext = () => {
+  if (!nextBugId.value) {
+    message.warning('没有下一个bug')
+    return
+  }
+  // 保持当前的查询参数
+  const query = { ...route.query }
+  router.push({ path: `/bug/${nextBugId.value}`, query })
+}
+
+// 处理刷新事件
+const handleRefresh = async () => {
+  if (bug.value?.id) {
+    await loadBug(bug.value.id)
+  }
+}
+
+// 处理需求点击事件
+const handleRequirementClick = (requirementId: number) => {
+  router.push(`/requirement/${requirementId}`)
 }
 
 // 加载用户列表
@@ -630,7 +619,7 @@ const loadUsers = async () => {
 // 编辑模态框相关
 const editModalVisible = ref(false)
 const editFormRef = ref()
-const editDescriptionEditorRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
+const editDescriptionEditorRef = ref<any>(null)
 const editFormData = reactive<CreateBugRequest & { id?: number; attachment_ids?: number[]; work_date?: Dayjs | undefined }>({
   title: '',
   description: '',
@@ -1085,185 +1074,16 @@ const handleDelete = async () => {
   }
 }
 
-// 获取状态颜色
-const getStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    active: 'orange',
-    resolved: 'green',
-    closed: 'default'
+
+
+
+
+// 监听路由变化，当bug ID改变时重新加载
+watch(() => route.params.id, (newId) => {
+  if (newId) {
+    loadBug(Number(newId))
   }
-  return colors[status] || 'default'
-}
-
-// 获取状态文本
-const getStatusText = (status: string | undefined) => {
-  if (!status) return '-'
-  const texts: Record<string, string> = {
-    active: '激活',
-    resolved: '已解决',
-    closed: '已关闭'
-  }
-  return texts[status.toLowerCase()] || status
-}
-
-// 获取优先级颜色
-const getPriorityColor = (priority: string) => {
-  const colors: Record<string, string> = {
-    low: 'default',
-    medium: 'blue',
-    high: 'orange',
-    urgent: 'red'
-  }
-  return colors[priority] || 'default'
-}
-
-// 获取优先级文本
-const getPriorityText = (priority: string) => {
-  const texts: Record<string, string> = {
-    low: '低',
-    medium: '中',
-    high: '高',
-    urgent: '紧急'
-  }
-  return texts[priority] || priority
-}
-
-// 获取严重程度颜色
-const getSeverityColor = (severity: string) => {
-  const colors: Record<string, string> = {
-    low: 'default',
-    medium: 'blue',
-    high: 'orange',
-    critical: 'red'
-  }
-  return colors[severity] || 'default'
-}
-
-// 获取严重程度文本
-const getSeverityText = (severity: string) => {
-  const texts: Record<string, string> = {
-    low: '低',
-    medium: '中',
-    high: '高',
-    critical: '严重'
-  }
-  return texts[severity] || severity
-}
-
-
-
-// 获取操作描述
-const getActionDescription = (action: Action): string => {
-  const actorName = action.actor
-    ? `${action.actor.username}${action.actor.nickname ? `(${action.actor.nickname})` : ''}`
-    : '系统'
-
-  switch (action.action) {
-    case 'created':
-      return `由 ${actorName} 创建。`
-    case 'assigned':
-      // 从histories中获取指派信息
-      const assignHistory = action.histories?.find(h => h.field === 'assignee_ids')
-      if (assignHistory) {
-        return `由 ${actorName} 指派给 ${assignHistory.new_value || assignHistory.new || '-'}。`
-      }
-      return `由 ${actorName} 指派。`
-    case 'resolved':
-      // 从extra中获取解决方案（如果有）
-      let solution = ''
-      if (action.extra) {
-        try {
-          const extra = JSON.parse(action.extra)
-          if (extra.solution) {
-            solution = extra.solution
-          }
-        } catch (e) {
-          // 解析失败，忽略
-        }
-      }
-      return `由 ${actorName} 解决${solution ? `, 方案为 ${solution}。` : '。'}`
-    case 'closed':
-      return `由 ${actorName} 关闭。`
-    case 'confirmed':
-      return `由 ${actorName} 确认。`
-    case 'edited':
-      return `由 ${actorName} 编辑。`
-    case 'commented':
-      return `由 ${actorName} 添加了备注：${action.comment || ''}`
-    default:
-      return `由 ${actorName} 执行了 ${action.action} 操作。`
-  }
-}
-
-// 获取字段显示名称
-const getFieldDisplayName = (fieldName: string): string => {
-  const fieldNames: Record<string, string> = {
-    title: 'Bug标题',
-    description: 'Bug描述',
-    status: 'Bug状态',
-    priority: '优先级',
-    severity: '严重程度',
-    confirmed: '是否确认',
-    project_id: '项目',
-    requirement_id: '关联需求',
-    module_id: '功能模块',
-    assignee_ids: '指派给',
-    estimated_hours: '预估工时',
-    actual_hours: '实际工时',
-    solution: '解决方案',
-    solution_note: '解决方案备注',
-    resolved_version_id: '解决版本'
-  }
-  return fieldNames[fieldName] || fieldName
-}
-
-// 判断历史记录是否有详情（字段变更或备注）
-const hasHistoryDetails = (action: Action): boolean => {
-  return !!(action.histories && action.histories.length > 0) || !!action.comment
-}
-
-// 切换历史记录详情展开/收起
-const toggleHistoryDetail = (actionId: number) => {
-  const newSet = new Set(expandedHistoryIds.value)
-  if (newSet.has(actionId)) {
-    newSet.delete(actionId)
-  } else {
-    newSet.add(actionId)
-  }
-  expandedHistoryIds.value = newSet
-}
-
-// 添加备注
-const handleAddNote = () => {
-  if (!bug.value) {
-    message.warning('Bug信息未加载完成，请稍候再试')
-    return
-  }
-  noteFormData.comment = ''
-  noteModalVisible.value = true
-}
-
-// 提交备注
-const handleNoteSubmit = async () => {
-  if (!bug.value) return
-  try {
-    await noteFormRef.value.validate()
-    await addBugHistoryNote(bug.value.id, { comment: noteFormData.comment })
-    message.success('添加备注成功')
-    noteModalVisible.value = false
-    await loadBugHistory(bug.value.id)
-  } catch (error: any) {
-    if (error.errorFields) {
-      return
-    }
-    message.error(error.message || '添加备注失败')
-  }
-}
-
-// 取消添加备注
-const handleNoteCancel = () => {
-  noteFormRef.value?.resetFields()
-}
+}, { immediate: false })
 
 onMounted(() => {
   loadBug()
@@ -1305,6 +1125,20 @@ onMounted(() => {
 
 .markdown-content {
   min-height: 200px;
+}
+
+/* 让导航按钮固定在左侧 */
+.bug-detail :deep(.ant-page-header-heading-extra) {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.bug-detail :deep(.ant-page-header-heading-extra > div) {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 </style>
 

@@ -660,207 +660,68 @@
       :footer="null"
       @cancel="handleDetailCancel"
     >
-      <a-spin :spinning="detailLoading">
-        <div v-if="detailBug" style="max-height: 70vh; overflow-y: auto">
-          <!-- 操作按钮 -->
-          <div style="margin-bottom: 16px; text-align: right">
-            <a-space>
-              <a-button @click="handleDetailEdit">编辑</a-button>
-              <a-button @click="handleDetailAssign">指派</a-button>
-              <a-button
-                v-if="detailBug.status === 'active' && !detailBug.confirmed"
-                @click="handleDetailConfirm"
-              >
-                确认
-              </a-button>
-              <a-button
-                v-if="detailBug.status === 'active'"
-                @click="handleDetailResolve"
-              >
-                解决
-              </a-button>
-              <a-button
-                @click="handleDetailClose"
-                :disabled="detailBug.status !== 'resolved'"
-              >
-                关闭
-              </a-button>
-              <a-button
-                v-if="detailBug.status === 'active'"
-                @click="handleDetailConvertToRequirement"
-              >
-                Bug转需求
-              </a-button>
-              <a-popconfirm
-                title="确定要删除这个Bug吗？"
-                @confirm="handleDetailDelete"
-              >
-                <a-button danger>删除</a-button>
-              </a-popconfirm>
-            </a-space>
-          </div>
-
-          <!-- 基本信息 -->
-          <a-card title="基本信息" :bordered="false" style="margin-bottom: 16px">
-            <a-descriptions :column="2" bordered>
-              <a-descriptions-item label="Bug标题">{{ detailBug.title }}</a-descriptions-item>
-              <a-descriptions-item label="状态">
-                <a-space>
-                  <a-tag :color="getStatusColor(detailBug.status || '')">
-                    {{ getStatusText(detailBug.status || '') }}
-                  </a-tag>
-                  <a-tag v-if="detailBug.confirmed" color="green">已确认</a-tag>
-                  <a-tag v-else-if="detailBug.status === 'active'" color="orange">未确认</a-tag>
-                </a-space>
-              </a-descriptions-item>
-              <a-descriptions-item label="优先级">
-                <a-tag :color="getPriorityColor(detailBug.priority || '')">
-                  {{ getPriorityText(detailBug.priority || '') }}
-                </a-tag>
-              </a-descriptions-item>
-              <a-descriptions-item label="严重程度">
-                <a-tag :color="getSeverityColor(detailBug.severity || '')">
-                  {{ getSeverityText(detailBug.severity || '') }}
-                </a-tag>
-              </a-descriptions-item>
-              <a-descriptions-item label="项目">
-                {{ detailBug.project?.name || '-' }}
-              </a-descriptions-item>
-              <a-descriptions-item label="关联需求">
-                <a v-if="detailBug.requirement" @click="router.push(`/requirement/${detailBug.requirement.id}`)" style="cursor: pointer">
-                  {{ detailBug.requirement.title }}
-                </a>
-                <span v-else>-</span>
-              </a-descriptions-item>
-              <a-descriptions-item label="指派给">
-                <a-space>
-                  <a-tag
-                    v-for="assignee in detailBug.assignees || []"
-                    :key="assignee.id"
-                  >
-                    {{ assignee.username }}{{ assignee.nickname ? `(${assignee.nickname})` : '' }}
-                  </a-tag>
-                  <span v-if="!detailBug.assignees || detailBug.assignees.length === 0">-</span>
-                </a-space>
-              </a-descriptions-item>
-              <a-descriptions-item label="创建人">
-                {{ detailBug.creator ? `${detailBug.creator.username}${detailBug.creator.nickname ? `(${detailBug.creator.nickname})` : ''}` : '-' }}
-              </a-descriptions-item>
-              <a-descriptions-item label="创建时间">
-                {{ formatDateTime(detailBug.created_at) }}
-              </a-descriptions-item>
-              <a-descriptions-item label="更新时间">
-                {{ formatDateTime(detailBug.updated_at) }}
-              </a-descriptions-item>
-            </a-descriptions>
-          </a-card>
-
-          <!-- Bug描述 -->
-          <a-card title="Bug描述" :bordered="false" style="margin-bottom: 16px">
-            <div v-if="detailBug.description" class="markdown-content">
-              <MarkdownEditor
-                :model-value="detailBug.description"
-                :readonly="true"
-              />
-            </div>
-            <a-empty v-else description="暂无描述" />
-          </a-card>
-
-          <!-- 历史记录 -->
-          <a-card :bordered="false" style="margin-bottom: 16px">
-            <template #title>
-              <span>历史记录</span>
-              <a-button 
-                type="link" 
-                size="small"
-                @click.stop="handleDetailAddNote" 
-                :disabled="detailHistoryLoading"
-                style="margin-left: 8px; padding: 0"
-              >
-                添加备注
-              </a-button>
-            </template>
-            <a-spin :spinning="detailHistoryLoading" :style="{ minHeight: '100px' }">
-              <a-timeline v-if="detailHistoryList.length > 0">
-                <a-timeline-item
-                  v-for="(action, index) in detailHistoryList"
-                  :key="action.id"
-                >
-                  <template #dot>
-                    <span style="font-weight: bold; color: #1890ff">{{ detailHistoryList.length - index }}</span>
-                  </template>
-                  <div>
-                    <div style="margin-bottom: 8px">
-                      <span style="color: #666; margin-right: 8px">{{ formatDateTime(action.date) }}</span>
-                      <span>{{ getDetailActionDescription(action) }}</span>
-                      <a-button
-                        v-if="hasDetailHistoryDetails(action)"
-                        type="link"
-                        size="small"
-                        @click="toggleDetailHistoryDetail(action.id)"
-                        style="padding: 0; height: auto; margin-left: 8px"
-                      >
-                        {{ detailExpandedHistoryIds.has(action.id) ? '收起' : '展开' }}
-                      </a-button>
-                    </div>
-                    <!-- 字段变更详情和备注内容（可折叠） -->
-                    <div
-                      v-show="detailExpandedHistoryIds.has(action.id)"
-                      style="margin-left: 24px; margin-top: 8px"
-                    >
-                      <!-- 字段变更详情 -->
-                      <div v-if="action.histories && action.histories.length > 0">
-                        <div
-                          v-for="history in action.histories"
-                          :key="history.id"
-                          style="margin-bottom: 8px; color: #666"
-                        >
-                          <div>修改了{{ getDetailFieldDisplayName(history.field) }}</div>
-                          <div style="margin-left: 16px; margin-top: 4px;">
-                            <div>旧值："{{ history.old_value || history.old || '-' }}"</div>
-                            <div>新值："{{ history.new_value || history.new || '-' }}"</div>
-                          </div>
-                        </div>
-                      </div>
-                      <!-- 备注内容 -->
-                      <div v-if="action.comment" style="margin-top: 8px; color: #666">
-                        {{ action.comment }}
-                      </div>
-                    </div>
-                  </div>
-                </a-timeline-item>
-              </a-timeline>
-              <a-empty v-else description="暂无历史记录" />
-            </a-spin>
-          </a-card>
+      <div v-if="detailBug" style="max-height: 70vh; overflow-y: auto">
+        <!-- 操作按钮 -->
+        <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center">
+          <a-space>
+            <a-button
+              :disabled="!prevBugId || bugListLoading"
+              @click="handleNavigateToPrev"
+            >
+              ← 上一个
+            </a-button>
+            <a-button
+              :disabled="!nextBugId || bugListLoading"
+              @click="handleNavigateToNext"
+            >
+              下一个 →
+            </a-button>
+          </a-space>
+          <a-space>
+            <a-button @click="handleDetailEdit">编辑</a-button>
+            <a-button @click="handleDetailAssign">指派</a-button>
+            <a-button
+              v-if="detailBug.status === 'active' && !detailBug.confirmed"
+              @click="handleDetailConfirm"
+            >
+              确认
+            </a-button>
+            <a-button
+              v-if="detailBug.status === 'active'"
+              @click="handleDetailResolve"
+            >
+              解决
+            </a-button>
+            <a-button
+              @click="handleDetailClose"
+              :disabled="detailBug.status !== 'resolved'"
+            >
+              关闭
+            </a-button>
+            <a-button
+              v-if="detailBug.status === 'active'"
+              @click="handleDetailConvertToRequirement"
+            >
+              Bug转需求
+            </a-button>
+            <a-popconfirm
+              title="确定要删除这个Bug吗？"
+              @confirm="handleDetailDelete"
+            >
+              <a-button danger>删除</a-button>
+            </a-popconfirm>
+          </a-space>
         </div>
-      </a-spin>
+
+        <BugDetailContent
+          :bug="detailBug"
+          :loading="detailLoading"
+          @refresh="handleDetailRefresh"
+          @requirement-click="handleDetailRequirementClick"
+        />
+      </div>
     </a-modal>
 
-    <!-- 详情页添加备注模态框 -->
-    <a-modal
-      v-model:open="detailNoteModalVisible"
-      title="添加备注"
-      :mask-closable="true"
-      @ok="handleDetailNoteSubmit"
-      @cancel="handleDetailNoteCancel"
-    >
-      <a-form
-        ref="detailNoteFormRef"
-        :model="detailNoteFormData"
-        :rules="detailNoteFormRules"
-        :label-col="{ span: 6 }"
-        :wrapper-col="{ span: 18 }"
-      >
-        <a-form-item label="备注" name="comment">
-          <a-textarea
-            v-model:value="detailNoteFormData.comment"
-            placeholder="请输入备注"
-            :rows="4"
-          />
-        </a-form-item>
-      </a-form>
-    </a-modal>
   </div>
 </template>
 
@@ -873,6 +734,7 @@ import { type Dayjs } from 'dayjs'
 import { formatDateTime } from '@/utils/date'
 import { PlusOutlined, UpOutlined, DownOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
+import BugDetailContent from '@/components/BugDetailContent.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
 import ProjectMemberSelect from '@/components/ProjectMemberSelect.vue'
@@ -887,12 +749,9 @@ import {
   assignBug,
   confirmBug,
   getBugStatistics,
-  getBugHistory,
-  addBugHistoryNote,
   type Bug,
   type CreateBugRequest,
-  type BugStatistics,
-  type Action
+  type BugStatistics
 } from '@/api/bug'
 import { getProjects, getProjectMembers, type Project } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
@@ -918,21 +777,15 @@ const statistics = ref<BugStatistics | null>(null)
 const activeTab = ref<string>('list')
 const searchFormVisible = ref(false) // 搜索栏显示/隐藏状态，默认折叠
 
+// 上一个/下一个bug导航
+const prevBugId = ref<number | null>(null)
+const nextBugId = ref<number | null>(null)
+const bugListLoading = ref(false)
+
 // 详情弹窗相关
 const detailModalVisible = ref(false)
 const detailLoading = ref(false)
 const detailBug = ref<Bug | null>(null)
-const detailHistoryLoading = ref(false)
-const detailHistoryList = ref<Action[]>([])
-const detailExpandedHistoryIds = ref<Set<number>>(new Set())
-const detailNoteModalVisible = ref(false)
-const detailNoteFormRef = ref()
-const detailNoteFormData = reactive({
-  comment: ''
-})
-const detailNoteFormRules = {
-  comment: [{ required: true, message: '请输入备注', trigger: 'blur' }]
-}
 
 const searchForm = reactive({
   keyword: '',
@@ -1735,7 +1588,8 @@ const loadBugDetail = async (bugId: number) => {
   detailLoading.value = true
   try {
     detailBug.value = await getBug(bugId)
-    await loadBugDetailHistory(bugId)
+    // 加载相邻bug信息
+    await loadAdjacentBugs(bugId)
   } catch (error: any) {
     message.error(error.message || '加载Bug详情失败')
     detailModalVisible.value = false
@@ -1744,24 +1598,154 @@ const loadBugDetail = async (bugId: number) => {
   }
 }
 
-// 加载Bug详情历史记录
-const loadBugDetailHistory = async (bugId: number) => {
-  detailHistoryLoading.value = true
-  try {
-    const response = await getBugHistory(bugId)
-    detailHistoryList.value = response.list || []
-  } catch (error: any) {
-    console.error('加载历史记录失败:', error)
-  } finally {
-    detailHistoryLoading.value = false
+// 处理详情刷新事件
+const handleDetailRefresh = async () => {
+  if (detailBug.value?.id) {
+    await loadBugDetail(detailBug.value.id)
+    loadBugs() // 同时刷新列表
   }
+}
+
+// 处理需求点击事件
+const handleDetailRequirementClick = (requirementId: number) => {
+  detailModalVisible.value = false
+  router.push(`/requirement/${requirementId}`)
+}
+
+// 加载相邻bug（上一个和下一个）
+const loadAdjacentBugs = async (currentBugId: number) => {
+  if (!currentBugId) return
+  
+  bugListLoading.value = true
+  prevBugId.value = null
+  nextBugId.value = null
+  
+  try {
+    // 使用与当前列表相同的筛选条件
+    const baseParams: any = {}
+    if (searchForm.keyword) {
+      baseParams.keyword = searchForm.keyword
+    }
+    if (searchForm.project_id) {
+      baseParams.project_id = searchForm.project_id
+    }
+    if (searchForm.status) {
+      baseParams.status = searchForm.status
+    }
+    if (searchForm.priority) {
+      baseParams.priority = searchForm.priority
+    }
+    if (searchForm.severity) {
+      baseParams.severity = searchForm.severity
+    }
+    if (searchForm.assignee_id) {
+      baseParams.assignee_id = searchForm.assignee_id
+    }
+    
+    // 先获取总数，确定需要查询多少页
+    const totalParams = { ...baseParams, page: 1, size: 100 }
+    const totalResponse = await getBugs(totalParams)
+    const total = totalResponse.total || 0
+    const pageSize = 100 // 后端最大限制
+    
+    if (total === 0) {
+      return
+    }
+    
+    // 通过分页查询找到当前bug所在的页
+    let currentPage = -1
+    let currentIndex = -1
+    const maxPages = Math.ceil(total / pageSize)
+    
+    // 线性查找当前bug所在的页
+    for (let page = 1; page <= maxPages; page++) {
+      const params = { ...baseParams, page, size: pageSize }
+      const response = await getBugs(params)
+      const bugs = response.list || []
+      const index = bugs.findIndex(b => b.id === currentBugId)
+      if (index !== -1) {
+        currentPage = page
+        currentIndex = index
+        break
+      }
+    }
+    
+    if (currentPage === -1 || currentIndex === -1) {
+      return
+    }
+    
+    // 获取当前页的bug列表
+    const currentPageParams = { ...baseParams, page: currentPage, size: pageSize }
+    const currentPageResponse = await getBugs(currentPageParams)
+    const currentPageBugs = currentPageResponse.list || []
+    
+    // 获取上一个bug
+    if (currentIndex > 0) {
+      // 在当前页的前一个
+      const prevBug = currentPageBugs[currentIndex - 1]
+      if (prevBug) {
+        prevBugId.value = prevBug.id
+      }
+    } else if (currentPage > 1) {
+      // 在前一页的最后一个
+      const prevPageParams = { ...baseParams, page: currentPage - 1, size: pageSize }
+      const prevPageResponse = await getBugs(prevPageParams)
+      const prevPageBugs = prevPageResponse.list || []
+      if (prevPageBugs.length > 0) {
+        const lastBug = prevPageBugs[prevPageBugs.length - 1]
+        if (lastBug) {
+          prevBugId.value = lastBug.id
+        }
+      }
+    }
+    
+    // 获取下一个bug
+    if (currentIndex < currentPageBugs.length - 1) {
+      // 在当前页的下一个
+      const nextBug = currentPageBugs[currentIndex + 1]
+      if (nextBug) {
+        nextBugId.value = nextBug.id
+      }
+    } else if (currentPage < maxPages) {
+      // 在下一页的第一个
+      const nextPageParams = { ...baseParams, page: currentPage + 1, size: pageSize }
+      const nextPageResponse = await getBugs(nextPageParams)
+      const nextPageBugs = nextPageResponse.list || []
+      if (nextPageBugs.length > 0) {
+        const firstBug = nextPageBugs[0]
+        if (firstBug) {
+          nextBugId.value = firstBug.id
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error('加载相邻bug失败:', error)
+  } finally {
+    bugListLoading.value = false
+  }
+}
+
+// 导航到上一个bug
+const handleNavigateToPrev = () => {
+  if (!prevBugId.value) {
+    message.warning('没有上一个bug')
+    return
+  }
+  loadBugDetail(prevBugId.value)
+}
+
+// 导航到下一个bug
+const handleNavigateToNext = () => {
+  if (!nextBugId.value) {
+    message.warning('没有下一个bug')
+    return
+  }
+  loadBugDetail(nextBugId.value)
 }
 
 // 详情弹窗取消
 const handleDetailCancel = () => {
   detailBug.value = null
-  detailHistoryList.value = []
-  detailExpandedHistoryIds.value = new Set()
 }
 
 // 详情页指派
@@ -1879,116 +1863,6 @@ const handleDetailDelete = async () => {
   }
 }
 
-// 详情页添加备注
-const handleDetailAddNote = () => {
-  if (!detailBug.value) {
-    message.warning('Bug信息未加载完成，请稍候再试')
-    return
-  }
-  detailNoteFormData.comment = ''
-  detailNoteModalVisible.value = true
-}
-
-// 详情页提交备注
-const handleDetailNoteSubmit = async () => {
-  if (!detailBug.value) return
-  try {
-    await detailNoteFormRef.value.validate()
-    await addBugHistoryNote(detailBug.value.id, { comment: detailNoteFormData.comment })
-    message.success('添加备注成功')
-    detailNoteModalVisible.value = false
-    await loadBugDetailHistory(detailBug.value.id)
-  } catch (error: any) {
-    if (error.errorFields) {
-      return
-    }
-    message.error(error.message || '添加备注失败')
-  }
-}
-
-// 详情页取消添加备注
-const handleDetailNoteCancel = () => {
-  detailNoteFormRef.value?.resetFields()
-}
-
-// 获取详情页操作描述
-const getDetailActionDescription = (action: Action): string => {
-  const actorName = action.actor
-    ? `${action.actor.username}${action.actor.nickname ? `(${action.actor.nickname})` : ''}`
-    : '系统'
-
-  switch (action.action) {
-    case 'created':
-      return `由 ${actorName} 创建。`
-    case 'assigned':
-      const assignHistory = action.histories?.find(h => h.field === 'assignee_ids')
-      if (assignHistory) {
-        return `由 ${actorName} 指派给 ${assignHistory.new_value || assignHistory.new || '-'}。`
-      }
-      return `由 ${actorName} 指派。`
-    case 'resolved':
-      let solution = ''
-      if (action.extra) {
-        try {
-          const extra = JSON.parse(action.extra)
-          if (extra.solution) {
-            solution = extra.solution
-          }
-        } catch (e) {
-          // 解析失败，忽略
-        }
-      }
-      return `由 ${actorName} 解决${solution ? `, 方案为 ${solution}。` : '。'}`
-    case 'closed':
-      return `由 ${actorName} 关闭。`
-    case 'confirmed':
-      return `由 ${actorName} 确认。`
-    case 'edited':
-      return `由 ${actorName} 编辑。`
-    case 'commented':
-      return `由 ${actorName} 添加了备注：${action.comment || ''}`
-    default:
-      return `由 ${actorName} 执行了 ${action.action} 操作。`
-  }
-}
-
-// 获取详情页字段显示名称
-const getDetailFieldDisplayName = (fieldName: string): string => {
-  const fieldNames: Record<string, string> = {
-    title: 'Bug标题',
-    description: 'Bug描述',
-    status: 'Bug状态',
-    priority: '优先级',
-    severity: '严重程度',
-    confirmed: '是否确认',
-    project_id: '项目',
-    requirement_id: '关联需求',
-    module_id: '功能模块',
-    assignee_ids: '指派给',
-    estimated_hours: '预估工时',
-    actual_hours: '实际工时',
-    solution: '解决方案',
-    solution_note: '解决方案备注',
-    resolved_version_id: '解决版本'
-  }
-  return fieldNames[fieldName] || fieldName
-}
-
-// 判断详情页历史记录是否有详情
-const hasDetailHistoryDetails = (action: Action): boolean => {
-  return !!(action.histories && action.histories.length > 0) || !!action.comment
-}
-
-// 切换详情页历史记录详情展开/收起
-const toggleDetailHistoryDetail = (actionId: number) => {
-  const newSet = new Set(detailExpandedHistoryIds.value)
-  if (newSet.has(actionId)) {
-    newSet.delete(actionId)
-  } else {
-    newSet.add(actionId)
-  }
-  detailExpandedHistoryIds.value = newSet
-}
 
 // 监听 tab 切换，切换到统计 tab 时加载统计信息
 watch(activeTab, (newTab) => {

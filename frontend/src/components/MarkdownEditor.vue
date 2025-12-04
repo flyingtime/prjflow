@@ -130,6 +130,18 @@ const renderedMarkdown = computed(() => {
     return `<img${before} src="${src}"${after} class="markdown-image-clickable" data-image-src="${src}" style="cursor: pointer;">`
   })
   
+  // 处理链接，防止内部路由链接被Vue Router拦截
+  // 将看起来像内部路由的链接转换为外部链接，或者阻止默认行为
+  html = html.replace(/<a([^>]*)\shref=["']([^"']+)["']([^>]*)>/gi, (match, before, href, after) => {
+    // 如果是内部路由路径（以 / 开头但不是 http/https），添加特殊处理
+    if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/uploads/')) {
+      // 添加 data-href 属性，并阻止默认行为
+      return `<a${before} href="javascript:void(0)" data-href="${href}"${after} class="markdown-link-internal">`
+    }
+    // 其他链接保持原样
+    return match
+  })
+  
   // 调试：在只读模式下检查图片URL
   if (props.readonly) {
     const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
@@ -285,6 +297,8 @@ const handleImageWheel = (e: WheelEvent) => {
 const handleImageClick = (e: Event) => {
   const target = e.target as HTMLElement
   if (target.tagName === 'IMG' && target.classList.contains('markdown-image-clickable')) {
+    e.preventDefault()
+    e.stopPropagation()
     const imageSrc = target.getAttribute('data-image-src') || target.getAttribute('src') || ''
     if (imageSrc) {
       openImagePreview(imageSrc)
@@ -292,13 +306,31 @@ const handleImageClick = (e: Event) => {
   }
 }
 
-// 绑定图片点击事件
+// 处理链接点击事件，防止内部路由链接被Vue Router拦截
+const handleLinkClick = (e: Event) => {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'A' && target.classList.contains('markdown-link-internal')) {
+    e.preventDefault()
+    e.stopPropagation()
+    const href = target.getAttribute('data-href')
+    if (href) {
+      // 如果是内部路由，可以选择打开新窗口或者提示用户
+      console.warn('Markdown中的内部链接被阻止:', href)
+      // 或者可以选择在新窗口打开
+      // window.open(href, '_blank')
+    }
+  }
+}
+
+// 绑定图片和链接点击事件
 const bindImageClickHandler = () => {
   if (previewContainerRef.value) {
     // 移除旧的事件监听器（如果存在）
     previewContainerRef.value.removeEventListener('click', handleImageClick)
+    previewContainerRef.value.removeEventListener('click', handleLinkClick)
     // 添加新的事件监听器
     previewContainerRef.value.addEventListener('click', handleImageClick)
+    previewContainerRef.value.addEventListener('click', handleLinkClick)
   }
 }
 
@@ -338,6 +370,7 @@ onUnmounted(() => {
   }
   if (previewContainerRef.value) {
     previewContainerRef.value.removeEventListener('click', handleImageClick)
+    previewContainerRef.value.removeEventListener('click', handleLinkClick)
   }
   localImages.forEach((_, blobUrl) => {
     URL.revokeObjectURL(blobUrl)
