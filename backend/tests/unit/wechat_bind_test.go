@@ -2,6 +2,7 @@ package unit
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -116,7 +117,7 @@ func TestAuthHandler_WeChatBindCallback(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		// state格式：bind:{ticket}:{user_id}
-		state := "bind:ticket123:" + string(rune(user.ID))
+		state := fmt.Sprintf("bind:ticket123:%d", user.ID)
 		c.Request = httptest.NewRequest(http.MethodGet, "/api/auth/wechat/bind/callback?state="+state, nil)
 
 		handler.WeChatBindCallback(c)
