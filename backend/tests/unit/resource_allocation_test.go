@@ -3,6 +3,7 @@ package unit
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -44,9 +45,14 @@ func TestResourceAllocationHandler_GetResourceAllocations(t *testing.T) {
 	handler := api.NewResourceAllocationHandler(db)
 
 	t.Run("获取所有资源分配", func(t *testing.T) {
+		// 添加用户到项目（作为项目成员）
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
 		c.Request = httptest.NewRequest(http.MethodGet, "/api/resource-allocations", nil)
 
 		handler.GetResourceAllocations(c)
@@ -64,10 +70,15 @@ func TestResourceAllocationHandler_GetResourceAllocations(t *testing.T) {
 	})
 
 	t.Run("按资源筛选", func(t *testing.T) {
+		// 添加用户到项目（作为项目成员）
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/resource-allocations?resource_id=1", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/resource-allocations?resource_id=%d", resource.ID), nil)
 
 		handler.GetResourceAllocations(c)
 
@@ -110,11 +121,16 @@ func TestResourceAllocationHandler_GetResourceAllocation(t *testing.T) {
 	handler := api.NewResourceAllocationHandler(db)
 
 	t.Run("获取存在的资源分配", func(t *testing.T) {
+		// 添加用户到项目（作为项目成员）
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/resource-allocations/1", nil)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/resource-allocations/%d", allocation.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", allocation.ID)}}
 
 		handler.GetResourceAllocation(c)
 
