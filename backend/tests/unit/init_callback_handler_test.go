@@ -194,8 +194,8 @@ func TestInitCallbackHandlerImpl_Process(t *testing.T) {
 		db.Where("wechat_open_id IN ?", []string{"test_open_id", "test_open_id_2"}).Unscoped().Delete(&model.User{})
 		// 删除所有角色（使用Unscoped确保完全删除，避免名称冲突）
 		db.Exec("DELETE FROM roles")
-		// 删除初始化配置
-		db.Where("key = ?", "initialized").Delete(&model.SystemConfig{})
+		// 删除初始化配置（使用SQL确保完全删除）
+		db.Exec("DELETE FROM system_configs WHERE key = 'initialized'")
 
 		// 先创建一个管理员角色（使用与Process方法相同的名称"管理员"）
 		adminRole := model.Role{

@@ -66,6 +66,10 @@ func TestInitCallbackHandler_HandleCallback(t *testing.T) {
 	})
 
 	t.Run("系统已初始化", func(t *testing.T) {
+		// 清理之前的数据
+		db.Where("key = ?", "initialized").Delete(&model.SystemConfig{})
+		db.Where("key IN ?", []string{"wechat_app_id", "wechat_app_secret"}).Delete(&model.SystemConfig{})
+
 		// 设置系统已初始化
 		initConfig := model.SystemConfig{
 			Key:   "initialized",
@@ -103,11 +107,17 @@ func TestInitCallbackHandler_HandleCallback(t *testing.T) {
 	})
 
 	t.Run("HandleCallback成功-完整流程", func(t *testing.T) {
-		// 清理之前的数据
+		// 清理之前的数据（包括之前测试创建的数据）
+		// 先删除关联关系
 		db.Exec("DELETE FROM user_roles")
-		db.Where("wechat_open_id = ?", "test_open_id_handle").Unscoped().Delete(&model.User{})
+		// 删除所有用户（包括之前测试创建的）
+		db.Exec("DELETE FROM users")
+		// 删除所有角色
 		db.Exec("DELETE FROM roles")
-		db.Where("key = ?", "initialized").Delete(&model.SystemConfig{})
+		// 确保删除所有initialized配置（可能有多个测试创建了）
+		db.Exec("DELETE FROM system_configs WHERE key = 'initialized'")
+		// 也清理微信配置，避免冲突
+		db.Exec("DELETE FROM system_configs WHERE key IN ('wechat_app_id', 'wechat_app_secret')")
 
 		// 设置微信配置
 		appIDConfig := model.SystemConfig{
