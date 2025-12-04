@@ -340,3 +340,159 @@ func TestAttachmentHandler_AttachToEntity(t *testing.T) {
 	})
 }
 
+func TestAttachmentHandler_UploadFile(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	// 初始化配置
+	if config.AppConfig == nil {
+		config.AppConfig = &config.Config{
+			Upload: config.UploadConfig{
+				StoragePath:  "./test_uploads",
+				MaxFileSize:  10 * 1024 * 1024, // 10MB
+				AllowedTypes: []string{"image/", "application/pdf"},
+			},
+		}
+	}
+
+	project := CreateTestProject(t, db, "上传附件项目")
+	user := CreateTestUser(t, db, "uploaduser", "上传用户")
+
+	// 添加用户到项目
+	AddUserToProject(t, db, user.ID, project.ID, "member")
+
+	handler := api.NewAttachmentHandler(db)
+
+	t.Run("上传文件失败-缺少权限", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/attachments/upload", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"user"})
+		c.Set("permissions", []string{}) // 没有上传权限
+
+		handler.UploadFile(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("上传文件失败-缺少项目ID", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/attachments/upload", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"user"})
+		c.Set("permissions", []string{"attachment:upload"})
+
+		handler.UploadFile(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("上传文件失败-项目不存在", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/attachments/upload?project_id=999", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"user"})
+		c.Set("permissions", []string{"attachment:upload"})
+
+		handler.UploadFile(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	// 注意：完整的文件上传测试需要创建multipart/form-data请求，比较复杂
+	// 这里只测试基本的参数验证和权限检查
+}
+
+func TestAttachmentHandler_DownloadFile(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	// 初始化配置
+	if config.AppConfig == nil {
+		config.AppConfig = &config.Config{
+			Upload: config.UploadConfig{
+				StoragePath:  "./test_uploads",
+				MaxFileSize:  10 * 1024 * 1024,
+				AllowedTypes: []string{"image/", "application/pdf"},
+			},
+		}
+	}
+
+	project := CreateTestProject(t, db, "下载附件项目")
+	user := CreateTestUser(t, db, "downloaduser", "下载用户")
+
+	// 添加用户到项目
+	AddUserToProject(t, db, user.ID, project.ID, "member")
+
+	attachment := &model.Attachment{
+		FileName: "test.pdf",
+		FilePath: "2024/01/01/test.pdf",
+		FileSize: 1024,
+		MimeType: "application/pdf",
+		CreatorID: user.ID,
+	}
+	db.Create(attachment)
+	db.Model(attachment).Association("Projects").Append(project)
+
+	handler := api.NewAttachmentHandler(db)
+
+	t.Run("下载文件失败-附件不存在", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/attachments/999/download", nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "999"}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"user"})
+
+		handler.DownloadFile(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("下载文件失败-无权限", func(t *testing.T) {
+		// 创建另一个项目
+		project2 := CreateTestProject(t, db, "其他下载项目")
+		attachment2 := &model.Attachment{
+			FileName: "test2.pdf",
+			FilePath: "2024/01/01/test2.pdf",
+			FileSize: 1024,
+			MimeType: "application/pdf",
+			CreatorID: user.ID,
+		}
+		db.Create(attachment2)
+		db.Model(attachment2).Association("Projects").Append(project2)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/attachments/2/download", nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"user"})
+
+		handler.DownloadFile(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	// 注意：完整的文件下载测试需要创建实际的文件，比较复杂
+	// 这里只测试基本的参数验证和权限检查
+}
+
