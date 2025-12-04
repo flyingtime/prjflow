@@ -3,6 +3,7 @@ package unit
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -287,12 +288,12 @@ func TestVersionHandler_UpdateVersionStatus(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 
 		reqBody := map[string]interface{}{
-			"status": "released",
+			"status": "normal",
 		}
 		jsonData, _ := json.Marshal(reqBody)
-		c.Request = httptest.NewRequest(http.MethodPut, "/api/versions/1/status", bytes.NewBuffer(jsonData))
+		c.Request = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/versions/%d/status", version.ID), bytes.NewBuffer(jsonData))
 		c.Request.Header.Set("Content-Type", "application/json")
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", version.ID)}}
 
 		handler.UpdateVersionStatus(c)
 
@@ -302,7 +303,8 @@ func TestVersionHandler_UpdateVersionStatus(t *testing.T) {
 		var updatedVersion model.Version
 		err := db.First(&updatedVersion, version.ID).Error
 		assert.NoError(t, err)
-		assert.Equal(t, "released", updatedVersion.Status)
+		assert.Equal(t, "normal", updatedVersion.Status)
+		assert.NotNil(t, updatedVersion.ReleaseDate)
 	})
 }
 
@@ -325,18 +327,18 @@ func TestVersionHandler_ReleaseVersion(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodPost, "/api/versions/1/release", nil)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Request = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/versions/%d/release", version.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", version.ID)}}
 
 		handler.ReleaseVersion(c)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		// 验证版本已发布
+		// 验证版本已发布（状态为normal）
 		var releasedVersion model.Version
 		err := db.First(&releasedVersion, version.ID).Error
 		assert.NoError(t, err)
-		assert.Equal(t, "released", releasedVersion.Status)
+		assert.Equal(t, "normal", releasedVersion.Status)
 		assert.NotNil(t, releasedVersion.ReleaseDate)
 	})
 }
