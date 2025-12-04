@@ -3,6 +3,7 @@ package unit
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -324,6 +325,173 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		// DeleteUser 在GORM中不会报错，即使记录不存在也会返回成功
 		// 这是GORM的默认行为，所以测试应该检查返回成功
 		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
+func TestUserHandler_AddUserByWeChatCallback(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	handler := api.NewUserHandler(db)
+
+	t.Run("添加用户回调-缺少code参数", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/users/wechat/callback?state=test_state", nil)
+
+		handler.AddUserByWeChatCallback(c)
+
+		// 应该返回错误页面（HTML）
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "html")
+		assert.Contains(t, w.Body.String(), "添加用户失败")
+	})
+
+	t.Run("添加用户回调-缺少state参数", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/users/wechat/callback?code=test_code", nil)
+
+		handler.AddUserByWeChatCallback(c)
+
+		// 应该返回错误页面（HTML）
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "html")
+		assert.Contains(t, w.Body.String(), "添加用户失败")
+	})
+}
+
+func TestUserHandler_AddUserByWeChat(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	handler := api.NewUserHandler(db)
+
+	t.Run("通过微信添加用户失败-缺少code参数", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"state": "test_state",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/users/wechat", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.AddUserByWeChat(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("通过微信添加用户失败-未配置微信AppID", func(t *testing.T) {
+		// 确保没有微信配置
+		db.Where("key IN ?", []string{"wechat_app_id", "wechat_app_secret"}).Delete(&model.SystemConfig{})
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"code":  "test_code",
+			"state": "test_state",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/users/wechat", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.AddUserByWeChat(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+}
+
+func TestUserHandler_GetUserWeChatBindQRCode(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	handler := api.NewUserHandler(db)
+
+	t.Run("获取用户微信绑定二维码失败-未登录", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/users/1/wechat/qrcode", nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+
+		handler.GetUserWeChatBindQRCode(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusUnauthorized || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("获取用户微信绑定二维码失败-用户不存在", func(t *testing.T) {
+		user := CreateTestUser(t, db, "qrcodeuser", "二维码用户")
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/users/999/wechat/qrcode", nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "999"}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"admin"})
+
+		handler.GetUserWeChatBindQRCode(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("获取用户微信绑定二维码失败-用户已绑定微信", func(t *testing.T) {
+		user := CreateTestUser(t, db, "qrcodeuser2", "二维码用户2")
+		targetUser := CreateTestUser(t, db, "targetuser", "目标用户")
+		openID := "already_bound_openid"
+		targetUser.WeChatOpenID = &openID
+		db.Save(&targetUser)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/users/%d/wechat/qrcode", targetUser.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", targetUser.ID)}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"admin"})
+
+		handler.GetUserWeChatBindQRCode(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("获取用户微信绑定二维码失败-未配置微信AppID", func(t *testing.T) {
+		user := CreateTestUser(t, db, "qrcodeuser3", "二维码用户3")
+		targetUser := CreateTestUser(t, db, "targetuser2", "目标用户2")
+
+		// 确保没有微信配置
+		db.Where("key IN ?", []string{"wechat_app_id", "wechat_app_secret"}).Delete(&model.SystemConfig{})
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/users/%d/wechat/qrcode", targetUser.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", targetUser.ID)}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"admin"})
+
+		handler.GetUserWeChatBindQRCode(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
 	})
 }
 
