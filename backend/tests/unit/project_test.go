@@ -340,6 +340,9 @@ func TestProjectHandler_CreateProject(t *testing.T) {
 	handler := api.NewProjectHandler(db)
 
 	t.Run("创建项目成功", func(t *testing.T) {
+		// 创建用户（作为项目创建者）
+		user := CreateTestUser(t, db, "createproject", "创建项目用户")
+
 		// 先创建标签
 		tag1 := CreateTestTag(t, db, "重要")
 		tag2 := CreateTestTag(t, db, "紧急")
@@ -347,12 +350,14 @@ func TestProjectHandler_CreateProject(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
 
 		reqBody := map[string]interface{}{
 			"name":        "新项目",
 			"code":        "NEW001",
 			"description": "这是一个新项目",
-			"status":      1,
+			"status":      "doing", // 使用字符串状态值
 			"tag_ids":     []uint{tag1.ID, tag2.ID}, // 使用标签ID数组
 		}
 		jsonData, _ := json.Marshal(reqBody)
@@ -412,12 +417,18 @@ func TestProjectHandler_UpdateProject(t *testing.T) {
 	handler := api.NewProjectHandler(db)
 
 	t.Run("更新项目成功", func(t *testing.T) {
+		// 创建用户并添加到项目（作为项目成员）
+		user := CreateTestUser(t, db, "updateproject", "更新项目用户")
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		// 先创建标签
 		tag := CreateTestTag(t, db, "已更新")
 
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
 
 		reqBody := map[string]interface{}{
 			"name":        "已更新项目",
@@ -440,7 +451,9 @@ func TestProjectHandler_UpdateProject(t *testing.T) {
 		assert.Equal(t, "已更新项目", updatedProject.Name)
 		assert.Equal(t, "更新后的描述", updatedProject.Description)
 		assert.Equal(t, 1, len(updatedProject.Tags))
-		assert.Equal(t, tag.ID, updatedProject.Tags[0].ID)
+		if len(updatedProject.Tags) > 0 {
+			assert.Equal(t, tag.ID, updatedProject.Tags[0].ID)
+		}
 	})
 
 	t.Run("更新不存在的项目", func(t *testing.T) {
@@ -649,19 +662,25 @@ func TestProjectHandler_UpdateProjectMember(t *testing.T) {
 	handler := api.NewProjectHandler(db)
 
 	t.Run("更新项目成员成功", func(t *testing.T) {
+		// 创建另一个用户作为项目成员（用于更新操作）
+		updaterUser := CreateTestUser(t, db, "updatemember2", "更新成员用户2")
+		AddUserToProject(t, db, updaterUser.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", updaterUser.ID)
+		c.Set("roles", []string{"developer"})
 
 		reqBody := map[string]interface{}{
 			"role": "manager",
 		}
 		jsonData, _ := json.Marshal(reqBody)
-		c.Request = httptest.NewRequest(http.MethodPut, "/api/projects/1/members/1", bytes.NewBuffer(jsonData))
+		c.Request = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/projects/%d/members/%d", project.ID, member.ID), bytes.NewBuffer(jsonData))
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Params = gin.Params{
-			gin.Param{Key: "id", Value: "1"},
-			gin.Param{Key: "member_id", Value: "1"},
+			gin.Param{Key: "id", Value: fmt.Sprintf("%d", project.ID)},
+			gin.Param{Key: "member_id", Value: fmt.Sprintf("%d", member.ID)},
 		}
 
 		handler.UpdateProjectMember(c)
