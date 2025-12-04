@@ -358,7 +358,7 @@ func TestRequirementHandler_UpdateRequirement(t *testing.T) {
 		Title:     "更新需求",
 		ProjectID: project.ID,
 		CreatorID: user.ID,
-		Status:    "pending",
+		Status:    "draft", // 使用有效的状态值
 	}
 	db.Create(&requirement)
 
@@ -428,24 +428,29 @@ func TestRequirementHandler_UpdateRequirementStatus(t *testing.T) {
 		Title:     "更新状态需求",
 		ProjectID: project.ID,
 		CreatorID: user.ID,
-		Status:    "pending",
+		Status:    "draft", // 使用有效的状态值
 	}
 	db.Create(&requirement)
 
 	handler := api.NewRequirementHandler(db)
 
 	t.Run("更新需求状态成功", func(t *testing.T) {
+		// 添加用户到项目（作为项目成员）
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
 
 		reqBody := map[string]interface{}{
-			"status": "in_progress",
+			"status": "active", // 使用有效的状态值
 		}
 		jsonData, _ := json.Marshal(reqBody)
-		c.Request = httptest.NewRequest(http.MethodPut, "/api/requirements/1/status", bytes.NewBuffer(jsonData))
+		c.Request = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/requirements/%d/status", requirement.ID), bytes.NewBuffer(jsonData))
 		c.Request.Header.Set("Content-Type", "application/json")
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", requirement.ID)}}
 
 		handler.UpdateRequirementStatus(c)
 
@@ -455,7 +460,7 @@ func TestRequirementHandler_UpdateRequirementStatus(t *testing.T) {
 		var updatedRequirement model.Requirement
 		err := db.First(&updatedRequirement, requirement.ID).Error
 		assert.NoError(t, err)
-		assert.Equal(t, "in_progress", updatedRequirement.Status)
+		assert.Equal(t, "active", updatedRequirement.Status)
 	})
 
 	t.Run("更新需求状态失败-无效状态", func(t *testing.T) {
@@ -490,18 +495,23 @@ func TestRequirementHandler_DeleteRequirement(t *testing.T) {
 		Title:     "删除需求",
 		ProjectID: project.ID,
 		CreatorID: user.ID,
-		Status:    "pending",
+		Status:    "draft", // 使用有效的状态值
 	}
 	db.Create(&requirement)
 
 	handler := api.NewRequirementHandler(db)
 
 	t.Run("删除需求成功", func(t *testing.T) {
+		// 添加用户到项目（作为项目成员）
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodDelete, "/api/requirements/1", nil)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+		c.Request = httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/requirements/%d", requirement.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", requirement.ID)}}
 
 		handler.DeleteRequirement(c)
 
