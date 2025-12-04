@@ -244,5 +244,119 @@ func TestInitCallbackHandlerImpl_Process(t *testing.T) {
 	})
 }
 
-// 注意：Process方法的错误场景测试在TestInitCallbackHandlerImpl_Process_Errors中
+func TestInitCallbackHandlerImpl_Process_Errors(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	handler := &api.InitCallbackHandlerImpl{}
+	mockHub := mocks.NewMockWebSocketHub()
+
+	t.Run("Process失败-系统已初始化（initialized配置已存在）", func(t *testing.T) {
+		// 先创建initialized配置，模拟系统已初始化
+		initConfig := model.SystemConfig{
+			Key:   "initialized",
+			Value: "true",
+			Type:  "boolean",
+		}
+		db.Create(&initConfig)
+
+		// 创建管理员角色
+		adminRole := model.Role{
+			Name:        "管理员",
+			Code:        "admin",
+			Description: "系统管理员",
+			Status:      1,
+		}
+		db.Create(&adminRole)
+
+		mockHub.Reset()
+
+		// 创建WeChatCallbackContext
+		ctx := &api.WeChatCallbackContext{
+			DB:   db,
+			Hub:  mockHub,
+			Ticket: "test_ticket_error",
+			UserInfo: &wechat.UserInfoResponse{
+				OpenID:     "test_open_id_error",
+				Nickname:   "测试用户",
+				Sex:        1,
+				Province:   "广东",
+				City:       "深圳",
+				Country:    "中国",
+				HeadImgURL: "http://example.com/error.jpg",
+				Privilege:  []string{},
+				UnionID:    "test_union_id_error",
+			},
+		}
+
+		result, err := handler.Process(ctx)
+
+		// 验证返回错误
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "标记系统初始化失败")
+
+		// 验证没有创建新用户（因为事务回滚）
+		var user model.User
+		err = db.Where("wechat_open_id = ?", "test_open_id_error").First(&user).Error
+		assert.Error(t, err) // 应该找不到用户
+	})
+
+	t.Run("Process失败-创建用户失败（用户名冲突）", func(t *testing.T) {
+		// 清理之前的数据
+		db.Exec("DELETE FROM user_roles")
+		db.Where("wechat_open_id = ?", "test_open_id_conflict").Unscoped().Delete(&model.User{})
+		db.Exec("DELETE FROM roles")
+		db.Where("key = ?", "initialized").Delete(&model.SystemConfig{})
+
+		// 创建管理员角色
+		adminRole := model.Role{
+			Name:        "管理员",
+			Code:        "admin",
+			Description: "系统管理员",
+			Status:      1,
+		}
+		db.Create(&adminRole)
+
+		// 先创建一个用户，使用相同的用户名（通过GenerateUniqueUsername生成的）
+		// 注意：由于GenerateUniqueUsername的逻辑，我们需要创建一个用户来触发冲突
+		// 但实际测试中，由于GenerateUniqueUsername会自动处理冲突，这个测试场景较难模拟
+		// 这里我们测试另一个场景：wechat_open_id冲突
+		existingOpenID := "test_open_id_conflict"
+		existingUser := model.User{
+			WeChatOpenID: &existingOpenID,
+			Username:     "existing_user",
+			Nickname:     "已存在用户",
+			Status:       1,
+		}
+		db.Create(&existingUser)
+
+		mockHub.Reset()
+
+		// 创建WeChatCallbackContext（使用相同的OpenID）
+		ctx := &api.WeChatCallbackContext{
+			DB:   db,
+			Hub:  mockHub,
+			Ticket: "test_ticket_conflict",
+			UserInfo: &wechat.UserInfoResponse{
+				OpenID:     "test_open_id_conflict", // 相同的OpenID
+				Nickname:   "新用户",
+				Sex:        1,
+				Province:   "广东",
+				City:       "深圳",
+				Country:    "中国",
+				HeadImgURL: "http://example.com/conflict.jpg",
+				Privilege:  []string{},
+				UnionID:    "test_union_id_conflict",
+			},
+		}
+
+		result, err := handler.Process(ctx)
+
+		// 验证返回错误（wechat_open_id唯一约束冲突）
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "创建管理员用户失败")
+	})
+}
 
