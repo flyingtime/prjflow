@@ -550,7 +550,7 @@ func TestTaskHandler_UpdateTaskProgress(t *testing.T) {
 		ProjectID:      project.ID,
 		CreatorID:      user.ID,
 		Status:         "doing",
-		EstimatedHours: estimatedHours,
+		EstimatedHours: &estimatedHours,
 		Progress:       0,
 	}
 	db.Create(&task)
