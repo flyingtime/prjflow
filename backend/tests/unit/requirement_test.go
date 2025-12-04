@@ -529,3 +529,150 @@ func TestRequirementHandler_DeleteRequirement(t *testing.T) {
 	})
 }
 
+func TestRequirementHandler_GetRequirementStatistics(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "需求统计项目")
+	user := CreateTestUser(t, db, "reqstatsuser", "需求统计用户")
+	AddUserToProject(t, db, user.ID, project.ID, "member")
+
+	// 创建不同状态的需求
+	req1 := &model.Requirement{
+		Title:     "待处理需求",
+		ProjectID: project.ID,
+		CreatorID: user.ID,
+		Status:    "draft",
+		Priority:  "high",
+	}
+	db.Create(req1)
+
+	req2 := &model.Requirement{
+		Title:     "进行中需求",
+		ProjectID: project.ID,
+		CreatorID: user.ID,
+		Status:    "active",
+		Priority:  "medium",
+	}
+	db.Create(req2)
+
+	handler := api.NewRequirementHandler(db)
+
+	t.Run("获取需求统计成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/requirements/statistics", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetRequirementStatistics(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		assert.NotNil(t, data["total"])
+		assert.NotNil(t, data["pending"])
+		assert.NotNil(t, data["in_progress"])
+	})
+
+	t.Run("获取需求统计-按项目筛选", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/requirements/statistics?project_id=%d", project.ID), nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetRequirementStatistics(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+	})
+}
+
+func TestRequirementHandler_GetRequirementHistory(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "需求历史项目")
+	user := CreateTestUser(t, db, "reqhistoryuser", "需求历史用户")
+	AddUserToProject(t, db, user.ID, project.ID, "member")
+
+	requirement := &model.Requirement{
+		Title:     "测试需求",
+		ProjectID: project.ID,
+		CreatorID: user.ID,
+		Status:    "draft",
+		Priority:  "high",
+	}
+	db.Create(requirement)
+
+	handler := api.NewRequirementHandler(db)
+
+	t.Run("获取需求历史成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/requirements/%d/history", requirement.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", requirement.ID)}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetRequirementHistory(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		assert.NotNil(t, data["list"])
+	})
+
+	t.Run("获取需求历史失败-需求不存在", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/requirements/999/history", nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "999"}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetRequirementHistory(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("获取需求历史失败-无权限", func(t *testing.T) {
+		otherUser := CreateTestUser(t, db, "otherreqhistory", "其他需求历史用户")
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/requirements/%d/history", requirement.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", requirement.ID)}}
+		c.Set("user_id", otherUser.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetRequirementHistory(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
+	})
+}
+

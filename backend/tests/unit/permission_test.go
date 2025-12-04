@@ -770,7 +770,74 @@ func TestPermissionHandler_GetUserPermissions(t *testing.T) {
 
 		var response map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &response)
-		assert.True(t, w.Code == http.StatusUnauthorized || (response["code"] != nil && response["code"] != float64(200)))
+		assert.True(t, w.Code == http.StatusUnauthorized || (response["code"] != nil && response["code"] != float64(200)))                              
+	})
+}
+
+func TestPermissionHandler_GetRolePermissions(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	// 创建角色和权限
+	role := &model.Role{
+		Name:        "测试角色",
+		Code:        "test_role",
+		Description: "测试角色描述",
+		Status:      1,
+	}
+	db.Create(role)
+
+	perm1 := &model.Permission{
+		Code:   "test:read",
+		Name:   "测试读取",
+		Status: 1,
+	}
+	db.Create(perm1)
+
+	perm2 := &model.Permission{
+		Code:   "test:write",
+		Name:   "测试写入",
+		Status: 1,
+	}
+	db.Create(perm2)
+
+	// 关联权限到角色
+	db.Model(role).Association("Permissions").Append([]*model.Permission{perm1, perm2})
+
+	handler := api.NewPermissionHandler(db)
+
+	t.Run("获取角色权限成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/roles/%d/permissions", role.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", role.ID)}}
+
+		handler.GetRolePermissions(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].([]interface{})
+		assert.GreaterOrEqual(t, len(data), 2)
+	})
+
+	t.Run("获取角色权限失败-角色不存在", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/roles/999/permissions", nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "999"}}
+
+		handler.GetRolePermissions(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
 	})
 }
 

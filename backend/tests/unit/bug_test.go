@@ -490,3 +490,269 @@ func TestBugHandler_DeleteBug(t *testing.T) {
 	})
 }
 
+func TestBugHandler_UpdateBugStatus(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "更新Bug状态项目")
+	user := CreateTestUser(t, db, "updatestatususer", "更新状态用户")
+	AddUserToProject(t, db, user.ID, project.ID, "member")
+
+	bug := &model.Bug{
+		Title:     "测试Bug",
+		ProjectID: project.ID,
+		CreatorID: user.ID,
+		Status:    "active",
+		Priority:  "high",
+		Severity:  "critical",
+	}
+	db.Create(bug)
+
+	handler := api.NewBugHandler(db)
+
+	t.Run("更新Bug状态成功-active到resolved", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+		c.Set("db", db)
+
+		reqBody := map[string]interface{}{
+			"status": "resolved",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/bugs/%d/status", bug.ID), bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", bug.ID)}}
+
+		handler.UpdateBugStatus(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		// 验证Bug状态已更新
+		var updatedBug model.Bug
+		db.First(&updatedBug, bug.ID)
+		assert.Equal(t, "resolved", updatedBug.Status)
+	})
+
+	t.Run("更新Bug状态失败-无效状态", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"status": "invalid_status",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/bugs/%d/status", bug.ID), bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", bug.ID)}}
+
+		handler.UpdateBugStatus(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("更新Bug状态失败-Bug不存在", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"status": "resolved",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/bugs/999/status", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "999"}}
+
+		handler.UpdateBugStatus(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
+	})
+}
+
+func TestBugHandler_GetBugStatistics(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "Bug统计项目")
+	user := CreateTestUser(t, db, "bugstatsuser", "Bug统计用户")
+	AddUserToProject(t, db, user.ID, project.ID, "member")
+
+	// 创建不同状态的Bug
+	bug1 := &model.Bug{
+		Title:     "活跃Bug",
+		ProjectID: project.ID,
+		CreatorID: user.ID,
+		Status:    "active",
+		Priority:  "high",
+		Severity:  "critical",
+	}
+	db.Create(bug1)
+
+	bug2 := &model.Bug{
+		Title:     "已解决Bug",
+		ProjectID: project.ID,
+		CreatorID: user.ID,
+		Status:    "resolved",
+		Priority:  "medium",
+		Severity:  "high",
+	}
+	db.Create(bug2)
+
+	handler := api.NewBugHandler(db)
+
+	t.Run("获取Bug统计成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/bugs/statistics", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetBugStatistics(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		assert.NotNil(t, data["total"])
+		assert.NotNil(t, data["active"])
+		assert.NotNil(t, data["resolved"])
+	})
+
+	t.Run("获取Bug统计-按项目筛选", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/bugs/statistics?project_id=%d", project.ID), nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetBugStatistics(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+	})
+}
+
+func TestBugHandler_AssignBug(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "分配Bug项目")
+	user := CreateTestUser(t, db, "assignbuguser", "分配Bug用户")
+	assignee1 := CreateTestUser(t, db, "assignee1", "分配人1")
+	assignee2 := CreateTestUser(t, db, "assignee2", "分配人2")
+	AddUserToProject(t, db, user.ID, project.ID, "member")
+	AddUserToProject(t, db, assignee1.ID, project.ID, "member")
+	AddUserToProject(t, db, assignee2.ID, project.ID, "member")
+
+	bug := &model.Bug{
+		Title:     "待分配Bug",
+		ProjectID: project.ID,
+		CreatorID: user.ID,
+		Status:    "active",
+		Priority:  "high",
+		Severity:  "critical",
+	}
+	db.Create(bug)
+
+	handler := api.NewBugHandler(db)
+
+	t.Run("分配Bug成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"assignee_ids": []uint{assignee1.ID, assignee2.ID},
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/bugs/%d/assign", bug.ID), bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", bug.ID)}}
+
+		handler.AssignBug(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		// 验证Bug已分配
+		var updatedBug model.Bug
+		db.Preload("Assignees").First(&updatedBug, bug.ID)
+		assert.GreaterOrEqual(t, len(updatedBug.Assignees), 2)
+	})
+
+	t.Run("分配Bug失败-缺少assignee_ids", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/bugs/%d/assign", bug.ID), bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", bug.ID)}}
+
+		handler.AssignBug(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("分配Bug失败-Bug不存在", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"assignee_ids": []uint{assignee1.ID},
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/bugs/999/assign", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "999"}}
+
+		handler.AssignBug(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
+	})
+}
+

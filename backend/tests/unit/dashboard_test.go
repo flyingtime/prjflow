@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -330,6 +331,106 @@ func TestDashboardHandler_GetDashboard(t *testing.T) {
 		statistics := data["statistics"].(map[string]interface{})
 		assert.NotNil(t, statistics["week_hours"])
 		assert.NotNil(t, statistics["month_hours"])
+	})
+}
+
+func TestDashboardHandler_GetDashboardConfig(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	user := CreateTestUser(t, db, "dashboardconfiguser", "工作台配置用户")
+	handler := api.NewDashboardHandler(db)
+
+	t.Run("获取工作台配置成功-返回默认配置", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/dashboard/config", nil)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetDashboardConfig(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		assert.NotNil(t, data["cards"])
+		assert.NotNil(t, data["tabs"])
+	})
+
+	t.Run("获取工作台配置失败-未登录", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/dashboard/config", nil)
+
+		handler.GetDashboardConfig(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusUnauthorized || (response["code"] != nil && response["code"] != float64(200)))
+	})
+}
+
+func TestDashboardHandler_SaveDashboardConfig(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	user := CreateTestUser(t, db, "savedashboardconfiguser", "保存工作台配置用户")
+	handler := api.NewDashboardHandler(db)
+
+	t.Run("保存工作台配置成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"cards": []map[string]interface{}{
+				{"key": "tasks", "visible": true, "order": 1},
+				{"key": "bugs", "visible": false, "order": 2},
+			},
+			"tabs": []map[string]interface{}{
+				{"key": "projects", "visible": true, "order": 1},
+			},
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/dashboard/config", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.SaveDashboardConfig(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+	})
+
+	t.Run("保存工作台配置失败-未登录", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"cards": []map[string]interface{}{},
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/dashboard/config", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.SaveDashboardConfig(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusUnauthorized || (response["code"] != nil && response["code"] != float64(200)))
 	})
 }
 

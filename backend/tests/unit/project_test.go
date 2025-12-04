@@ -798,3 +798,72 @@ func TestProjectHandler_GetProjectStatistics(t *testing.T) {
 		assert.NotNil(t, data["total_members"])
 	})
 }
+
+func TestProjectHandler_GetProjectMembers(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "获取成员项目")
+	user1 := CreateTestUser(t, db, "memberuser1", "成员用户1")
+	user2 := CreateTestUser(t, db, "memberuser2", "成员用户2")
+	AddUserToProject(t, db, user1.ID, project.ID, "member")
+	AddUserToProject(t, db, user2.ID, project.ID, "developer")
+
+	handler := api.NewProjectHandler(db)
+
+	t.Run("获取项目成员成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/projects/%d/members", project.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", project.ID)}}
+		c.Set("user_id", user1.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetProjectMembers(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].([]interface{})
+		assert.GreaterOrEqual(t, len(data), 2)
+	})
+
+	t.Run("获取项目成员失败-项目不存在", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects/999/members", nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "999"}}
+		c.Set("user_id", user1.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetProjectMembers(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("获取项目成员失败-无权限", func(t *testing.T) {
+		otherUser := CreateTestUser(t, db, "othermemberuser", "其他成员用户")
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/projects/%d/members", project.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", project.ID)}}
+		c.Set("user_id", otherUser.ID)
+		c.Set("roles", []string{"developer"})
+
+		handler.GetProjectMembers(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
+	})
+}

@@ -345,3 +345,113 @@ func TestResourceAllocationHandler_DeleteResourceAllocation(t *testing.T) {
 	})
 }
 
+func TestResourceAllocationHandler_GetResourceCalendar(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "资源日历项目")
+	user := CreateTestUser(t, db, "caluser", "日历用户")
+	resource := &model.Resource{
+		UserID:    user.ID,
+		ProjectID: project.ID,
+		Role:      "developer",
+	}
+	db.Create(resource)
+
+	// 创建资源分配
+	allocation := &model.ResourceAllocation{
+		ResourceID: resource.ID,
+		Date:       time.Now(),
+		Hours:      8.0,
+		ProjectID:  &project.ID,
+	}
+	db.Create(allocation)
+
+	handler := api.NewResourceAllocationHandler(db)
+
+	t.Run("获取资源日历成功", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/resource-allocations/calendar", nil)
+
+		handler.GetResourceCalendar(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"]
+		assert.NotNil(t, data)
+	})
+
+	t.Run("获取资源日历-按用户筛选", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/resource-allocations/calendar?user_id=%d", user.ID), nil)
+
+		handler.GetResourceCalendar(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+	})
+}
+
+func TestResourceAllocationHandler_CheckResourceConflict(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "资源冲突项目")
+	user := CreateTestUser(t, db, "conflictuser", "冲突用户")
+	resource := &model.Resource{
+		UserID:    user.ID,
+		ProjectID: project.ID,
+		Role:      "developer",
+	}
+	db.Create(resource)
+
+	handler := api.NewResourceAllocationHandler(db)
+
+	t.Run("检查资源冲突成功-无冲突", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		date := time.Now().Format("2006-01-02")
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/resource-allocations/check-conflict?resource_id=%d&date=%s", resource.ID, date), nil)
+
+		handler.CheckResourceConflict(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		assert.NotNil(t, data["total_hours"])
+		assert.NotNil(t, data["has_conflict"])
+	})
+
+	t.Run("检查资源冲突失败-缺少参数", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/resource-allocations/check-conflict", nil)
+
+		handler.CheckResourceConflict(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+}
+

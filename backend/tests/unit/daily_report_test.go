@@ -3,6 +3,7 @@ package unit
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -470,6 +471,126 @@ func TestReportHandler_GetWorkSummary(t *testing.T) {
 		var response map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &response)
 		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+}
+
+func TestReportHandler_ApproveDailyReport(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	user := CreateTestUser(t, db, "approveuser", "审批用户")
+	approver := CreateTestUser(t, db, "approveruser", "审批人用户")
+
+	// 创建测试日报
+	report := &model.DailyReport{
+		Date:    time.Now(),
+		Content: "待审批日报",
+		Status:  "submitted",
+		UserID:  user.ID,
+	}
+	db.Create(report)
+
+	// 添加审批人
+	report.Approvers = []model.User{*approver}
+	db.Save(&report)
+
+	handler := api.NewReportHandler(db)
+
+	t.Run("审批日报成功-通过", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", approver.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"status":  "approved",
+			"comment": "审批通过",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/daily-reports/%d/approve", report.ID), bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", report.ID)}}
+
+		handler.ApproveDailyReport(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+	})
+
+	t.Run("审批日报失败-不是审批人", func(t *testing.T) {
+		otherUser := CreateTestUser(t, db, "otherapprove", "其他审批用户")
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", otherUser.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"status":  "approved",
+			"comment": "审批通过",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/daily-reports/%d/approve", report.ID), bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", report.ID)}}
+
+		handler.ApproveDailyReport(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusForbidden || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("审批日报失败-无效状态", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", approver.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"status":  "invalid_status",
+			"comment": "审批通过",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/daily-reports/%d/approve", report.ID), bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", report.ID)}}
+
+		handler.ApproveDailyReport(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("审批日报失败-日报不存在", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", approver.ID)
+		c.Set("roles", []string{"developer"})
+
+		reqBody := map[string]interface{}{
+			"status":  "approved",
+			"comment": "审批通过",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/daily-reports/999/approve", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{gin.Param{Key: "id", Value: "999"}}
+
+		handler.ApproveDailyReport(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
 	})
 }
 
