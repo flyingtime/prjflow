@@ -268,7 +268,7 @@ func TestRequirementHandler_CreateRequirement(t *testing.T) {
 		reqBody := map[string]interface{}{
 			"title":      "新需求",
 			"description": "这是一个新需求",
-			"status":     "pending",
+			"status":     "draft", // 使用有效的状态值
 			"priority":   "high",
 			"project_id": projectID,
 		}
@@ -365,19 +365,24 @@ func TestRequirementHandler_UpdateRequirement(t *testing.T) {
 	handler := api.NewRequirementHandler(db)
 
 	t.Run("更新需求成功", func(t *testing.T) {
+		// 添加用户到项目（作为项目成员）
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
 
 		reqBody := map[string]interface{}{
 			"title":     "已更新需求",
-			"status":    "in_progress",
+			"status":    "active", // 使用有效的状态值
 			"priority":  "medium",
 		}
 		jsonData, _ := json.Marshal(reqBody)
-		c.Request = httptest.NewRequest(http.MethodPut, "/api/requirements/1", bytes.NewBuffer(jsonData))
+		c.Request = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/requirements/%d", requirement.ID), bytes.NewBuffer(jsonData))
 		c.Request.Header.Set("Content-Type", "application/json")
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", requirement.ID)}}
 
 		handler.UpdateRequirement(c)
 
@@ -388,7 +393,7 @@ func TestRequirementHandler_UpdateRequirement(t *testing.T) {
 		err := db.First(&updatedRequirement, requirement.ID).Error
 		assert.NoError(t, err)
 		assert.Equal(t, "已更新需求", updatedRequirement.Title)
-		assert.Equal(t, "in_progress", updatedRequirement.Status)
+		assert.Equal(t, "active", updatedRequirement.Status)
 	})
 
 	t.Run("更新不存在的需求", func(t *testing.T) {
