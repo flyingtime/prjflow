@@ -485,11 +485,17 @@ func TestProjectHandler_DeleteProject(t *testing.T) {
 	handler := api.NewProjectHandler(db)
 
 	t.Run("删除项目成功", func(t *testing.T) {
+		// 创建用户并添加到项目（作为项目成员）
+		user := CreateTestUser(t, db, "deleteproject", "删除项目用户")
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodDelete, "/api/projects/1", nil)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+		c.Request = httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/projects/%d", project.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", project.ID)}}
 
 		handler.DeleteProject(c)
 
@@ -526,11 +532,16 @@ func TestProjectHandler_GetProjectGantt(t *testing.T) {
 	handler := api.NewProjectHandler(db)
 
 	t.Run("获取项目甘特图数据", func(t *testing.T) {
+		// 添加用户到项目（作为项目成员）
+		AddUserToProject(t, db, user.ID, project.ID, "member")
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/projects/1/gantt", nil)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+		c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/projects/%d/gantt", project.ID), nil)
+		c.Params = gin.Params{gin.Param{Key: "id", Value: fmt.Sprintf("%d", project.ID)}}
 
 		handler.GetProjectGantt(c)
 
