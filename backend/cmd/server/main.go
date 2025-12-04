@@ -827,6 +827,8 @@ func main() {
 	dashboardGroup := r.Group("/api/dashboard", middleware.Auth())
 	{
 		dashboardGroup.GET("", dashboardHandler.GetDashboard)
+		dashboardGroup.GET("/config", dashboardHandler.GetDashboardConfig)
+		dashboardGroup.POST("/config", dashboardHandler.SaveDashboardConfig)
 	}
 
 	// 标签管理路由（标签是系统资源，使用项目权限）

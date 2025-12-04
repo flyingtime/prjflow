@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 
 	"project-management/internal/model"
@@ -249,4 +250,103 @@ func (h *DashboardHandler) getResourceStats(userID uint) gin.H {
 		"week_hours":  weekHours,
 		"month_hours": monthHours,
 	}
+}
+
+// GetDashboardConfig 获取工作台配置
+func (h *DashboardHandler) GetDashboardConfig(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Error(c, 401, "未授权")
+		return
+	}
+
+	uid := userID.(uint)
+	var dashboard model.UserDashboard
+	if err := h.db.Where("user_id = ?", uid).First(&dashboard).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// 返回默认配置
+			defaultConfig := gin.H{
+				"cards": []gin.H{
+					{"key": "tasks", "visible": true, "order": 1},
+					{"key": "bugs", "visible": true, "order": 2},
+					{"key": "requirements", "visible": true, "order": 3},
+					{"key": "projects", "visible": true, "order": 4},
+					{"key": "resources", "visible": true, "order": 5},
+					{"key": "reports", "visible": true, "order": 6},
+				},
+				"tabs": []gin.H{
+					{"key": "projects", "visible": true, "order": 1},
+					{"key": "tasks", "visible": true, "order": 2},
+					{"key": "bugs", "visible": true, "order": 3},
+					{"key": "resources", "visible": true, "order": 4},
+					{"key": "reports", "visible": true, "order": 5},
+				},
+			}
+			utils.Success(c, defaultConfig)
+			return
+		}
+		utils.Error(c, utils.CodeError, "查询配置失败")
+		return
+	}
+
+	// 解析JSON配置
+	var config map[string]interface{}
+	if err := json.Unmarshal([]byte(dashboard.Config), &config); err != nil {
+		utils.Error(c, utils.CodeError, "解析配置失败")
+		return
+	}
+
+	utils.Success(c, config)
+}
+
+// SaveDashboardConfig 保存工作台配置
+func (h *DashboardHandler) SaveDashboardConfig(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Error(c, 401, "未授权")
+		return
+	}
+
+	uid := userID.(uint)
+
+	var req map[string]interface{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, 400, "参数错误: "+err.Error())
+		return
+	}
+
+	// 将配置转换为JSON字符串
+	configJSON, err := json.Marshal(req)
+	if err != nil {
+		utils.Error(c, 400, "配置格式错误")
+		return
+	}
+
+	// 保存或更新配置
+	var dashboard model.UserDashboard
+	if err := h.db.Where("user_id = ?", uid).First(&dashboard).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// 创建新配置
+			dashboard = model.UserDashboard{
+				UserID: uid,
+				Config: string(configJSON),
+			}
+			if err := h.db.Create(&dashboard).Error; err != nil {
+				utils.Error(c, utils.CodeError, "保存配置失败")
+				return
+			}
+		} else {
+			utils.Error(c, utils.CodeError, "查询配置失败")
+			return
+		}
+	} else {
+		// 更新现有配置
+		dashboard.Config = string(configJSON)
+		if err := h.db.Save(&dashboard).Error; err != nil {
+			utils.Error(c, utils.CodeError, "保存配置失败")
+			return
+		}
+	}
+
+	utils.Success(c, gin.H{"message": "配置已保存"})
 }

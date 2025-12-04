@@ -40,3 +40,24 @@ export const getDashboard = async (): Promise<DashboardData> => {
   return request.get('/dashboard')
 }
 
+export interface DashboardConfig {
+  cards: Array<{
+    key: string
+    visible: boolean
+    order: number
+  }>
+  tabs: Array<{
+    key: string
+    visible: boolean
+    order: number
+  }>
+}
+
+export const getDashboardConfig = async (): Promise<DashboardConfig> => {
+  return request.get('/dashboard/config')
+}
+
+export const saveDashboardConfig = async (config: DashboardConfig): Promise<void> => {
+  return request.post('/dashboard/config', config)
+}
+

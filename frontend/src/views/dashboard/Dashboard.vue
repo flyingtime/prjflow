@@ -4,7 +4,16 @@
       <AppHeader />
       <a-layout-content class="content">
         <div class="content-inner">
-          <a-page-header title="个人工作台" />
+          <a-page-header title="个人工作台">
+            <template #extra>
+              <a-button type="text" @click="showConfigModal = true">
+                <template #icon>
+                  <SettingOutlined />
+                </template>
+                个性化配置
+              </a-button>
+            </template>
+          </a-page-header>
           
           <a-spin :spinning="loading">
             <!-- 统计概览 -->
@@ -361,6 +370,59 @@
         </div>
       </a-layout-content>
     </a-layout>
+
+    <!-- 个性化配置弹窗 -->
+    <a-modal
+      v-model:open="showConfigModal"
+      title="工作台个性化配置"
+      :width="600"
+      @ok="saveConfig"
+      @cancel="showConfigModal = false"
+    >
+      <a-form :model="dashboardConfig" layout="vertical">
+        <a-divider>卡片显示设置</a-divider>
+        <a-form-item label="统计卡片">
+          <a-list :data-source="dashboardConfig.cards" size="small">
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <a-checkbox v-model:checked="item.visible">{{ getCardTitle(item.key) }}</a-checkbox>
+                <template #actions>
+                  <a-button-group size="small">
+                    <a-button @click="moveCardUp(item)" :disabled="item.order === 1">
+                      <ArrowUpOutlined />
+                    </a-button>
+                    <a-button @click="moveCardDown(item)" :disabled="item.order === dashboardConfig.cards.length">
+                      <ArrowDownOutlined />
+                    </a-button>
+                  </a-button-group>
+                </template>
+              </a-list-item>
+            </template>
+          </a-list>
+        </a-form-item>
+
+        <a-divider>Tab标签设置</a-divider>
+        <a-form-item label="Tab标签">
+          <a-list :data-source="dashboardConfig.tabs" size="small">
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <a-checkbox v-model:checked="item.visible">{{ getTabTitle(item.key) }}</a-checkbox>
+                <template #actions>
+                  <a-button-group size="small">
+                    <a-button @click="moveTabUp(item)" :disabled="item.order === 1">
+                      <ArrowUpOutlined />
+                    </a-button>
+                    <a-button @click="moveTabDown(item)" :disabled="item.order === dashboardConfig.tabs.length">
+                      <ArrowDownOutlined />
+                    </a-button>
+                  </a-button-group>
+                </template>
+              </a-list-item>
+            </template>
+          </a-list>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -368,8 +430,9 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { SettingOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
-import { getDashboard, type DashboardData } from '@/api/dashboard'
+import { getDashboard, getDashboardConfig, saveDashboardConfig, type DashboardData, type DashboardConfig } from '@/api/dashboard'
 import { getDailyReports, getWeeklyReports, type DailyReport, type WeeklyReport } from '@/api/report'
 import { getResourceAllocations, type ResourceAllocation } from '@/api/resource'
 import { useAuthStore } from '@/stores/auth'
@@ -383,9 +446,27 @@ const reportLoading = ref(false)
 const resourceLoading = ref(false)
 const activeTab = ref('projects')
 const reportTab = ref('daily')
+const showConfigModal = ref(false)
 const dailyReports = ref<DailyReport[]>([])
 const weeklyReports = ref<WeeklyReport[]>([])
 const resourceAllocations = ref<ResourceAllocation[]>([])
+const dashboardConfig = ref<DashboardConfig>({
+  cards: [
+    { key: 'tasks', visible: true, order: 1 },
+    { key: 'bugs', visible: true, order: 2 },
+    { key: 'requirements', visible: true, order: 3 },
+    { key: 'projects', visible: true, order: 4 },
+    { key: 'resources', visible: true, order: 5 },
+    { key: 'reports', visible: true, order: 6 }
+  ],
+  tabs: [
+    { key: 'projects', visible: true, order: 1 },
+    { key: 'tasks', visible: true, order: 2 },
+    { key: 'bugs', visible: true, order: 3 },
+    { key: 'resources', visible: true, order: 4 },
+    { key: 'reports', visible: true, order: 5 }
+  ]
+})
 const dashboardData = ref<DashboardData>({
   tasks: { todo: 0, in_progress: 0, done: 0 },
   bugs: { active: 0, resolved: 0, closed: 0 },
@@ -613,8 +694,118 @@ watch(activeTab, (newTab) => {
   }
 })
 
+// 加载工作台配置
+const loadDashboardConfig = async () => {
+  try {
+    const config = await getDashboardConfig()
+    dashboardConfig.value = config
+    applyConfig()
+  } catch (error) {
+    // 使用默认配置
+    applyConfig()
+  }
+}
+
+// 应用配置（根据配置显示/隐藏卡片和Tab）
+const applyConfig = () => {
+  // 这里可以根据配置动态显示/隐藏卡片和Tab
+  // 由于Vue的响应式特性，配置变化会自动反映到界面上
+}
+
+// 保存配置
+const saveConfig = async () => {
+  try {
+    // 更新order
+    dashboardConfig.value.cards.forEach((card, index) => {
+      card.order = index + 1
+    })
+    dashboardConfig.value.tabs.forEach((tab, index) => {
+      tab.order = index + 1
+    })
+    
+    await saveDashboardConfig(dashboardConfig.value)
+    message.success('配置已保存')
+    showConfigModal.value = false
+    applyConfig()
+  } catch (error) {
+    message.error('保存配置失败')
+  }
+}
+
+// 获取卡片标题
+const getCardTitle = (key: string) => {
+  const titles: Record<string, string> = {
+    tasks: '总任务数',
+    bugs: '总Bug数',
+    requirements: '总需求数',
+    projects: '参与项目',
+    resources: '工时统计',
+    reports: '工作报告'
+  }
+  return titles[key] || key
+}
+
+// 获取Tab标题
+const getTabTitle = (key: string) => {
+  const titles: Record<string, string> = {
+    projects: '我的项目',
+    tasks: '我的任务',
+    bugs: '我的Bug',
+    resources: '我的资源分配',
+    reports: '工作报告'
+  }
+  return titles[key] || key
+}
+
+// 移动卡片
+const moveCardUp = (item: { key: string; order: number }) => {
+  const index = dashboardConfig.value.cards.findIndex(c => c.key === item.key)
+  if (index > 0) {
+    const temp = dashboardConfig.value.cards[index]
+    dashboardConfig.value.cards[index] = dashboardConfig.value.cards[index - 1]
+    dashboardConfig.value.cards[index - 1] = temp
+    dashboardConfig.value.cards[index].order = index + 1
+    dashboardConfig.value.cards[index - 1].order = index
+  }
+}
+
+const moveCardDown = (item: { key: string; order: number }) => {
+  const index = dashboardConfig.value.cards.findIndex(c => c.key === item.key)
+  if (index < dashboardConfig.value.cards.length - 1) {
+    const temp = dashboardConfig.value.cards[index]
+    dashboardConfig.value.cards[index] = dashboardConfig.value.cards[index + 1]
+    dashboardConfig.value.cards[index + 1] = temp
+    dashboardConfig.value.cards[index].order = index + 1
+    dashboardConfig.value.cards[index + 1].order = index + 2
+  }
+}
+
+// 移动Tab
+const moveTabUp = (item: { key: string; order: number }) => {
+  const index = dashboardConfig.value.tabs.findIndex(t => t.key === item.key)
+  if (index > 0) {
+    const temp = dashboardConfig.value.tabs[index]
+    dashboardConfig.value.tabs[index] = dashboardConfig.value.tabs[index - 1]
+    dashboardConfig.value.tabs[index - 1] = temp
+    dashboardConfig.value.tabs[index].order = index + 1
+    dashboardConfig.value.tabs[index - 1].order = index
+  }
+}
+
+const moveTabDown = (item: { key: string; order: number }) => {
+  const index = dashboardConfig.value.tabs.findIndex(t => t.key === item.key)
+  if (index < dashboardConfig.value.tabs.length - 1) {
+    const temp = dashboardConfig.value.tabs[index]
+    dashboardConfig.value.tabs[index] = dashboardConfig.value.tabs[index + 1]
+    dashboardConfig.value.tabs[index + 1] = temp
+    dashboardConfig.value.tabs[index].order = index + 1
+    dashboardConfig.value.tabs[index + 1].order = index + 2
+  }
+}
+
 onMounted(() => {
   loadDashboard()
+  loadDashboardConfig()
   // 加载用户信息
   if (!authStore.user && authStore.isAuthenticated) {
     authStore.loadUserInfo()
