@@ -198,9 +198,10 @@ func TestReportHandler_CreateWeeklyReport(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, float64(200), response["code"])
 
-		// 验证周报已创建
+		// 验证周报已创建（使用time.Parse解析日期字符串）
+		parsedWeekStart, _ := time.Parse("2006-01-02", weekStart.Format("2006-01-02"))
 		var report model.WeeklyReport
-		err = db.Where("user_id = ? AND week_start = ?", user.ID, weekStart.Format("2006-01-02")).First(&report).Error
+		err = db.Where("user_id = ? AND week_start = ?", user.ID, parsedWeekStart).First(&report).Error
 		assert.NoError(t, err)
 		assert.Equal(t, "本周工作总结", report.Summary)
 	})
