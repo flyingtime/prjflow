@@ -170,44 +170,116 @@
                       <span>工作报告</span>
                     </a-badge>
                   </template>
-                  <a-row :gutter="16">
-                    <a-col :span="8">
-                      <a-card
-                        class="stat-card"
-                        @click="goToReports('pending')"
-                      >
-                        <a-statistic
-                          title="待提交"
-                          :value="reports.pending"
-                          :value-style="{ color: '#faad14' }"
-                        />
-                      </a-card>
-                    </a-col>
-                    <a-col :span="8">
-                      <a-card
-                        class="stat-card"
-                        @click="goToReports('submitted')"
-                      >
-                        <a-statistic
-                          title="已提交"
-                          :value="reports.submitted"
-                          :value-style="{ color: '#52c41a' }"
-                        />
-                      </a-card>
-                    </a-col>
-                    <a-col :span="8">
-                      <a-card
-                        class="stat-card"
-                        @click="goToReports('approval')"
-                      >
-                        <a-statistic
-                          title="待审批"
-                          :value="reports.pending_approval"
-                          :value-style="{ color: '#1890ff' }"
-                        />
-                      </a-card>
-                    </a-col>
-                  </a-row>
+                  <div>
+                    <a-row :gutter="16" style="margin-bottom: 16px;">
+                      <a-col :span="8">
+                        <a-card
+                          class="stat-card"
+                          @click="goToReports('pending')"
+                        >
+                          <a-statistic
+                            title="待提交"
+                            :value="reports.pending"
+                            :value-style="{ color: '#faad14' }"
+                          />
+                        </a-card>
+                      </a-col>
+                      <a-col :span="8">
+                        <a-card
+                          class="stat-card"
+                          @click="goToReports('submitted')"
+                        >
+                          <a-statistic
+                            title="已提交"
+                            :value="reports.submitted"
+                            :value-style="{ color: '#52c41a' }"
+                          />
+                        </a-card>
+                      </a-col>
+                      <a-col :span="8">
+                        <a-card
+                          class="stat-card"
+                          @click="goToReports('approval')"
+                        >
+                          <a-statistic
+                            title="待审批"
+                            :value="reports.pending_approval"
+                            :value-style="{ color: '#1890ff' }"
+                          />
+                        </a-card>
+                      </a-col>
+                    </a-row>
+                    
+                    <!-- 报告列表 -->
+                    <a-tabs v-model:activeKey="reportTab" size="small">
+                      <a-tab-pane key="daily" tab="日报">
+                        <a-list
+                          :data-source="dailyReports"
+                          :loading="reportLoading"
+                          :pagination="false"
+                          size="small"
+                        >
+                          <template #renderItem="{ item }">
+                            <a-list-item @click="goToReportDetail('daily', item.id)">
+                              <a-list-item-meta>
+                                <template #title>
+                                  <span>{{ formatDate(item.date) }}</span>
+                                  <a-tag :color="getReportStatusColor(item.status)" style="margin-left: 8px;">
+                                    {{ getReportStatusText(item.status) }}
+                                  </a-tag>
+                                </template>
+                                <template #description>
+                                  <div v-if="item.content" style="max-height: 40px; overflow: hidden; text-overflow: ellipsis;">
+                                    {{ item.content.replace(/[#*`]/g, '').substring(0, 50) }}{{ item.content.length > 50 ? '...' : '' }}
+                                  </div>
+                                  <div v-else style="color: #999;">暂无内容</div>
+                                </template>
+                              </a-list-item-meta>
+                            </a-list-item>
+                          </template>
+                          <template #empty>
+                            <a-empty description="暂无日报" />
+                          </template>
+                        </a-list>
+                        <div style="text-align: center; margin-top: 16px;">
+                          <a-button type="link" @click="goToReports('draft')">查看全部日报</a-button>
+                        </div>
+                      </a-tab-pane>
+                      <a-tab-pane key="weekly" tab="周报">
+                        <a-list
+                          :data-source="weeklyReports"
+                          :loading="reportLoading"
+                          :pagination="false"
+                          size="small"
+                        >
+                          <template #renderItem="{ item }">
+                            <a-list-item @click="goToReportDetail('weekly', item.id)">
+                              <a-list-item-meta>
+                                <template #title>
+                                  <span>{{ formatDate(item.week_start) }} ~ {{ formatDate(item.week_end) }}</span>
+                                  <a-tag :color="getReportStatusColor(item.status)" style="margin-left: 8px;">
+                                    {{ getReportStatusText(item.status) }}
+                                  </a-tag>
+                                </template>
+                                <template #description>
+                                  <div v-if="item.summary" style="max-height: 40px; overflow: hidden; text-overflow: ellipsis;">
+                                    {{ item.summary.replace(/[#*`]/g, '').substring(0, 50) }}{{ item.summary.length > 50 ? '...' : '' }}
+                                  </div>
+                                  <div v-else style="color: #999;">暂无内容</div>
+                                </template>
+                              </a-list-item-meta>
+                            </a-list-item>
+                          </template>
+                          <template #empty>
+                            <a-empty description="暂无周报" />
+                          </template>
+                        </a-list>
+                        <div style="text-align: center; margin-top: 16px;">
+                          <a-button type="link" @click="goToReports('draft')">查看全部周报</a-button>
+                        </div>
+                      </a-tab-pane>
+                    </a-tabs>
+                  </div>
                 </a-tab-pane>
               </a-tabs>
             </a-card>
@@ -219,10 +291,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import dayjs from 'dayjs'
 import { getDashboard, type DashboardData } from '@/api/dashboard'
+import { getDailyReports, getWeeklyReports, type DailyReport, type WeeklyReport } from '@/api/report'
 import { useAuthStore } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'
 
@@ -230,7 +304,11 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
+const reportLoading = ref(false)
 const activeTab = ref('projects')
+const reportTab = ref('daily')
+const dailyReports = ref<DailyReport[]>([])
+const weeklyReports = ref<WeeklyReport[]>([])
 const dashboardData = ref<DashboardData>({
   tasks: { todo: 0, in_progress: 0, done: 0 },
   bugs: { active: 0, resolved: 0, closed: 0 },
@@ -340,6 +418,75 @@ const goToAllProjects = () => {
     path: '/project'
   })
 }
+
+// 加载报告列表
+const loadReports = async () => {
+  reportLoading.value = true
+  try {
+    // 加载最近的日报（最多5条）
+    const dailyRes = await getDailyReports({ page: 1, size: 5 })
+    dailyReports.value = dailyRes.list
+
+    // 加载最近的周报（最多5条）
+    const weeklyRes = await getWeeklyReports({ page: 1, size: 5 })
+    weeklyReports.value = weeklyRes.list
+  } catch (error) {
+    // 静默失败，不影响主界面
+  } finally {
+    reportLoading.value = false
+  }
+}
+
+// 格式化日期
+const formatDate = (date: string | Date) => {
+  if (!date) return ''
+  return dayjs(date).format('YYYY-MM-DD')
+}
+
+// 获取报告状态颜色
+const getReportStatusColor = (status: string) => {
+  const colorMap: Record<string, string> = {
+    draft: 'default',
+    submitted: 'processing',
+    approved: 'success',
+    rejected: 'error'
+  }
+  return colorMap[status] || 'default'
+}
+
+// 获取报告状态文本
+const getReportStatusText = (status: string) => {
+  const textMap: Record<string, string> = {
+    draft: '草稿',
+    submitted: '已提交',
+    approved: '已通过',
+    rejected: '已拒绝'
+  }
+  return textMap[status] || status
+}
+
+// 跳转到报告详情
+const goToReportDetail = (type: 'daily' | 'weekly', id: number) => {
+  if (type === 'daily') {
+    router.push(`/reports/daily/${id}`)
+  } else {
+    router.push(`/reports/weekly/${id}`)
+  }
+}
+
+// 监听报告Tab切换，加载对应数据
+watch(reportTab, () => {
+  if (activeTab.value === 'reports') {
+    loadReports()
+  }
+})
+
+// 监听主Tab切换
+watch(activeTab, (newTab) => {
+  if (newTab === 'reports') {
+    loadReports()
+  }
+})
 
 onMounted(() => {
   loadDashboard()
