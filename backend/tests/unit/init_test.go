@@ -278,3 +278,68 @@ func TestInitHandler_InitSystemWithPassword(t *testing.T) {
 	})
 }
 
+func TestInitHandler_GetInitQRCode(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	handler := api.NewInitHandler(db)
+
+	t.Run("获取初始化二维码失败-系统已初始化", func(t *testing.T) {
+		// 设置初始化状态
+		initConfig := model.SystemConfig{
+			Key:   "initialized",
+			Value: "true",
+			Type:  "boolean",
+		}
+		db.Create(&initConfig)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/init/qrcode", nil)
+
+		handler.GetInitQRCode(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("获取初始化二维码失败-未配置微信AppID", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/init/qrcode", nil)
+
+		handler.GetInitQRCode(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("获取初始化二维码失败-未配置微信AppSecret", func(t *testing.T) {
+		// 只配置AppID，不配置AppSecret
+		appIDConfig := model.SystemConfig{
+			Key:   "wechat_app_id",
+			Value: "test_app_id",
+			Type:  "string",
+		}
+		db.Create(&appIDConfig)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/init/qrcode", nil)
+
+		handler.GetInitQRCode(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	// 注意：GetInitQRCode需要调用微信API获取二维码，实际测试中需要mock微信客户端
+	// 这里只测试参数验证和错误处理场景
+}
+
