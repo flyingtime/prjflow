@@ -6,7 +6,11 @@
         <div class="content-inner">
           <a-page-header title="需求管理">
             <template #extra>
-              <a-button type="primary" @click="handleCreate">
+              <a-button 
+                v-permission="'requirement:create'"
+                type="primary" 
+                @click="handleCreate"
+              >
                 <template #icon><PlusOutlined /></template>
                 新增需求
               </a-button>
@@ -211,10 +215,15 @@
                 </template>
                 <template v-else-if="column.key === 'action'">
                   <a-space @click.stop>
-                    <a-button type="link" size="small" @click.stop="handleEdit(record)">
+                    <a-button 
+                      v-permission="'requirement:update'"
+                      type="link" 
+                      size="small" 
+                      @click.stop="handleEdit(record)"
+                    >
                       编辑
                     </a-button>
-                    <a-dropdown>
+                    <a-dropdown v-permission="'requirement:update'">
                       <a-button type="link" size="small">
                         状态 <DownOutlined />
                       </a-button>
@@ -230,6 +239,7 @@
                       </template>
                     </a-dropdown>
                     <a-popconfirm
+                      v-permission="'requirement:delete'"
                       title="确定要删除这个需求吗？"
                       @confirm="handleDelete(record.id)"
                     >
@@ -379,8 +389,8 @@
           <!-- 操作按钮 -->
           <div style="margin-bottom: 16px; text-align: right">
             <a-space>
-              <a-button @click="handleDetailEdit">编辑</a-button>
-              <a-dropdown>
+              <a-button v-permission="'requirement:update'" @click="handleDetailEdit">编辑</a-button>
+              <a-dropdown v-permission="'requirement:update'">
                 <a-button>
                   状态 <DownOutlined />
                 </a-button>

@@ -6,7 +6,11 @@
         <div class="content-inner">
           <a-page-header title="测试单管理">
             <template #extra>
-              <a-button type="primary" @click="handleCreate">
+              <a-button 
+                v-permission="'test-case:create'"
+                type="primary" 
+                @click="handleCreate"
+              >
                 <template #icon><PlusOutlined /></template>
                 新增测试单
               </a-button>
@@ -269,10 +273,15 @@
                 </template>
                 <template v-else-if="column.key === 'action'">
                   <a-space @click.stop>
-                    <a-button type="link" size="small" @click.stop="handleEdit(record)">
+                    <a-button 
+                      v-permission="'test-case:update'"
+                      type="link" 
+                      size="small" 
+                      @click.stop="handleEdit(record)"
+                    >
                       编辑
                     </a-button>
-                    <a-dropdown>
+                    <a-dropdown v-permission="'test-case:update'">
                       <a-button type="link" size="small">
                         状态 <DownOutlined />
                       </a-button>
@@ -286,6 +295,7 @@
                       </template>
                     </a-dropdown>
                     <a-popconfirm
+                      v-permission="'test-case:delete'"
                       title="确定要删除这个测试单吗？"
                       @confirm="handleDelete(record.id)"
                     >
@@ -405,8 +415,8 @@
           <!-- 操作按钮 -->
           <div style="margin-bottom: 16px; text-align: right">
             <a-space>
-              <a-button @click="handleDetailEdit">编辑</a-button>
-              <a-dropdown>
+              <a-button v-permission="'test-case:update'" @click="handleDetailEdit">编辑</a-button>
+              <a-dropdown v-permission="'test-case:update'">
                 <a-button>
                   状态 <DownOutlined />
                 </a-button>
@@ -420,6 +430,7 @@
                 </template>
               </a-dropdown>
               <a-popconfirm
+                v-permission="'test-case:delete'"
                 title="确定要删除这个测试单吗？"
                 @confirm="handleDetailDelete"
               >

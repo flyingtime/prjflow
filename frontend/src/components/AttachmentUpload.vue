@@ -3,6 +3,7 @@
     <!-- 上传按钮 -->
     <a-upload
       v-if="!readonly"
+      v-permission="'attachment:upload'"
       :file-list="fileList"
       :before-upload="beforeUpload"
       :custom-request="handleUpload"
@@ -47,6 +48,7 @@
           <!-- 删除按钮 -->
           <a-button
             v-if="!readonly"
+            v-permission="'attachment:delete'"
             type="link"
             size="small"
             danger
