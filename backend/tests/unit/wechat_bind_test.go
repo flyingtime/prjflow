@@ -45,6 +45,21 @@ func TestAuthHandler_GetWeChatBindQRCode(t *testing.T) {
 	handler := api.NewAuthHandler(db)
 
 	t.Run("获取绑定二维码成功", func(t *testing.T) {
+		// 设置微信配置（GetWeChatBindQRCode需要）
+		appIDConfig := model.SystemConfig{
+			Key:   "wechat_app_id",
+			Value: "test_app_id",
+			Type:  "string",
+		}
+		db.Create(&appIDConfig)
+
+		appSecretConfig := model.SystemConfig{
+			Key:   "wechat_app_secret",
+			Value: "test_app_secret",
+			Type:  "string",
+		}
+		db.Create(&appSecretConfig)
+
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
