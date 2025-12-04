@@ -544,12 +544,13 @@ func TestTaskHandler_UpdateTaskProgress(t *testing.T) {
 	project := CreateTestProject(t, db, "更新任务进度项目")
 	user := CreateTestUser(t, db, "updateprogress", "更新进度用户")
 
+	estimatedHours := 10.0
 	task := &model.Task{
 		Title:          "更新进度任务",
 		ProjectID:      project.ID,
 		CreatorID:      user.ID,
 		Status:         "doing",
-		EstimatedHours: 10.0,
+		EstimatedHours: estimatedHours,
 		Progress:       0,
 	}
 	db.Create(&task)
