@@ -279,21 +279,14 @@
           </a-select>
         </a-form-item>
         <a-form-item label="负责人" name="assignee_id">
-          <a-select
-            v-model:value="formData.assignee_id"
+          <ProjectMemberSelect
+            v-model="formData.assignee_id"
+            :project-id="formData.project_id"
+            :multiple="false"
             placeholder="选择负责人（可选）"
-            allow-clear
-            show-search
-            :filter-option="filterUserOption"
-          >
-            <a-select-option
-              v-for="user in users"
-              :key="user.id"
-              :value="user.id"
-            >
-              {{ user.username }}{{ user.nickname ? `(${user.nickname})` : '' }}
-            </a-select-option>
-          </a-select>
+            :show-role="true"
+            :show-hint="!formData.project_id"
+          />
         </a-form-item>
         <a-form-item label="开始日期" name="start_date">
           <a-date-picker
@@ -673,6 +666,7 @@ import dayjs, { type Dayjs } from 'dayjs'
 import { formatDateTime, formatDate } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import ProjectMemberSelect from '@/components/ProjectMemberSelect.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
 import {
   getTasks,
@@ -691,7 +685,6 @@ import {
 } from '@/api/task'
 import { getProjects, type Project } from '@/api/project'
 import { getRequirements, type Requirement } from '@/api/requirement'
-import { getUsers, type User } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import { getAttachments, attachToEntity, uploadFile, type Attachment } from '@/api/attachment'
 
@@ -702,7 +695,6 @@ const loading = ref(false)
 const tasks = ref<Task[]>([])
 const projects = ref<Project[]>([])
 const requirements = ref<Requirement[]>([])
-const users = ref<User[]>([])
 const availableTasks = ref<Task[]>([])
 const taskLoading = ref(false)
 const searchFormVisible = ref(false) // 搜索栏显示/隐藏状态，默认折叠
@@ -872,15 +864,6 @@ const loadProjects = async () => {
   }
 }
 
-// 加载用户列表
-const loadUsers = async () => {
-  try {
-    const response = await getUsers()
-    users.value = response.list || []
-  } catch (error: any) {
-    console.error('加载用户列表失败:', error)
-  }
-}
 
 // 加载任务列表（用于依赖选择）
 const loadTasksForProject = async () => {
@@ -1468,21 +1451,10 @@ const filterTaskOption = (input: string, option: any) => {
   return task.title.toLowerCase().includes(searchText)
 }
 
-// 用户筛选
-const filterUserOption = (input: string, option: any) => {
-  const user = users.value.find(u => u.id === option.value)
-  if (!user) return false
-  const searchText = input.toLowerCase()
-  return (
-    user.username.toLowerCase().includes(searchText) ||
-    (user.nickname && user.nickname.toLowerCase().includes(searchText))
-  )
-}
 
 onMounted(async () => {
   // 先加载项目列表，确保项目选择器有数据
   await loadProjects()
-  loadUsers()
   
   // 读取路由查询参数（优先级高于 localStorage）
   const projectIdFromQuery = route.query.project_id

@@ -398,8 +398,11 @@
                   </a-menu>
                 </template>
               </a-dropdown>
+              <a-button @click="handleDetailConvertToTask">
+                转任务
+              </a-button>
               <a-button @click="handleDetailConvertToBug">
-                需求转Bug
+                转Bug
               </a-button>
               <a-popconfirm
                 title="确定要删除这个需求吗？"
@@ -581,6 +584,7 @@ import {
 } from '@/api/requirement'
 import { getProjects, type Project } from '@/api/project'
 import { createBug, type CreateBugRequest } from '@/api/bug'
+import { createTask, type CreateTaskRequest } from '@/api/task'
 import { getAttachments, attachToEntity, uploadFile, type Attachment } from '@/api/attachment'
 
 const route = useRoute()
@@ -1038,6 +1042,53 @@ const handleDetailStatusChange = async (status: string) => {
   }
 }
 
+// 详情页需求转任务
+const handleDetailConvertToTask = async () => {
+  if (!detailRequirement.value) return
+  
+  const confirmed = await new Promise<boolean>((resolve) => {
+    const modal = Modal.confirm({
+      title: '确认转换',
+      content: '确定要将此需求转为任务吗？转换后将创建新任务，并关联到此需求。',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => {
+        resolve(true)
+        modal.destroy()
+      },
+      onCancel: () => {
+        resolve(false)
+        modal.destroy()
+      }
+    })
+  })
+  
+  if (!confirmed) return
+  
+  try {
+    const taskData: CreateTaskRequest = {
+      title: `[转任务] ${detailRequirement.value.title}`,
+      description: detailRequirement.value.description 
+        ? `${detailRequirement.value.description}\n\n---\n\n*由需求 #${detailRequirement.value.id}转换而来*`
+        : `*由需求 #${detailRequirement.value.id}转换而来*`,
+      project_id: detailRequirement.value.project_id,
+      priority: detailRequirement.value.priority,
+      status: 'wait', // 任务默认未开始状态
+      requirement_id: detailRequirement.value.id, // 关联原需求
+      assignee_id: detailRequirement.value.assignee_id,
+      estimated_hours: detailRequirement.value.estimated_hours
+    }
+    
+    const task = await createTask(taskData)
+    
+    message.success(`转换成功，已创建任务 #${task.id}`)
+    await loadRequirementDetail(detailRequirement.value.id)
+    loadRequirements()
+  } catch (error: any) {
+    message.error(error.message || '转换失败')
+  }
+}
+
 // 详情页需求转Bug
 const handleDetailConvertToBug = async () => {
   if (!detailRequirement.value) return
@@ -1063,7 +1114,7 @@ const handleDetailConvertToBug = async () => {
   
   try {
     const bugData: CreateBugRequest = {
-      title: `[需求转Bug] ${detailRequirement.value.title}`,
+      title: `[转Bug] ${detailRequirement.value.title}`,
       description: detailRequirement.value.description 
         ? `${detailRequirement.value.description}\n\n---\n\n*由需求 #${detailRequirement.value.id}转换而来*`
         : `*由需求 #${detailRequirement.value.id}转换而来*`,

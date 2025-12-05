@@ -737,7 +737,7 @@
               v-if="detailBug.status === 'active'"
               @click="handleDetailConvertToRequirement"
             >
-              Bug转需求
+              转需求
             </a-button>
             <a-popconfirm
               title="确定要删除这个Bug吗？"
@@ -1866,7 +1866,7 @@ const handleDetailConvertToRequirement = async () => {
   
   try {
     const requirementData: CreateRequirementRequest = {
-      title: `[Bug转需求] ${detailBug.value.title}`,
+      title: `[转需求] ${detailBug.value.title}`,
       description: detailBug.value.description 
         ? `${detailBug.value.description}\n\n---\n\n*由Bug #${detailBug.value.id}转换而来*`
         : `*由Bug #${detailBug.value.id}转换而来*`,

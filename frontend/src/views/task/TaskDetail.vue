@@ -27,6 +27,12 @@
                     </a-menu>
                   </template>
                 </a-dropdown>
+                <a-button @click="handleConvertToRequirement">
+                  转需求
+                </a-button>
+                <a-button @click="handleConvertToBug">
+                  转Bug
+                </a-button>
                 <a-popconfirm
                   title="确定要删除这个任务吗？"
                   @confirm="handleDelete"
@@ -329,21 +335,14 @@
           </a-select>
         </a-form-item>
         <a-form-item label="负责人" name="assignee_id">
-          <a-select
-            v-model:value="editFormData.assignee_id"
+          <ProjectMemberSelect
+            v-model="editFormData.assignee_id"
+            :project-id="task?.project_id"
+            :multiple="false"
             placeholder="选择负责人（可选）"
-            allow-clear
-            show-search
-            :filter-option="filterUserOption"
-          >
-            <a-select-option
-              v-for="user in users"
-              :key="user.id"
-              :value="user.id"
-            >
-              {{ user.username }}{{ user.nickname ? `(${user.nickname})` : '' }}
-            </a-select-option>
-          </a-select>
+            :show-role="true"
+            :show-hint="!task?.project_id"
+          />
         </a-form-item>
         <a-form-item label="开始日期" name="start_date">
           <a-date-picker
@@ -420,12 +419,13 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
 import dayjs, { type Dayjs } from 'dayjs'
 import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import ProjectMemberSelect from '@/components/ProjectMemberSelect.vue'
 import {
   getTask,
   updateTask,
@@ -439,16 +439,15 @@ import {
   type UpdateTaskProgressRequest,
   type Action
 } from '@/api/task'
-import { getUsers, type User } from '@/api/user'
 import { getProjects, type Project } from '@/api/project'
-import { getRequirements, type Requirement } from '@/api/requirement'
+import { getRequirements, createRequirement, type Requirement, type CreateRequirementRequest } from '@/api/requirement'
+import { createBug, type CreateBugRequest } from '@/api/bug'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
 const task = ref<Task | null>(null)
-const users = ref<User[]>([])
 const projects = ref<Project[]>([])
 const requirements = ref<Requirement[]>([])
 const progressModalVisible = ref(false)
@@ -584,9 +583,6 @@ const handleEdit = async () => {
   editFormData.dependency_ids = task.value.dependencies?.map(d => d.id) || []
   
   editModalVisible.value = true
-  if (users.value.length === 0) {
-    await loadUsers()
-  }
   if (projects.value.length === 0) {
     await loadProjects()
   }
@@ -654,15 +650,6 @@ const handleEditCancel = () => {
   editFormRef.value?.resetFields()
 }
 
-// 加载用户列表
-const loadUsers = async () => {
-  try {
-    const response = await getUsers()
-    users.value = response.list || []
-  } catch (error: any) {
-    console.error('加载用户列表失败:', error)
-  }
-}
 
 // 加载项目列表
 const loadProjects = async () => {
@@ -779,11 +766,6 @@ const filterRequirementOption = (input: string, option: any) => {
   return option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
 }
 
-// 用户筛选
-const filterUserOption = (input: string, option: any) => {
-  return option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-}
-
 // 编辑表单项目选择改变
 const handleEditFormProjectChange = () => {
   editFormData.requirement_id = undefined
@@ -841,6 +823,116 @@ const handleStatusChange = async (status: string) => {
     loadTask()
   } catch (error: any) {
     message.error(error.message || '状态更新失败')
+  }
+}
+
+// 任务转需求
+const handleConvertToRequirement = async () => {
+  if (!task.value) return
+  
+  // 确认对话框
+  const confirmed = await new Promise<boolean>((resolve) => {
+    const modal = Modal.confirm({
+      title: '确认转换',
+      content: '确定要将此任务转为需求吗？转换后将创建新需求，并关联到此任务。',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => {
+        resolve(true)
+        modal.destroy()
+      },
+      onCancel: () => {
+        resolve(false)
+        modal.destroy()
+      }
+    })
+  })
+  
+  if (!confirmed) return
+  
+  try {
+    // 创建新需求，基于任务的信息
+    const requirementData: CreateRequirementRequest = {
+      title: `[转需求] ${task.value.title}`,
+      description: task.value.description 
+        ? `${task.value.description}\n\n---\n\n*由任务 #${task.value.id}转换而来*`
+        : `*由任务 #${task.value.id}转换而来*`,
+      project_id: task.value.project_id,
+      priority: task.value.priority,
+      status: 'draft', // 需求默认草稿状态
+      assignee_id: task.value.assignee_id,
+      estimated_hours: task.value.estimated_hours
+    }
+    
+    // 创建需求
+    const requirement = await createRequirement(requirementData)
+    
+    message.success(`转换成功，已创建需求 #${requirement.id}`)
+    
+    // 刷新任务详情
+    await loadTask()
+    
+    // 可选：跳转到新创建的需求详情页
+    // router.push(`/requirement/${requirement.id}`)
+  } catch (error: any) {
+    message.error(error.message || '转换失败')
+  }
+}
+
+// 任务转Bug
+const handleConvertToBug = async () => {
+  if (!task.value) return
+  
+  // 确认对话框
+  const confirmed = await new Promise<boolean>((resolve) => {
+    const modal = Modal.confirm({
+      title: '确认转换',
+      content: '确定要将此任务转为Bug吗？转换后将创建新Bug，并关联到此任务。',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => {
+        resolve(true)
+        modal.destroy()
+      },
+      onCancel: () => {
+        resolve(false)
+        modal.destroy()
+      }
+    })
+  })
+  
+  if (!confirmed) return
+  
+  try {
+    // 创建新Bug，基于任务的信息
+    const bugData: CreateBugRequest = {
+      title: `[转Bug] ${task.value.title}`,
+      description: task.value.description 
+        ? `${task.value.description}\n\n---\n\n*由任务 #${task.value.id}转换而来*`
+        : `*由任务 #${task.value.id}转换而来*`,
+      project_id: task.value.project_id,
+      priority: task.value.priority,
+      severity: 'medium', // Bug默认严重程度
+      status: 'active', // Bug默认激活状态
+      // 如果任务有负责人，作为Bug的指派人员
+      assignee_ids: task.value.assignee_id 
+        ? [task.value.assignee_id] 
+        : undefined,
+      estimated_hours: task.value.estimated_hours
+    }
+    
+    // 创建Bug
+    const bug = await createBug(bugData)
+    
+    message.success(`转换成功，已创建Bug #${bug.id}`)
+    
+    // 刷新任务详情
+    await loadTask()
+    
+    // 可选：跳转到新创建的Bug详情页
+    // router.push(`/bug/${bug.id}`)
+  } catch (error: any) {
+    message.error(error.message || '转换失败')
   }
 }
 
