@@ -152,7 +152,7 @@
       <a-card title="任务统计" :bordered="false" style="margin-bottom: 16px">
         <a-row :gutter="16">
           <a-col :span="8">
-            <a-card class="stat-card" @click="handleGoToTasks('todo')">
+            <a-card class="stat-card" @click="handleGoToTasks('wait')">
               <a-statistic
                 title="待办"
                 :value="statistics?.todo_tasks || 0"
@@ -161,7 +161,7 @@
             </a-card>
           </a-col>
           <a-col :span="8">
-            <a-card class="stat-card" @click="handleGoToTasks('in_progress')">
+            <a-card class="stat-card" @click="handleGoToTasks('doing')">
               <a-statistic
                 title="进行中"
                 :value="statistics?.in_progress_tasks || 0"

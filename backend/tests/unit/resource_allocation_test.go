@@ -455,3 +455,135 @@ func TestResourceAllocationHandler_CheckResourceConflict(t *testing.T) {
 	})
 }
 
+// TestResourceAllocationHandler_GetResourceAllocations_WithUserIDAndDateRange 测试带user_id和日期范围的查询
+func TestResourceAllocationHandler_GetResourceAllocations_WithUserIDAndDateRange(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	project := CreateTestProject(t, db, "日期范围测试项目")
+	user := CreateTestUser(t, db, "daterangeuser", "日期范围用户")
+
+	// 添加用户到项目（作为项目成员）
+	AddUserToProject(t, db, user.ID, project.ID, "member")
+
+	// 创建资源
+	resource := &model.Resource{
+		UserID:    user.ID,
+		ProjectID: project.ID,
+		Role:      "developer",
+	}
+	db.Create(&resource)
+
+	// 创建资源分配（本周的数据）
+	now := time.Now()
+	weekStart := now
+	for weekStart.Weekday() != time.Monday {
+		weekStart = weekStart.AddDate(0, 0, -1)
+	}
+	weekStart = time.Date(weekStart.Year(), weekStart.Month(), weekStart.Day(), 0, 0, 0, 0, weekStart.Location())
+
+	projectID := project.ID
+	allocation1 := &model.ResourceAllocation{
+		ResourceID: resource.ID,
+		ProjectID:  &projectID,
+		Date:       weekStart,
+		Hours:      8.0,
+		Description: "周一工作",
+	}
+	db.Create(allocation1)
+
+	allocation2 := &model.ResourceAllocation{
+		ResourceID: resource.ID,
+		ProjectID:  &projectID,
+		Date:       weekStart.AddDate(0, 0, 1),
+		Hours:      6.0,
+		Description: "周二工作",
+	}
+	db.Create(allocation2)
+
+	handler := api.NewResourceAllocationHandler(db)
+
+	t.Run("按user_id和日期范围查询", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", user.ID)
+		c.Set("roles", []string{"developer"})
+
+		// 构建查询URL，模拟前端请求
+		startDate := weekStart.Format("2006-01-02")
+		endDate := weekStart.AddDate(0, 0, 6).Format("2006-01-02")
+		url := fmt.Sprintf("/api/resource-allocations?page=1&size=20&start_date=%s&end_date=%s&user_id=%d",
+			startDate, endDate, user.ID)
+		c.Request = httptest.NewRequest(http.MethodGet, url, nil)
+
+		handler.GetResourceAllocations(c)
+
+		// 打印响应以便调试
+		if w.Code != http.StatusOK {
+			t.Logf("Response code: %d", w.Code)
+			t.Logf("Response body: %s", w.Body.String())
+		}
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err, "Response should be valid JSON")
+
+		if response["code"] != float64(200) {
+			t.Logf("Error response: %+v", response)
+		}
+		if response["code"] != float64(200) {
+			t.Fatalf("Expected code 200, got %v. Message: %v", response["code"], response["message"])
+		}
+		assert.Equal(t, float64(200), response["code"], "Response code should be 200")
+
+		data, ok := response["data"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("Response data is not a map: %+v", response)
+		}
+		list := data["list"].([]interface{})
+		total := data["total"].(float64)
+
+		t.Logf("Found %d allocations, total: %.0f", len(list), total)
+		assert.GreaterOrEqual(t, len(list), 2, "Should find at least 2 allocations")
+		assert.GreaterOrEqual(t, total, float64(2), "Total should be at least 2")
+	})
+
+	t.Run("按user_id和日期范围查询-管理员", func(t *testing.T) {
+		// 创建管理员用户
+		adminUser := CreateTestAdminUser(t, db, "adminuser", "管理员用户")
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_id", adminUser.ID)
+		c.Set("roles", []string{"admin"})
+
+		startDate := weekStart.Format("2006-01-02")
+		endDate := weekStart.AddDate(0, 0, 6).Format("2006-01-02")
+		url := fmt.Sprintf("/api/resource-allocations?page=1&size=20&start_date=%s&end_date=%s&user_id=%d",
+			startDate, endDate, user.ID)
+		c.Request = httptest.NewRequest(http.MethodGet, url, nil)
+
+		handler.GetResourceAllocations(c)
+
+		if w.Code != http.StatusOK {
+			t.Logf("Response code: %d", w.Code)
+			t.Logf("Response body: %s", w.Body.String())
+		}
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		list := data["list"].([]interface{})
+		assert.GreaterOrEqual(t, len(list), 2, "Admin should see all allocations")
+	})
+}
+

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,33 +21,57 @@ func NewResourceAllocationHandler(db *gorm.DB) *ResourceAllocationHandler {
 // GetResourceAllocations 获取资源分配列表
 func (h *ResourceAllocationHandler) GetResourceAllocations(c *gin.Context) {
 	var allocations []model.ResourceAllocation
-	query := h.db.Preload("Resource").Preload("Resource.User").Preload("Resource.Project").Preload("Task").Preload("Bug").Preload("Project")
+	query := h.db.Model(&model.ResourceAllocation{}).
+		Preload("Resource").Preload("Resource.User").Preload("Resource.Project").Preload("Task").Preload("Bug").Preload("Project")
+
+	// 用户筛选（通过资源）
+	requestUserIDStr := c.Query("user_id")
+	var requestUserID uint
+	hasUserFilter := false
+	if requestUserIDStr != "" {
+		// 解析用户ID
+		if _, err := fmt.Sscanf(requestUserIDStr, "%d", &requestUserID); err == nil {
+			hasUserFilter = true
+			query = query.Joins("JOIN resources AS filter_resources ON resource_allocations.resource_id = filter_resources.id").
+				Where("filter_resources.user_id = ?", requestUserID)
+		}
+	}
 
 	// 权限过滤：普通用户只能看到自己参与的项目相关的资源分配
+	// 包括：1) 直接通过 project_id 关联的项目 2) 通过 resource 关联的项目
 	if !utils.IsAdmin(c) {
-		userID := utils.GetUserID(c)
-		if userID == 0 {
+		currentUserID := utils.GetUserID(c)
+		if currentUserID == 0 {
 			query = query.Where("1 = 0")
 		} else {
-			// 获取用户参与的项目ID列表
-			projectIDs := utils.GetUserProjectIDs(h.db, userID)
-			if len(projectIDs) > 0 {
-				query = query.Where("resource_allocations.project_id IN ?", projectIDs)
+			// 如果用户筛选的是自己，则已经通过JOIN过滤，不需要额外的权限检查
+			if hasUserFilter && requestUserID == currentUserID {
+				// 已经通过JOIN过滤，允许查看
 			} else {
-				query = query.Where("1 = 0")
+				// 获取用户参与的项目ID列表
+				projectIDs := utils.GetUserProjectIDs(h.db, currentUserID)
+				if len(projectIDs) > 0 {
+					if hasUserFilter {
+						// 如果已经JOIN了resources表，直接使用JOIN后的表
+						query = query.Where(
+							"(resource_allocations.project_id IN ? OR filter_resources.project_id IN ?)",
+							projectIDs, projectIDs)
+					} else {
+						// 如果没有JOIN，使用EXISTS子查询
+						query = query.Where(
+							"(resource_allocations.project_id IN ? OR EXISTS (SELECT 1 FROM resources WHERE resources.id = resource_allocations.resource_id AND resources.project_id IN ?))",
+							projectIDs, projectIDs)
+					}
+				} else {
+					query = query.Where("1 = 0")
+				}
 			}
 		}
 	}
 
 	// 资源筛选
 	if resourceID := c.Query("resource_id"); resourceID != "" {
-		query = query.Where("resource_id = ?", resourceID)
-	}
-
-	// 用户筛选（通过资源）
-	if userID := c.Query("user_id"); userID != "" {
-		query = query.Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
-			Where("resources.user_id = ?", userID)
+		query = query.Where("resource_allocations.resource_id = ?", resourceID)
 	}
 
 	// 项目筛选
@@ -56,23 +81,23 @@ func (h *ResourceAllocationHandler) GetResourceAllocations(c *gin.Context) {
 
 	// 任务筛选
 	if taskID := c.Query("task_id"); taskID != "" {
-		query = query.Where("task_id = ?", taskID)
+		query = query.Where("resource_allocations.task_id = ?", taskID)
 	}
 
 	// Bug筛选
 	if bugID := c.Query("bug_id"); bugID != "" {
-		query = query.Where("bug_id = ?", bugID)
+		query = query.Where("resource_allocations.bug_id = ?", bugID)
 	}
 
 	// 日期范围筛选
 	if startDate := c.Query("start_date"); startDate != "" {
 		if t, err := time.Parse("2006-01-02", startDate); err == nil {
-			query = query.Where("date >= ?", t)
+			query = query.Where("resource_allocations.date >= ?", t)
 		}
 	}
 	if endDate := c.Query("end_date"); endDate != "" {
 		if t, err := time.Parse("2006-01-02", endDate); err == nil {
-			query = query.Where("date <= ?", t)
+			query = query.Where("resource_allocations.date <= ?", t)
 		}
 	}
 
@@ -83,30 +108,54 @@ func (h *ResourceAllocationHandler) GetResourceAllocations(c *gin.Context) {
 
 	var total int64
 	countQuery := h.db.Model(&model.ResourceAllocation{})
+	
+	// 用户筛选（通过资源）
+	countRequestUserIDStr := c.Query("user_id")
+	var countRequestUserID uint
+	countHasUserFilter := false
+	if countRequestUserIDStr != "" {
+		if _, err := fmt.Sscanf(countRequestUserIDStr, "%d", &countRequestUserID); err == nil {
+			countHasUserFilter = true
+			countQuery = countQuery.Joins("JOIN resources AS filter_resources ON resource_allocations.resource_id = filter_resources.id").
+				Where("filter_resources.user_id = ?", countRequestUserID)
+		}
+	}
+
 	// 权限过滤：普通用户只能看到自己参与的项目相关的资源分配
+	// 包括：1) 直接通过 project_id 关联的项目 2) 通过 resource 关联的项目
 	if !utils.IsAdmin(c) {
-		userID := utils.GetUserID(c)
-		if userID == 0 {
+		currentUserID := utils.GetUserID(c)
+		if currentUserID == 0 {
 			countQuery = countQuery.Where("1 = 0")
 		} else {
-			projectIDs := utils.GetUserProjectIDs(h.db, userID)
-			if len(projectIDs) > 0 {
-				countQuery = countQuery.Where("project_id IN ?", projectIDs)
+			// 如果用户筛选的是自己，则已经通过JOIN过滤，不需要额外的权限检查
+			if countHasUserFilter && countRequestUserID == currentUserID {
+				// 已经通过JOIN过滤，允许查看
 			} else {
-				countQuery = countQuery.Where("1 = 0")
+				// 获取用户参与的项目ID列表
+				projectIDs := utils.GetUserProjectIDs(h.db, currentUserID)
+				if len(projectIDs) > 0 {
+					if countHasUserFilter {
+						// 如果已经JOIN了resources表，直接使用JOIN后的表
+						countQuery = countQuery.Where(
+							"(resource_allocations.project_id IN ? OR filter_resources.project_id IN ?)",
+							projectIDs, projectIDs)
+					} else {
+						// 如果没有JOIN，使用EXISTS子查询
+						countQuery = countQuery.Where(
+							"(resource_allocations.project_id IN ? OR EXISTS (SELECT 1 FROM resources WHERE resources.id = resource_allocations.resource_id AND resources.project_id IN ?))",
+							projectIDs, projectIDs)
+					}
+				} else {
+					countQuery = countQuery.Where("1 = 0")
+				}
 			}
 		}
 	}
 
 	// 资源筛选
 	if resourceID := c.Query("resource_id"); resourceID != "" {
-		countQuery = countQuery.Where("resource_id = ?", resourceID)
-	}
-
-	// 用户筛选（通过资源）
-	if userID := c.Query("user_id"); userID != "" {
-		countQuery = countQuery.Joins("JOIN resources ON resource_allocations.resource_id = resources.id").
-			Where("resources.user_id = ?", userID)
+		countQuery = countQuery.Where("resource_allocations.resource_id = ?", resourceID)
 	}
 
 	// 项目筛选
@@ -116,29 +165,29 @@ func (h *ResourceAllocationHandler) GetResourceAllocations(c *gin.Context) {
 
 	// 任务筛选
 	if taskID := c.Query("task_id"); taskID != "" {
-		countQuery = countQuery.Where("task_id = ?", taskID)
+		countQuery = countQuery.Where("resource_allocations.task_id = ?", taskID)
 	}
 
 	// Bug筛选
 	if bugID := c.Query("bug_id"); bugID != "" {
-		countQuery = countQuery.Where("bug_id = ?", bugID)
+		countQuery = countQuery.Where("resource_allocations.bug_id = ?", bugID)
 	}
 
 	// 日期范围筛选
 	if startDate := c.Query("start_date"); startDate != "" {
 		if t, err := time.Parse("2006-01-02", startDate); err == nil {
-			countQuery = countQuery.Where("date >= ?", t)
+			countQuery = countQuery.Where("resource_allocations.date >= ?", t)
 		}
 	}
 	if endDate := c.Query("end_date"); endDate != "" {
 		if t, err := time.Parse("2006-01-02", endDate); err == nil {
-			countQuery = countQuery.Where("date <= ?", t)
+			countQuery = countQuery.Where("resource_allocations.date <= ?", t)
 		}
 	}
 
 	countQuery.Count(&total)
 
-	if err := query.Offset(offset).Limit(pageSize).Order("date DESC, created_at DESC").Find(&allocations).Error; err != nil {
+	if err := query.Offset(offset).Limit(pageSize).Order("resource_allocations.date DESC, resource_allocations.created_at DESC").Find(&allocations).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询失败")
 		return
 	}

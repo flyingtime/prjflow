@@ -229,7 +229,6 @@
                       </a-button>
                       <template #overlay>
                         <a-menu @click="(e: any) => handleStatusChange(record.id, e.key as string)">
-                          <a-menu-item key="pending">待处理</a-menu-item>
                           <a-menu-item key="draft">草稿</a-menu-item>
                           <a-menu-item key="reviewing">评审中</a-menu-item>
                           <a-menu-item key="active">激活</a-menu-item>
@@ -371,12 +370,19 @@
     <!-- 需求详情弹窗 -->
     <a-modal
       v-model:open="detailModalVisible"
-      :title="detailRequirement?.title || '需求详情'"
       :width="1200"
       :mask-closable="true"
       :footer="null"
       @cancel="handleDetailCancel"
     >
+      <template #title>
+        <div style="width: 100%;">
+          <div style="text-align: center;">需求详情</div>
+          <div v-if="detailRequirement" style="font-size: 14px; color: #666; margin-top: 4px; text-align: left;">
+            {{ detailRequirement.title }}
+          </div>
+        </div>
+      </template>
       <a-spin :spinning="detailLoading">
         <div v-if="detailRequirement" style="max-height: 70vh; overflow-y: auto">
           <!-- 操作按钮 -->
@@ -389,7 +395,6 @@
                 </a-button>
                 <template #overlay>
                   <a-menu @click="(e: any) => handleDetailStatusChange(e.key as string)">
-                    <a-menu-item key="pending">待处理</a-menu-item>
                     <a-menu-item key="draft">草稿</a-menu-item>
                     <a-menu-item key="reviewing">评审中</a-menu-item>
                     <a-menu-item key="active">激活</a-menu-item>
@@ -413,116 +418,13 @@
             </a-space>
           </div>
 
-          <!-- 基本信息 -->
-          <a-card title="基本信息" :bordered="false" style="margin-bottom: 16px">
-            <a-descriptions :column="2" bordered>
-              <a-descriptions-item label="需求标题">{{ detailRequirement.title }}</a-descriptions-item>
-              <a-descriptions-item label="状态">
-                <a-tag :color="getStatusColor(detailRequirement.status || '')">
-                  {{ getStatusText(detailRequirement.status || '') }}
-                </a-tag>
-              </a-descriptions-item>
-              <a-descriptions-item label="优先级">
-                <a-tag :color="getPriorityColor(detailRequirement.priority || '')">
-                  {{ getPriorityText(detailRequirement.priority || '') }}
-                </a-tag>
-              </a-descriptions-item>
-              <a-descriptions-item label="项目">
-                {{ detailRequirement.project?.name || '-' }}
-              </a-descriptions-item>
-              <a-descriptions-item label="负责人">
-                {{ detailRequirement.assignee ? `${detailRequirement.assignee.username}${detailRequirement.assignee.nickname ? `(${detailRequirement.assignee.nickname})` : ''}` : '-' }}
-              </a-descriptions-item>
-              <a-descriptions-item label="创建人">
-                {{ detailRequirement.creator ? `${detailRequirement.creator.username}${detailRequirement.creator.nickname ? `(${detailRequirement.creator.nickname})` : ''}` : '-' }}
-              </a-descriptions-item>
-              <a-descriptions-item label="创建时间">
-                {{ formatDateTime(detailRequirement.created_at) }}
-              </a-descriptions-item>
-              <a-descriptions-item label="更新时间">
-                {{ formatDateTime(detailRequirement.updated_at) }}
-              </a-descriptions-item>
-            </a-descriptions>
-          </a-card>
-
-          <!-- 需求描述 -->
-          <a-card title="需求描述" :bordered="false" style="margin-bottom: 16px">
-            <div v-if="detailRequirement.description" class="markdown-content">
-              <MarkdownEditor
-                :model-value="detailRequirement.description"
-                :readonly="true"
-              />
-            </div>
-            <a-empty v-else description="暂无描述" />
-          </a-card>
-
-          <!-- 历史记录 -->
-          <a-card :bordered="false" style="margin-bottom: 16px">
-            <template #title>
-              <span>历史记录</span>
-              <a-button 
-                type="link" 
-                size="small"
-                @click.stop="handleDetailAddNote" 
-                :disabled="detailHistoryLoading"
-                style="margin-left: 8px; padding: 0"
-              >
-                添加备注
-              </a-button>
-            </template>
-            <a-spin :spinning="detailHistoryLoading" :style="{ minHeight: '100px' }">
-              <a-timeline v-if="detailHistoryList.length > 0">
-                <a-timeline-item
-                  v-for="(action, index) in detailHistoryList"
-                  :key="action.id"
-                >
-                  <template #dot>
-                    <span style="font-weight: bold; color: #1890ff">{{ detailHistoryList.length - index }}</span>
-                  </template>
-                  <div>
-                    <div style="margin-bottom: 8px">
-                      <span style="color: #666; margin-right: 8px">{{ formatDateTime(action.date) }}</span>
-                      <span>{{ getDetailActionDescription(action) }}</span>
-                      <a-button
-                        v-if="hasDetailHistoryDetails(action)"
-                        type="link"
-                        size="small"
-                        @click="toggleDetailHistoryDetail(action.id)"
-                        style="padding: 0; height: auto; margin-left: 8px"
-                      >
-                        {{ detailExpandedHistoryIds.has(action.id) ? '收起' : '展开' }}
-                      </a-button>
-                    </div>
-                    <!-- 字段变更详情和备注内容（可折叠） -->
-                    <div
-                      v-show="detailExpandedHistoryIds.has(action.id)"
-                      style="margin-left: 24px; margin-top: 8px"
-                    >
-                      <!-- 字段变更详情 -->
-                      <div v-if="action.histories && action.histories.length > 0">
-                        <div
-                          v-for="history in action.histories"
-                          :key="history.id"
-                          style="margin-bottom: 8px; color: #666"
-                        >
-                          <div>修改了{{ getDetailFieldDisplayName(history.field) }}</div>
-                          <div style="margin-left: 16px; margin-top: 4px;">
-                            <div>旧值："{{ history.old_value || history.old || '-' }}"</div>
-                            <div>新值："{{ history.new_value || history.new || '-' }}"</div>
-                          </div>
-                        </div>
-                      </div>
-                      <!-- 备注内容 -->
-                      <div v-if="action.comment" style="margin-top: 8px; color: #666">
-                        {{ action.comment }}
-                      </div>
-                    </div>
-                  </div>
-                </a-timeline-item>
-              </a-timeline>
-              <a-empty v-else description="暂无历史记录" />
-            </a-spin>
-          </a-card>
+          <RequirementDetailContent
+            :requirement="detailRequirement"
+            :loading="detailLoading"
+            :history-list="detailHistoryList"
+            :history-loading="detailHistoryLoading"
+            @add-note="handleDetailAddNote"
+          />
         </div>
       </a-spin>
     </a-modal>
@@ -564,6 +466,7 @@ import { formatDateTime } from '@/utils/date'
 import { type Dayjs } from 'dayjs'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import RequirementDetailContent from '@/components/RequirementDetailContent.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
 import ProjectMemberSelect from '@/components/ProjectMemberSelect.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -602,7 +505,6 @@ const detailLoading = ref(false)
 const detailRequirement = ref<Requirement | null>(null)
 const detailHistoryLoading = ref(false)
 const detailHistoryList = ref<Action[]>([])
-const detailExpandedHistoryIds = ref<Set<number>>(new Set())
 const detailNoteModalVisible = ref(false)
 const detailNoteFormRef = ref()
 const detailNoteFormData = reactive({
@@ -1017,7 +919,6 @@ const loadRequirementDetailHistory = async (requirementId: number) => {
 const handleDetailCancel = () => {
   detailRequirement.value = null
   detailHistoryList.value = []
-  detailExpandedHistoryIds.value = new Set()
 }
 
 // 详情页编辑
@@ -1185,56 +1086,6 @@ const handleDetailNoteCancel = () => {
   detailNoteFormRef.value?.resetFields()
 }
 
-// 获取详情页操作描述
-const getDetailActionDescription = (action: Action): string => {
-  const actorName = action.actor
-    ? `${action.actor.username}${action.actor.nickname ? `(${action.actor.nickname})` : ''}`
-    : '系统'
-
-  switch (action.action) {
-    case 'created':
-      return `由 ${actorName} 创建。`
-    case 'edited':
-      return `由 ${actorName} 编辑。`
-    case 'status_changed':
-      return `由 ${actorName} 变更状态。`
-    case 'commented':
-      return `由 ${actorName} 添加了备注：${action.comment || ''}`
-    default:
-      return `由 ${actorName} 执行了 ${action.action} 操作。`
-  }
-}
-
-// 获取详情页字段显示名称
-const getDetailFieldDisplayName = (fieldName: string): string => {
-  const fieldNames: Record<string, string> = {
-    title: '需求标题',
-    description: '需求描述',
-    status: '状态',
-    priority: '优先级',
-    project_id: '项目',
-    assignee_id: '负责人',
-    estimated_hours: '预估工时',
-    actual_hours: '实际工时'
-  }
-  return fieldNames[fieldName] || fieldName
-}
-
-// 判断详情页历史记录是否有详情
-const hasDetailHistoryDetails = (action: Action): boolean => {
-  return !!(action.histories && action.histories.length > 0) || !!action.comment
-}
-
-// 切换详情页历史记录详情展开/收起
-const toggleDetailHistoryDetail = (actionId: number) => {
-  const newSet = new Set(detailExpandedHistoryIds.value)
-  if (newSet.has(actionId)) {
-    newSet.delete(actionId)
-  } else {
-    newSet.add(actionId)
-  }
-  detailExpandedHistoryIds.value = newSet
-}
 
 // 监听编辑模态框关闭，重新打开详情弹窗
 watch(modalVisible, (visible, prevVisible) => {

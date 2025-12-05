@@ -170,6 +170,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/resource-allocation',
+    name: 'ResourceAllocation',
+    component: () => import('../views/resource/ResourceAllocation.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/reports',
     name: 'Report',
     component: () => import('../views/report/Report.vue'),
@@ -196,6 +202,12 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/reports/daily/create',
     name: 'CreateDailyReport',
+    component: () => import('../views/report/Report.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/reports/daily/:id',
+    name: 'DailyReportDetail',
     component: () => import('../views/report/Report.vue'),
     meta: { requiresAuth: true }
   }

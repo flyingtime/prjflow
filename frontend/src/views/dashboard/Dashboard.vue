@@ -137,7 +137,7 @@
                     <a-col :span="8">
                       <a-card
                         class="stat-card todo-card"
-                        @click="goToTasks('todo')"
+                        @click="goToTasks('wait')"
                       >
                         <a-statistic
                           title="待办"
@@ -149,7 +149,7 @@
                     <a-col :span="8">
                       <a-card
                         class="stat-card in-progress-card"
-                        @click="goToTasks('in_progress')"
+                        @click="goToTasks('doing')"
                       >
                         <a-statistic
                           title="进行中"

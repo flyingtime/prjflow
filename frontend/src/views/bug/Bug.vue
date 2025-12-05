@@ -689,12 +689,19 @@
     <!-- Bug详情弹窗 -->
     <a-modal
       v-model:open="detailModalVisible"
-      :title="detailBug?.title || 'Bug详情'"
       :width="1200"
       :mask-closable="true"
       :footer="null"
       @cancel="handleDetailCancel"
     >
+      <template #title>
+        <div style="width: 100%;">
+          <div style="text-align: center;">Bug详情</div>
+          <div v-if="detailBug" style="font-size: 14px; color: #666; margin-top: 4px; text-align: left;">
+            {{ detailBug.title }}
+          </div>
+        </div>
+      </template>
       <div v-if="detailBug" style="max-height: 70vh; overflow-y: auto">
         <!-- 操作按钮 -->
         <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center">

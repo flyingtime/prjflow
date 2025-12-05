@@ -667,11 +667,18 @@
     <a-modal
       :mask-closable="true"
       v-model:open="dailyDetailModalVisible"
-      :title="dailyDetailData ? `日报详情 - ${formatDate(dailyDetailData.date)}` : '日报详情'"
       :width="900"
       :footer="null"
       @cancel="handleDailyDetailCancel"
     >
+      <template #title>
+        <div style="width: 100%;">
+          <div style="text-align: center;">日报详情</div>
+          <div v-if="dailyDetailData" style="font-size: 14px; color: #666; margin-top: 4px; text-align: left;">
+            {{ formatDate(dailyDetailData.date) }}
+          </div>
+        </div>
+      </template>
       <a-spin :spinning="dailyDetailLoading">
         <div v-if="dailyDetailData">
         <a-descriptions :column="1" bordered>
@@ -745,11 +752,18 @@
     <a-modal
       :mask-closable="true"
       v-model:open="weeklyDetailModalVisible"
-      :title="weeklyDetailData ? `周报详情 - ${formatDate(weeklyDetailData.week_start)} ~ ${formatDate(weeklyDetailData.week_end)}` : '周报详情'"
       :width="900"
       :footer="null"
       @cancel="handleWeeklyDetailCancel"
     >
+      <template #title>
+        <div style="width: 100%;">
+          <div style="text-align: center;">周报详情</div>
+          <div v-if="weeklyDetailData" style="font-size: 14px; color: #666; margin-top: 4px; text-align: left;">
+            {{ formatDate(weeklyDetailData.week_start) }} ~ {{ formatDate(weeklyDetailData.week_end) }}
+          </div>
+        </div>
+      </template>
       <a-spin :spinning="weeklyDetailLoading">
         <div v-if="weeklyDetailData">
         <a-descriptions :column="1" bordered>
@@ -1250,6 +1264,23 @@ const handleDailyView = async (record: DailyReport) => {
   } catch (error: any) {
     message.error(error.message || '加载日报详情失败')
     dailyDetailModalVisible.value = false
+  } finally {
+    dailyDetailLoading.value = false
+  }
+}
+
+// 通过ID加载日报详情（用于路由参数）
+const handleDailyViewById = async (id: number) => {
+  dailyDetailLoading.value = true
+  dailyDetailModalVisible.value = true
+  try {
+    const fullRecord = await getDailyReport(id)
+    dailyDetailData.value = fullRecord
+  } catch (error: any) {
+    message.error(error.message || '加载日报详情失败')
+    dailyDetailModalVisible.value = false
+    // 加载失败时返回列表页
+    router.push('/reports')
   } finally {
     dailyDetailLoading.value = false
   }
@@ -1938,6 +1969,17 @@ onMounted(() => {
     activeTab.value = route.query.tab as 'daily' | 'weekly' | 'approval'
   }
   
+  // 如果是日报详情路由，自动加载并显示日报详情
+  if (route.name === 'DailyReportDetail' && route.params.id) {
+    activeTab.value = 'daily'
+    const reportId = parseInt(route.params.id as string)
+    if (!isNaN(reportId)) {
+      nextTick(() => {
+        handleDailyViewById(reportId)
+      })
+    }
+  }
+  
   // 如果是写日报路由，自动打开新增日报对话框
   if (route.name === 'CreateDailyReport') {
     activeTab.value = 'daily'
@@ -1975,6 +2017,17 @@ watch(() => route.query, () => {
     }
   }
 }, { immediate: false })
+
+// 监听路由参数变化，支持日报详情路由
+watch(() => route.params.id, (newId) => {
+  if (route.name === 'DailyReportDetail' && newId) {
+    const reportId = parseInt(newId as string)
+    if (!isNaN(reportId)) {
+      activeTab.value = 'daily'
+      handleDailyViewById(reportId)
+    }
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>

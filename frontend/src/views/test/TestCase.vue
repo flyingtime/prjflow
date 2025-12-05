@@ -404,12 +404,19 @@
     <!-- 测试单详情弹窗 -->
     <a-modal
       v-model:open="detailModalVisible"
-      :title="detailTestCase?.name || '测试单详情'"
       :width="1200"
       :mask-closable="true"
       :footer="null"
       @cancel="handleDetailCancel"
     >
+      <template #title>
+        <div style="width: 100%;">
+          <div style="text-align: center;">测试单详情</div>
+          <div v-if="detailTestCase" style="font-size: 14px; color: #666; margin-top: 4px; text-align: left;">
+            {{ detailTestCase.name }}
+          </div>
+        </div>
+      </template>
       <a-spin :spinning="detailLoading">
         <div v-if="detailTestCase" style="max-height: 70vh; overflow-y: auto">
           <!-- 操作按钮 -->
