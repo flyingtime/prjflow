@@ -96,6 +96,24 @@
             :show-role="true"
           />
         </a-form-item>
+        <a-form-item label="备注" name="comment">
+          <a-textarea
+            v-model:value="assignFormData.comment"
+            placeholder="请输入备注（可选）"
+            :rows="4"
+          />
+        </a-form-item>
+        <a-form-item label="状态" name="status">
+          <a-select
+            v-model:value="assignFormData.status"
+            placeholder="选择状态（可选）"
+            allow-clear
+          >
+            <a-select-option value="active">激活</a-select-option>
+            <a-select-option value="resolved">已解决</a-select-option>
+            <a-select-option value="closed">已关闭</a-select-option>
+          </a-select>
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -407,7 +425,9 @@ const bugListLoading = ref(false)
 const assignModalVisible = ref(false)
 const assignFormRef = ref()
 const assignFormData = reactive({
-  assignee_ids: [] as number[]
+  assignee_ids: [] as number[],
+  status: undefined as string | undefined,
+  comment: undefined as string | undefined
 })
 
 
@@ -833,7 +853,9 @@ const handleEditFormProjectChange = () => {
 // 指派
 const handleAssign = () => {
   if (!bug.value) return
-  assignFormData.assignee_ids = bug.value.assignees?.map(a => a.id) || []
+  assignFormData.assignee_ids = [] // 默认清空，不预填充当前值
+  assignFormData.status = bug.value.status // 设置当前Bug的状态
+  assignFormData.comment = undefined // 清空备注
   assignModalVisible.value = true
 }
 
@@ -842,7 +864,14 @@ const handleAssignSubmit = async () => {
   if (!bug.value) return
   try {
     await assignFormRef.value.validate()
-    await assignBug(bug.value.id, { assignee_ids: assignFormData.assignee_ids })
+    const requestData: any = { assignee_ids: assignFormData.assignee_ids }
+    if (assignFormData.status) {
+      requestData.status = assignFormData.status
+    }
+    if (assignFormData.comment) {
+      requestData.comment = assignFormData.comment
+    }
+    await assignBug(bug.value.id, requestData)
     message.success('指派成功')
     assignModalVisible.value = false
     await loadBug(bug.value.id)
@@ -857,6 +886,9 @@ const handleAssignSubmit = async () => {
 // 指派取消
 const handleAssignCancel = () => {
   assignFormRef.value?.resetFields()
+  assignFormData.status = undefined
+  assignFormData.comment = undefined
+  assignFormData.assignee_ids = []
 }
 
 // 解决Bug（弹出对话框）

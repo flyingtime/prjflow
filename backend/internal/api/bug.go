@@ -1039,7 +1039,9 @@ func (h *BugHandler) AssignBug(c *gin.Context) {
 	h.db.Model(&model.BugAssignee{}).Where("bug_id = ?", bug.ID).Pluck("user_id", &oldAssigneeIDs)
 
 	var req struct {
-		AssigneeIDs []uint `json:"assignee_ids" binding:"required"`
+		AssigneeIDs []uint  `json:"assignee_ids" binding:"required"`
+		Status      *string `json:"status"`
+		Comment     *string `json:"comment"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1060,8 +1062,19 @@ func (h *BugHandler) AssignBug(c *gin.Context) {
 		return
 	}
 
-	// 如果有分配人，状态保持为active（禅道中Bug只有active/resolved/closed三种状态）
-	// 不需要改变状态
+	// 如果提供了状态，更新Bug状态
+	if req.Status != nil {
+		validStatuses := map[string]bool{"active": true, "resolved": true, "closed": true}
+		if !validStatuses[*req.Status] {
+			utils.Error(c, 400, "无效的状态值")
+			return
+		}
+		bug.Status = *req.Status
+		if err := h.db.Model(&bug).Update("status", *req.Status).Error; err != nil {
+			utils.Error(c, utils.CodeError, "更新状态失败")
+			return
+		}
+	}
 
 	// 重新加载关联数据
 	h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("ResolvedVersion").First(&bug, bug.ID)
@@ -1081,6 +1094,15 @@ func (h *BugHandler) AssignBug(c *gin.Context) {
 					{Field: "assignee_ids", Old: oldIDsStr, New: newIDsStr},
 				}
 				utils.RecordHistory(db, actionID, changes)
+			}
+
+			// 如果提供了备注，记录备注操作
+			if req.Comment != nil && *req.Comment != "" {
+				_, err := utils.RecordAction(db, "bug", bug.ID, "commented", userID.(uint), *req.Comment, nil)
+				if err != nil {
+					utils.Error(c, utils.CodeError, "添加备注失败")
+					return
+				}
 			}
 		}
 	}

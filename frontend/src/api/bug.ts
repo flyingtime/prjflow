@@ -63,6 +63,8 @@ export interface UpdateBugStatusRequest {
 
 export interface AssignBugRequest {
   assignee_ids: number[]
+  status?: 'active' | 'resolved' | 'closed'
+  comment?: string
 }
 
 // Bug相关API
