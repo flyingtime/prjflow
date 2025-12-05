@@ -164,8 +164,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { formatDateTime } from '@/utils/date'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
@@ -189,8 +188,6 @@ const emit = defineEmits<{
   'refresh': []
   'requirement-click': [requirementId: number]
 }>()
-
-const router = useRouter()
 
 // 历史记录相关
 const historyLoading = ref(false)

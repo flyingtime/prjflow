@@ -761,22 +761,30 @@ const getTabTitle = (key: string) => {
 const moveCardUp = (item: { key: string; order: number }) => {
   const index = dashboardConfig.value.cards.findIndex(c => c.key === item.key)
   if (index > 0) {
-    const temp = dashboardConfig.value.cards[index]
-    dashboardConfig.value.cards[index] = dashboardConfig.value.cards[index - 1]
-    dashboardConfig.value.cards[index - 1] = temp
-    dashboardConfig.value.cards[index].order = index + 1
-    dashboardConfig.value.cards[index - 1].order = index
+    const current = dashboardConfig.value.cards[index]
+    const previous = dashboardConfig.value.cards[index - 1]
+    if (current && previous) {
+      const temp = { ...current }
+      dashboardConfig.value.cards[index] = previous
+      dashboardConfig.value.cards[index - 1] = temp
+      previous.order = index + 1
+      temp.order = index
+    }
   }
 }
 
 const moveCardDown = (item: { key: string; order: number }) => {
   const index = dashboardConfig.value.cards.findIndex(c => c.key === item.key)
   if (index < dashboardConfig.value.cards.length - 1) {
-    const temp = dashboardConfig.value.cards[index]
-    dashboardConfig.value.cards[index] = dashboardConfig.value.cards[index + 1]
-    dashboardConfig.value.cards[index + 1] = temp
-    dashboardConfig.value.cards[index].order = index + 1
-    dashboardConfig.value.cards[index + 1].order = index + 2
+    const current = dashboardConfig.value.cards[index]
+    const next = dashboardConfig.value.cards[index + 1]
+    if (current && next) {
+      const temp = { ...current }
+      dashboardConfig.value.cards[index] = next
+      dashboardConfig.value.cards[index + 1] = temp
+      next.order = index + 1
+      temp.order = index + 2
+    }
   }
 }
 
@@ -784,22 +792,30 @@ const moveCardDown = (item: { key: string; order: number }) => {
 const moveTabUp = (item: { key: string; order: number }) => {
   const index = dashboardConfig.value.tabs.findIndex(t => t.key === item.key)
   if (index > 0) {
-    const temp = dashboardConfig.value.tabs[index]
-    dashboardConfig.value.tabs[index] = dashboardConfig.value.tabs[index - 1]
-    dashboardConfig.value.tabs[index - 1] = temp
-    dashboardConfig.value.tabs[index].order = index + 1
-    dashboardConfig.value.tabs[index - 1].order = index
+    const current = dashboardConfig.value.tabs[index]
+    const previous = dashboardConfig.value.tabs[index - 1]
+    if (current && previous) {
+      const temp = { ...current }
+      dashboardConfig.value.tabs[index] = previous
+      dashboardConfig.value.tabs[index - 1] = temp
+      previous.order = index + 1
+      temp.order = index
+    }
   }
 }
 
 const moveTabDown = (item: { key: string; order: number }) => {
   const index = dashboardConfig.value.tabs.findIndex(t => t.key === item.key)
   if (index < dashboardConfig.value.tabs.length - 1) {
-    const temp = dashboardConfig.value.tabs[index]
-    dashboardConfig.value.tabs[index] = dashboardConfig.value.tabs[index + 1]
-    dashboardConfig.value.tabs[index + 1] = temp
-    dashboardConfig.value.tabs[index].order = index + 1
-    dashboardConfig.value.tabs[index + 1].order = index + 2
+    const current = dashboardConfig.value.tabs[index]
+    const next = dashboardConfig.value.tabs[index + 1]
+    if (current && next) {
+      const temp = { ...current }
+      dashboardConfig.value.tabs[index] = next
+      dashboardConfig.value.tabs[index + 1] = temp
+      next.order = index + 1
+      temp.order = index + 2
+    }
   }
 }
 
