@@ -501,23 +501,6 @@ const loadProjectHistory = async (projectId?: number) => {
   }
 }
 
-// 获取操作描述（用于备注模态框）
-const getActionDescription = (action: Action): string => {
-  const actorName = action.actor
-    ? `${action.actor.username}${action.actor.nickname ? `(${action.actor.nickname})` : ''}`
-    : '系统'
-
-  switch (action.action) {
-    case 'created':
-      return `由 ${actorName} 创建。`
-    case 'edited':
-      return `由 ${actorName} 编辑。`
-    case 'commented':
-      return `由 ${actorName} 添加了备注：${action.comment || ''}`
-    default:
-      return `由 ${actorName} 执行了 ${action.action} 操作。`
-  }
-}
 
 // 添加备注
 const handleAddNote = () => {

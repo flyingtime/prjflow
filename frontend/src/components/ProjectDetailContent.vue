@@ -274,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { formatDateTime } from '@/utils/date'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import type { Project, ProjectStatistics, Action } from '@/api/project'

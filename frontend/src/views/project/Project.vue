@@ -462,12 +462,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownOutlined, UpOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
-import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import ProjectDetailContent from '@/components/ProjectDetailContent.vue'
 import ProjectMemberSelect from '@/components/ProjectMemberSelect.vue'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
-import { formatDate, formatDateTime } from '@/utils/date'
+import { formatDate } from '@/utils/date'
 import {
   getProjects,
   getProject,
@@ -584,7 +583,7 @@ const tagSubmitting = ref(false)
 const detailModalVisible = ref(false)
 const detailLoading = ref(false)
 const detailProject = ref<Project | null>(null)
-const detailStatistics = ref<ProjectStatistics | null>(null)
+const detailStatistics = ref<ProjectStatistics | undefined>(undefined)
 const shouldKeepDetailOpen = ref(false)
 
 // 历史记录相关
@@ -1246,23 +1245,6 @@ const loadProjectHistory = async (projectId: number) => {
   }
 }
 
-// 获取操作描述（用于备注模态框）
-const getActionDescription = (action: Action): string => {
-  const actorName = action.actor
-    ? `${action.actor.username}${action.actor.nickname ? `(${action.actor.nickname})` : ''}`
-    : '系统'
-
-  switch (action.action) {
-    case 'created':
-      return `由 ${actorName} 创建。`
-    case 'edited':
-      return `由 ${actorName} 编辑。`
-    case 'commented':
-      return `由 ${actorName} 添加了备注：${action.comment || ''}`
-    default:
-      return `由 ${actorName} 执行了 ${action.action} 操作。`
-  }
-}
 
 // 添加备注
 const handleAddNote = () => {
@@ -1329,7 +1311,7 @@ const goToRequirements = (status: string) => {
 // 详情弹窗取消
 const handleDetailCancel = () => {
   detailProject.value = null
-  detailStatistics.value = null
+  detailStatistics.value = undefined
   historyList.value = []
 }
 
