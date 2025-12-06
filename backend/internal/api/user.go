@@ -190,6 +190,11 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	// 重新加载用户（包含关联数据）
 	h.db.Preload("Department").Preload("Roles").First(&user, user.ID)
 
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	utils.RecordAuditLog(h.db, userID.(uint), username.(string), "create", "user", user.ID, c, true, "", "")
+
 	utils.Success(c, user)
 }
 
@@ -275,6 +280,11 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	// 重新加载用户（包含关联数据）
 	h.db.Preload("Department").Preload("Roles").First(&user, user.ID)
 
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	utils.RecordAuditLog(h.db, userID.(uint), username.(string), "update", "user", user.ID, c, true, "", "")
+
 	utils.Success(c, user)
 }
 
@@ -300,6 +310,13 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 	
+	// 记录审计日志（在删除前记录，因为删除后user.ID可能无法访问）
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	if userID != nil && username != nil {
+		utils.RecordAuditLog(h.db, userID.(uint), username.(string), "delete", "user", user.ID, c, true, "", "")
+	}
+
 	// 硬删除用户
 	if err := h.db.Unscoped().Delete(&model.User{}, id).Error; err != nil {
 		utils.Error(c, utils.CodeError, "删除失败")

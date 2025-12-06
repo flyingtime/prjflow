@@ -242,11 +242,20 @@ func (h *LoginCallbackHandler) Validate(ctx *WeChatCallbackContext) error {
 func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{}, error) {
 	// 查找用户（不自动创建）
 	var user model.User
-	result := ctx.DB.Where("wechat_open_id = ?", ctx.UserInfo.OpenID).First(&user)
+	// 使用Unscoped()查询，包括软删除的用户，但只查询wechat_open_id不为NULL的记录
+	result := ctx.DB.Where("wechat_open_id = ? AND wechat_open_id IS NOT NULL", ctx.UserInfo.OpenID).First(&user)
 	if result.Error == gorm.ErrRecordNotFound {
 		// 用户不存在，返回错误提示
+		// 如果存在ticket，发送错误消息到WebSocket
+		if ctx.Ticket != "" && ctx.Hub != nil {
+			ctx.Hub.SendMessage(ctx.Ticket, "error", nil, "用户不存在，请联系管理员添加用户")
+		}
 		return nil, &CallbackError{Message: "用户不存在，请联系管理员添加用户"}
 	} else if result.Error != nil {
+		// 查询出错，发送错误消息到WebSocket
+		if ctx.Ticket != "" && ctx.Hub != nil {
+			ctx.Hub.SendMessage(ctx.Ticket, "error", nil, "查询用户失败")
+		}
 		return nil, &CallbackError{Message: "查询用户失败", Err: result.Error}
 	}
 	
@@ -281,8 +290,13 @@ func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{},
 	// 生成JWT Token
 	token, err := auth.GenerateToken(user.ID, user.Username, roleNames)
 	if err != nil {
+		// 记录登录失败
+		utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, nil, false, "生成Token失败", "")
 		return nil, &CallbackError{Message: "生成Token失败", Err: err}
 	}
+
+	// 记录登录成功（微信登录）
+	utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, nil, true, "微信登录", "")
 
 	// 通过WebSocket通知PC前端登录成功
 	if ctx.Ticket != "" && ctx.Hub != nil {
@@ -597,6 +611,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var user model.User
 	if err := h.db.Where("username = ?", req.Username).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
+			// 记录登录失败（用户不存在）
+			utils.RecordAuditLog(h.db, 0, req.Username, "login", "user", 0, c, false, "用户不存在", "")
 			utils.Error(c, 401, "用户名或密码错误")
 		} else {
 			utils.Error(c, utils.CodeError, "查询用户失败")
@@ -606,12 +622,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// 检查用户状态
 	if user.Status != 1 {
+		// 记录登录失败（用户被禁用）
+		utils.RecordAuditLog(h.db, user.ID, user.Username, "login", "user", user.ID, c, false, "用户已被禁用", "")
 		utils.Error(c, 403, "用户已被禁用")
 		return
 	}
 
 	// 验证密码
 	if user.Password == "" || !utils.CheckPassword(req.Password, user.Password) {
+		// 记录登录失败（密码错误）
+		utils.RecordAuditLog(h.db, user.ID, user.Username, "login", "user", user.ID, c, false, "密码错误", "")
 		utils.Error(c, 401, "用户名或密码错误")
 		return
 	}
@@ -644,8 +664,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	token, err := auth.GenerateToken(user.ID, user.Username, roleNames)
 	if err != nil {
 		utils.Error(c, utils.CodeError, "生成Token失败")
+		// 记录登录失败
+		utils.RecordAuditLog(h.db, user.ID, user.Username, "login", "user", user.ID, c, false, "生成Token失败", "")
 		return
 	}
+
+	// 记录登录成功
+	utils.RecordAuditLog(h.db, user.ID, user.Username, "login", "user", user.ID, c, true, "", "")
 
 	utils.Success(c, gin.H{
 		"token": token,
@@ -739,6 +764,15 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 // Logout 登出
 func (h *AuthHandler) Logout(c *gin.Context) {
+	// 记录登出操作
+	userID, exists := c.Get("user_id")
+	if exists {
+		var user model.User
+		if err := h.db.First(&user, userID).Error; err == nil {
+			utils.RecordAuditLog(h.db, user.ID, user.Username, "logout", "user", user.ID, c, true, "", "")
+		}
+	}
+
 	// JWT是无状态的，客户端删除token即可
 	utils.Success(c, gin.H{
 		"message": "登出成功",

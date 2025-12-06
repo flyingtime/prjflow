@@ -8,6 +8,24 @@ database:
   type: sqlite  # sqlite or mysql
   dsn: data.db  # SQLite文件路径，或MySQL DSN格式: user:password@tcp(host:port)/dbname?charset=utf8mb4&parseTime=True&loc=Local
 
+# 审计日志数据库配置（可选，默认使用独立的审计数据库）
+# 如果不配置，系统会自动创建独立的审计数据库：
+# - SQLite: 使用 audit.db 文件
+# - MySQL: 使用主数据库名 + "_audit" 作为数据库名，使用主数据库的连接信息
+# 使用独立数据库的好处：
+# 1. 与业务数据隔离，提高安全性
+# 2. 不影响主数据库性能
+# 3. 可以独立备份和优化
+# audit_database:
+#   type: sqlite  # sqlite or mysql（如果不配置 type，默认使用主数据库类型）
+#   dsn: audit.db  # SQLite文件路径，或MySQL DSN格式（如果不配置，SQLite默认使用 audit.db）
+#   # 对于 MySQL，也可以使用以下配置：
+#   # host: localhost
+#   # port: 3306
+#   # user: root
+#   # password: password
+#   # dbname: project_audit  # 如果不配置，默认使用主数据库名 + "_audit"
+
 jwt:
   secret: your-secret-key-change-in-production
   expiration: 24  # 小时

@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	WeChat   WeChatConfig   `mapstructure:"wechat"`
-	Upload   UploadConfig   `mapstructure:"upload"`
+	Server         ServerConfig         `mapstructure:"server"`
+	Database       DatabaseConfig       `mapstructure:"database"`
+	AuditDatabase  DatabaseConfig       `mapstructure:"audit_database"` // 审计日志数据库（可选，不配置则使用主数据库）
+	JWT            JWTConfig            `mapstructure:"jwt"`
+	WeChat         WeChatConfig         `mapstructure:"wechat"`
+	Upload         UploadConfig         `mapstructure:"upload"`
 }
 
 type ServerConfig struct {

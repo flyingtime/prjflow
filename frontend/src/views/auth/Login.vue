@@ -76,7 +76,11 @@ const handlePasswordLogin = async () => {
     })
     handleLoginSuccess(response)
   } catch (error: any) {
-    message.error(error.message || '登录失败')
+    // 响应拦截器已经显示了错误消息，这里不再重复显示
+    // 但如果响应拦截器没有显示（比如网络错误），这里作为后备显示
+    if (!error.response) {
+      message.error(error.message || '登录失败')
+    }
   } finally {
     loading.value = false
   }

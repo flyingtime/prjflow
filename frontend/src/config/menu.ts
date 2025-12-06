@@ -123,6 +123,12 @@ export const menuConfig: MenuItem[] = [
         title: '日志设置',
         path: '/system/log-settings',
         permission: 'log:settings'
+      },
+      {
+        key: 'audit-log',
+        title: '审计日志',
+        path: '/system/audit-log',
+        permission: 'audit:read'
       }
     ]
   }

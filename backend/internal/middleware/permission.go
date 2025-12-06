@@ -12,6 +12,19 @@ import (
 // RequirePermission 要求特定权限
 func RequirePermission(db *gorm.DB, permCode string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 检查是否是管理员角色（管理员自动拥有所有权限）
+		roles, exists := c.Get("roles")
+		if exists {
+			if roleList, ok := roles.([]string); ok {
+				for _, role := range roleList {
+					if role == "admin" {
+						c.Next()
+						return
+					}
+				}
+			}
+		}
+
 		// 优先从上下文获取权限列表（如果已加载）
 		if perms, exists := c.Get("permissions"); exists {
 			if permList, ok := perms.([]string); ok {
@@ -29,7 +42,6 @@ func RequirePermission(db *gorm.DB, permCode string) gin.HandlerFunc {
 		}
 
 		// 如果上下文没有权限列表，从角色查询
-		roles, exists := c.Get("roles")
 		if !exists {
 			utils.Error(c, 403, "没有权限")
 			c.Abort()

@@ -86,6 +86,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.RequirementAttachment{},
 		&model.TaskAttachment{},
 		&model.BugAttachment{},
+		// 注意：审计日志表（AuditLog）不在主数据库中迁移，而是在审计日志数据库中迁移
 	)
 
 	// AutoMigrate 之后，再次清理可能产生的临时表
@@ -99,6 +100,23 @@ func AutoMigrate(db *gorm.DB) error {
 	}
 
 	return err
+}
+
+// MigrateAuditDB 迁移审计日志数据库
+// 如果 auditDB 为 nil，则在主数据库 db 中创建审计日志表
+func MigrateAuditDB(db *gorm.DB, auditDB *gorm.DB) error {
+	// 确定使用哪个数据库
+	targetDB := db
+	if auditDB != nil {
+		targetDB = auditDB
+	}
+
+	// 迁移审计日志表
+	if err := targetDB.AutoMigrate(&model.AuditLog{}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // initDefaultPermissionsAndRoles 初始化默认权限和角色
@@ -177,6 +195,8 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 		{Code: "system:settings", Name: "系统设置", Resource: "system", Action: "settings", Description: "管理系统设置（包括备份配置等）", Status: 1, IsMenu: true, MenuPath: "/system/backup-settings", MenuTitle: "备份设置", MenuOrder: 4},
 		// 日志设置（子菜单）
 		{Code: "log:settings", Name: "日志设置", Resource: "log", Action: "settings", Description: "管理系统日志设置", Status: 1, IsMenu: true, MenuPath: "/system/log-settings", MenuTitle: "日志设置", MenuOrder: 5},
+		// 审计日志（子菜单）
+		{Code: "audit:read", Name: "查看审计日志", Resource: "audit", Action: "read", Description: "查看系统审计日志", Status: 1, IsMenu: true, MenuPath: "/system/audit-log", MenuTitle: "审计日志", MenuOrder: 6},
 
 		// 用户管理权限（操作权限）
 		{Code: "user:read", Name: "查看用户", Resource: "user", Action: "read", Description: "查看用户信息", Status: 1},

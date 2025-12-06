@@ -685,6 +685,31 @@ func main() {
 		log.Println("Database migrated successfully")
 	}
 
+	// 初始化审计日志数据库（默认使用独立的审计数据库）
+	auditDB, err := utils.InitAuditDB()
+	if err != nil {
+		if utils.Logger != nil {
+			utils.Logger.Fatalf("Failed to initialize audit database: %v", err)
+		} else {
+			log.Fatalf("Failed to initialize audit database: %v", err)
+		}
+	}
+	// 设置全局审计日志数据库连接
+	utils.AuditDB = auditDB
+	// 迁移审计日志数据库
+	if err := utils.MigrateAuditDB(db, auditDB); err != nil {
+		if utils.Logger != nil {
+			utils.Logger.Fatalf("Failed to migrate audit database: %v", err)
+		} else {
+			log.Fatalf("Failed to migrate audit database: %v", err)
+		}
+	}
+	if utils.Logger != nil {
+		utils.Logger.Info("Audit database initialized and migrated successfully")
+	} else {
+		log.Println("Audit database initialized and migrated successfully")
+	}
+
 	// 创建Gin引擎
 	r := gin.New()
 
@@ -1072,6 +1097,14 @@ func main() {
 		systemGroup.POST("/log-level", middleware.RequirePermissionOptional(db, "log:settings"), systemHandler.SetLogLevel)
 		systemGroup.GET("/log-files", middleware.RequirePermissionOptional(db, "log:settings"), systemHandler.GetLogFiles)
 		systemGroup.GET("/log-files/:filename", middleware.RequirePermissionOptional(db, "log:settings"), systemHandler.DownloadLogFile)
+	}
+
+	// 审计日志路由
+	auditLogHandler := api.NewAuditLogHandler(db)
+	auditLogGroup := r.Group("/api/audit-logs", middleware.Auth())
+	{
+		auditLogGroup.GET("", middleware.RequirePermission(db, "audit:read"), auditLogHandler.GetAuditLogs)
+		auditLogGroup.GET("/:id", middleware.RequirePermission(db, "audit:read"), auditLogHandler.GetAuditLog)
 	}
 
 	// 静态文件服务（前端构建后的文件，使用 embed 嵌入）

@@ -83,6 +83,11 @@ func (h *PermissionHandler) CreateRole(c *gin.Context) {
 		return
 	}
 
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	utils.RecordAuditLog(h.db, userID.(uint), username.(string), "create", "role", role.ID, c, true, "", "")
+
 	utils.Success(c, role)
 }
 
@@ -135,6 +140,11 @@ func (h *PermissionHandler) UpdateRole(c *gin.Context) {
 		return
 	}
 
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	utils.RecordAuditLog(h.db, userID.(uint), username.(string), "update", "role", role.ID, c, true, "", "")
+
 	utils.Success(c, role)
 }
 
@@ -148,6 +158,14 @@ func (h *PermissionHandler) DeleteRole(c *gin.Context) {
 	if count > 0 {
 		utils.Error(c, 400, "该角色正在被用户使用，无法删除")
 		return
+	}
+
+	var role model.Role
+	if err := h.db.First(&role, id).Error; err == nil {
+		// 记录审计日志（在删除前记录）
+		userID, _ := c.Get("user_id")
+		username, _ := c.Get("username")
+		utils.RecordAuditLog(h.db, userID.(uint), username.(string), "delete", "role", role.ID, c, true, "", "")
 	}
 
 	if err := h.db.Delete(&model.Role{}, id).Error; err != nil {
@@ -251,6 +269,11 @@ func (h *PermissionHandler) CreatePermission(c *gin.Context) {
 		return
 	}
 
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	utils.RecordAuditLog(h.db, userID.(uint), username.(string), "create", "permission", permission.ID, c, true, "", "")
+
 	utils.Success(c, permission)
 }
 
@@ -321,6 +344,11 @@ func (h *PermissionHandler) UpdatePermission(c *gin.Context) {
 		return
 	}
 
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	utils.RecordAuditLog(h.db, userID.(uint), username.(string), "update", "permission", permission.ID, c, true, "", "")
+
 	utils.Success(c, permission)
 }
 
@@ -334,6 +362,14 @@ func (h *PermissionHandler) DeletePermission(c *gin.Context) {
 	if count > 0 {
 		utils.Error(c, 400, "该权限正在被角色使用，无法删除")
 		return
+	}
+
+	var permission model.Permission
+	if err := h.db.First(&permission, id).Error; err == nil {
+		// 记录审计日志（在删除前记录）
+		userID, _ := c.Get("user_id")
+		username, _ := c.Get("username")
+		utils.RecordAuditLog(h.db, userID.(uint), username.(string), "delete", "permission", permission.ID, c, true, "", "")
 	}
 
 	if err := h.db.Delete(&model.Permission{}, id).Error; err != nil {
@@ -428,9 +464,34 @@ func (h *PermissionHandler) GetUserPermissions(c *gin.Context) {
 		return
 	}
 
+	// 类型转换
+	var userIDUint uint
+	switch v := userID.(type) {
+	case uint:
+		userIDUint = v
+	case int:
+		userIDUint = uint(v)
+	case float64:
+		userIDUint = uint(v)
+	default:
+		utils.Error(c, 401, "无效的用户ID")
+		return
+	}
+
 	var user model.User
-	if err := h.db.Preload("Roles.Permissions").First(&user, userID).Error; err != nil {
-		utils.Error(c, 404, "用户不存在")
+	// 使用 Unscoped() 查询，包括软删除的用户（虽然不应该有软删除，但为了安全）
+	if err := h.db.Unscoped().Preload("Roles.Permissions").First(&user, userIDUint).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			utils.Error(c, 404, "用户不存在")
+		} else {
+			utils.Error(c, utils.CodeError, "查询用户失败: "+err.Error())
+		}
+		return
+	}
+	
+	// 如果用户被软删除，返回错误
+	if user.DeletedAt.Valid {
+		utils.Error(c, 404, "用户已被删除")
 		return
 	}
 

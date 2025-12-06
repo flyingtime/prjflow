@@ -119,6 +119,13 @@ func (h *WeChatHandler) SaveWeChatConfig(c *gin.Context) {
 		}
 	}
 
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	if userID != nil && username != nil {
+		utils.RecordAuditLog(h.db, userID.(uint), username.(string), "update", "system", 0, c, true, "", "更新微信配置")
+	}
+
 	utils.Success(c, gin.H{
 		"message": "微信配置保存成功",
 	})

@@ -37,6 +37,13 @@ func GetRolePermissions(db *gorm.DB, roleCodes []string) ([]string, error) {
 
 // CheckPermissionWithDB 使用数据库检查权限
 func CheckPermissionWithDB(db *gorm.DB, roleCodes []string, permCode string) (bool, error) {
+	// 管理员角色自动拥有所有权限
+	for _, roleCode := range roleCodes {
+		if roleCode == "admin" {
+			return true, nil
+		}
+	}
+
 	permissions, err := GetRolePermissions(db, roleCodes)
 	if err != nil {
 		return false, err

@@ -167,6 +167,13 @@ func (h *DepartmentHandler) CreateDepartment(c *gin.Context) {
 		return
 	}
 
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	if userID != nil && username != nil {
+		utils.RecordAuditLog(h.db, userID.(uint), username.(string), "create", "department", department.ID, c, true, "", "")
+	}
+
 	utils.Success(c, department)
 }
 
@@ -199,6 +206,13 @@ func (h *DepartmentHandler) UpdateDepartment(c *gin.Context) {
 	if err := h.db.Save(&department).Error; err != nil {
 		utils.Error(c, utils.CodeError, "更新失败")
 		return
+	}
+
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	if userID != nil && username != nil {
+		utils.RecordAuditLog(h.db, userID.(uint), username.(string), "update", "department", department.ID, c, true, "", "")
 	}
 
 	utils.Success(c, department)
@@ -234,6 +248,13 @@ func (h *DepartmentHandler) DeleteDepartment(c *gin.Context) {
 	if err := h.db.Unscoped().Delete(&department).Error; err != nil {
 		utils.Error(c, utils.CodeError, "删除失败: "+err.Error())
 		return
+	}
+
+	// 记录审计日志
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+	if userID != nil && username != nil {
+		utils.RecordAuditLog(h.db, userID.(uint), username.(string), "delete", "department", department.ID, c, true, "", "")
 	}
 
 	utils.Success(c, gin.H{"message": "删除成功"})
