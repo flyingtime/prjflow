@@ -11,6 +11,7 @@
             <template #extra>
               <a-space>
                 <a-button @click="handleEdit">编辑</a-button>
+                <a-button @click="handleAssign">指派</a-button>
                 <a-button @click="handleUpdateProgress">更新进度</a-button>
                 <a-dropdown>
                   <a-button>
@@ -272,6 +273,54 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 任务指派模态框 -->
+    <a-modal
+      v-model:open="assignModalVisible"
+      title="指派任务"
+      :mask-closable="true"
+      @ok="handleAssignSubmit"
+      @cancel="handleAssignCancel"
+    >
+      <a-form
+        ref="assignFormRef"
+        :model="assignFormData"
+        :rules="assignFormRules"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="指派给" name="assignee_id">
+          <ProjectMemberSelect
+            v-model="assignFormData.assignee_id"
+            :project-id="task?.project_id"
+            :multiple="false"
+            placeholder="选择指派给"
+            :show-role="true"
+          />
+        </a-form-item>
+        <a-form-item label="状态" name="status">
+          <a-select
+            v-model:value="assignFormData.status"
+            placeholder="选择状态（可选，不选择则自动修改）"
+            allow-clear
+          >
+            <a-select-option value="wait">未开始</a-select-option>
+            <a-select-option value="doing">进行中</a-select-option>
+            <a-select-option value="done">已完成</a-select-option>
+            <a-select-option value="pause">已暂停</a-select-option>
+            <a-select-option value="cancel">已取消</a-select-option>
+            <a-select-option value="closed">已关闭</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="备注" name="comment">
+          <a-textarea
+            v-model:value="assignFormData.comment"
+            placeholder="请输入备注（可选）"
+            :rows="4"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -293,6 +342,7 @@ import {
   updateTaskProgress,
   getTaskHistory,
   addTaskHistoryNote,
+  assignTask,
   type Task,
   type CreateTaskRequest,
   type UpdateTaskProgressRequest,
@@ -365,6 +415,18 @@ const progressFormData = reactive<{
 
 const progressFormRules = {
   // progress不再是必填项，因为可以通过工时自动计算
+}
+
+// 指派模态框相关
+const assignModalVisible = ref(false)
+const assignFormRef = ref()
+const assignFormData = reactive({
+  assignee_id: undefined as number | undefined,
+  status: undefined as string | undefined,
+  comment: undefined as string | undefined
+})
+const assignFormRules = {
+  assignee_id: [{ required: true, message: '请选择指派人', trigger: 'change' }]
 }
 
 // 自动计算进度（实际工时/预估工时 * 100）
@@ -508,6 +570,51 @@ const handleEditCancel = () => {
   editFormRef.value?.resetFields()
 }
 
+// 指派
+const handleAssign = () => {
+  if (!task.value) return
+  // 设置默认值：如果当前状态是 "wait"，默认选择 "doing"；否则默认不选择（自动修改）
+  if (task.value.status === 'wait') {
+    assignFormData.status = 'doing'
+  } else {
+    assignFormData.status = undefined
+  }
+  assignFormData.assignee_id = task.value.assignee_id // 预填充当前指派人
+  assignFormData.comment = undefined // 清空备注
+  assignModalVisible.value = true
+}
+
+// 指派提交
+const handleAssignSubmit = async () => {
+  if (!task.value) return
+  try {
+    await assignFormRef.value.validate()
+    const requestData: any = { assignee_id: assignFormData.assignee_id }
+    if (assignFormData.status) {
+      requestData.status = assignFormData.status
+    }
+    if (assignFormData.comment) {
+      requestData.comment = assignFormData.comment
+    }
+    await assignTask(task.value.id, requestData)
+    message.success('指派成功')
+    assignModalVisible.value = false
+    await loadTask() // 重新加载任务详情（会自动加载历史记录）
+  } catch (error: any) {
+    if (error.errorFields) {
+      return
+    }
+    message.error(error.message || '指派失败')
+  }
+}
+
+// 指派取消
+const handleAssignCancel = () => {
+  assignFormRef.value?.resetFields()
+  assignFormData.status = undefined
+  assignFormData.comment = undefined
+  assignFormData.assignee_id = undefined
+}
 
 // 加载项目列表
 const loadProjects = async () => {

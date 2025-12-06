@@ -11,6 +11,7 @@
             <template #extra>
               <a-space>
                 <a-button @click="handleEdit">编辑</a-button>
+                <a-button @click="handleAssign">指派</a-button>
                 <a-dropdown>
                   <a-button>
                     状态 <DownOutlined />
@@ -143,6 +144,53 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 需求指派模态框 -->
+    <a-modal
+      v-model:open="assignModalVisible"
+      title="指派需求"
+      :mask-closable="true"
+      @ok="handleAssignSubmit"
+      @cancel="handleAssignCancel"
+    >
+      <a-form
+        ref="assignFormRef"
+        :model="assignFormData"
+        :rules="assignFormRules"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="指派给" name="assignee_id">
+          <ProjectMemberSelect
+            v-model="assignFormData.assignee_id"
+            :project-id="requirement?.project_id"
+            :multiple="false"
+            placeholder="选择指派给"
+            :show-role="true"
+          />
+        </a-form-item>
+        <a-form-item label="状态" name="status">
+          <a-select
+            v-model:value="assignFormData.status"
+            placeholder="选择状态（可选，不选择则自动修改）"
+            allow-clear
+          >
+            <a-select-option value="draft">草稿</a-select-option>
+            <a-select-option value="reviewing">评审中</a-select-option>
+            <a-select-option value="active">激活</a-select-option>
+            <a-select-option value="changing">变更中</a-select-option>
+            <a-select-option value="closed">已关闭</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="备注" name="comment">
+          <a-textarea
+            v-model:value="assignFormData.comment"
+            placeholder="请输入备注（可选）"
+            :rows="4"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -162,6 +210,7 @@ import {
   deleteRequirement,
   getRequirementHistory,
   addRequirementHistoryNote,
+  assignRequirement,
   type Requirement,
   type CreateRequirementRequest,
   type Action
@@ -203,6 +252,18 @@ const editFormData = reactive<CreateRequirementRequest>({
 const editFormRules = {
   title: [{ required: true, message: '请输入需求标题', trigger: 'blur' }],
   project_id: [{ required: true, message: '请选择项目', trigger: 'change' }]
+}
+
+// 指派模态框相关
+const assignModalVisible = ref(false)
+const assignFormRef = ref()
+const assignFormData = reactive({
+  assignee_id: undefined as number | undefined,
+  status: undefined as string | undefined,
+  comment: undefined as string | undefined
+})
+const assignFormRules = {
+  assignee_id: [{ required: true, message: '请选择指派人', trigger: 'change' }]
 }
 
 // 加载需求详情
@@ -308,6 +369,52 @@ const handleEditSubmit = async () => {
 // 编辑取消
 const handleEditCancel = () => {
   editFormRef.value?.resetFields()
+}
+
+// 指派
+const handleAssign = () => {
+  if (!requirement.value) return
+  // 设置默认值：如果当前状态是 "draft" 或 "reviewing"，默认选择 "active"；否则默认不选择（自动修改）
+  if (requirement.value.status === 'draft' || requirement.value.status === 'reviewing') {
+    assignFormData.status = 'active'
+  } else {
+    assignFormData.status = undefined
+  }
+  assignFormData.assignee_id = requirement.value.assignee_id // 预填充当前指派人
+  assignFormData.comment = undefined // 清空备注
+  assignModalVisible.value = true
+}
+
+// 指派提交
+const handleAssignSubmit = async () => {
+  if (!requirement.value) return
+  try {
+    await assignFormRef.value.validate()
+    const requestData: any = { assignee_id: assignFormData.assignee_id }
+    if (assignFormData.status) {
+      requestData.status = assignFormData.status
+    }
+    if (assignFormData.comment) {
+      requestData.comment = assignFormData.comment
+    }
+    await assignRequirement(requirement.value.id, requestData)
+    message.success('指派成功')
+    assignModalVisible.value = false
+    await loadRequirement() // 重新加载需求详情（会自动加载历史记录）
+  } catch (error: any) {
+    if (error.errorFields) {
+      return
+    }
+    message.error(error.message || '指派失败')
+  }
+}
+
+// 指派取消
+const handleAssignCancel = () => {
+  assignFormRef.value?.resetFields()
+  assignFormData.status = undefined
+  assignFormData.comment = undefined
+  assignFormData.assignee_id = undefined
 }
 
 

@@ -939,3 +939,127 @@ func (h *TaskHandler) AddTaskHistoryNote(c *gin.Context) {
 
 	utils.Success(c, gin.H{"message": "添加备注成功"})
 }
+
+// AssignTask 分配任务给用户
+func (h *TaskHandler) AssignTask(c *gin.Context) {
+	id := c.Param("id")
+	var task model.Task
+	if err := h.db.First(&task, id).Error; err != nil {
+		utils.Error(c, 404, "任务不存在")
+		return
+	}
+
+	// 权限检查：普通用户只能分配自己创建或参与的任务
+	if !utils.CheckTaskAccess(h.db, c, task.ID) {
+		utils.Error(c, 403, "没有权限分配该任务")
+		return
+	}
+
+	// 获取旧的指派人ID
+	oldAssigneeID := task.AssigneeID
+
+	var req struct {
+		AssigneeID uint    `json:"assignee_id" binding:"required"`
+		Status     *string `json:"status"`
+		Comment    *string `json:"comment"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, 400, "参数错误")
+		return
+	}
+
+	// 验证用户是否存在
+	var user model.User
+	if err := h.db.First(&user, req.AssigneeID).Error; err != nil {
+		utils.Error(c, 400, "用户不存在")
+		return
+	}
+
+	// 更新指派人
+	task.AssigneeID = &req.AssigneeID
+
+	// 状态处理逻辑
+	oldStatus := task.Status
+	if req.Status != nil {
+		// 如果提供了状态，使用提供的状态
+		validStatuses := map[string]bool{
+			"wait":   true,
+			"doing":  true,
+			"done":   true,
+			"pause":  true,
+			"cancel": true,
+			"closed": true,
+		}
+		if !validStatuses[*req.Status] {
+			utils.Error(c, 400, "无效的状态值，有效值：wait, doing, done, pause, cancel, closed")
+			return
+		}
+		task.Status = *req.Status
+	} else {
+		// 如果没有提供状态，自动修改：如果当前状态是 "wait"，自动改为 "doing"
+		if task.Status == "wait" {
+			task.Status = "doing"
+		}
+	}
+
+	// 保存更新
+	if err := h.db.Save(&task).Error; err != nil {
+		utils.Error(c, utils.CodeError, "分配失败")
+		return
+	}
+
+	// 重新加载关联数据
+	h.db.Preload("Project").Preload("Requirement").Preload("Creator").Preload("Assignee").Preload("Dependencies").First(&task, task.ID)
+
+	// 记录分配操作
+	userID, exists := c.Get("user_id")
+	if exists {
+		dbValue, _ := c.Get("db")
+		if db, ok := dbValue.(*gorm.DB); ok {
+			// 记录分配操作
+			actionID, _ := utils.RecordAction(db, "task", task.ID, "assigned", userID.(uint), "", nil)
+			
+			// 记录字段变更
+			var changes []utils.HistoryChange
+			
+			// 记录指派人变更
+			oldAssigneeIDStr := ""
+			if oldAssigneeID != nil {
+				oldAssigneeIDStr = fmt.Sprintf("%d", *oldAssigneeID)
+			}
+			newAssigneeIDStr := fmt.Sprintf("%d", req.AssigneeID)
+			if oldAssigneeIDStr != newAssigneeIDStr {
+				changes = append(changes, utils.HistoryChange{
+					Field: "assignee_id",
+					Old:   oldAssigneeIDStr,
+					New:   newAssigneeIDStr,
+				})
+			}
+			
+			// 记录状态变更
+			if oldStatus != task.Status {
+				changes = append(changes, utils.HistoryChange{
+					Field: "status",
+					Old:   oldStatus,
+					New:   task.Status,
+				})
+			}
+			
+			if len(changes) > 0 {
+				utils.RecordHistory(db, actionID, changes)
+			}
+
+			// 如果提供了备注，记录备注操作
+			if req.Comment != nil && *req.Comment != "" {
+				_, err := utils.RecordAction(db, "task", task.ID, "commented", userID.(uint), *req.Comment, nil)
+				if err != nil {
+					utils.Error(c, utils.CodeError, "添加备注失败")
+					return
+				}
+			}
+		}
+	}
+
+	utils.Success(c, task)
+}

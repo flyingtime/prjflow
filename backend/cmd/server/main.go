@@ -883,6 +883,7 @@ func main() {
 		requirementGroup.PUT("/:id", middleware.RequirePermission(db, "requirement:update"), requirementHandler.UpdateRequirement)
 		requirementGroup.DELETE("/:id", middleware.RequirePermission(db, "requirement:delete"), requirementHandler.DeleteRequirement)
 		requirementGroup.PATCH("/:id/status", middleware.RequirePermission(db, "requirement:update"), requirementHandler.UpdateRequirementStatus)
+		requirementGroup.POST("/:id/assign", middleware.RequirePermission(db, "requirement:update"), requirementHandler.AssignRequirement)
 		// 需求历史记录
 		requirementGroup.GET("/:id/history", middleware.RequirePermission(db, "requirement:read"), requirementHandler.GetRequirementHistory)
 		requirementGroup.POST("/:id/history/note", middleware.RequirePermission(db, "requirement:update"), requirementHandler.AddRequirementHistoryNote)
@@ -927,6 +928,7 @@ func main() {
 		taskGroup.PUT("/:id", middleware.RequirePermission(db, "task:update"), taskHandler.UpdateTask)
 		taskGroup.DELETE("/:id", middleware.RequirePermission(db, "task:delete"), taskHandler.DeleteTask)
 		taskGroup.PATCH("/:id/status", middleware.RequirePermission(db, "task:update"), taskHandler.UpdateTaskStatus)
+		taskGroup.POST("/:id/assign", middleware.RequirePermission(db, "task:update"), taskHandler.AssignTask)
 		// 任务历史记录
 		taskGroup.GET("/:id/history", middleware.RequirePermission(db, "task:read"), taskHandler.GetTaskHistory)
 		taskGroup.POST("/:id/history/note", middleware.RequirePermission(db, "task:update"), taskHandler.AddTaskHistoryNote)

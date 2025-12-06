@@ -142,3 +142,13 @@ export const addRequirementHistoryNote = async (id: number, data: AddRequirement
   return request.post(`/requirements/${id}/history/note`, data)
 }
 
+export interface AssignRequirementRequest {
+  assignee_id: number
+  status?: 'draft' | 'reviewing' | 'active' | 'changing' | 'closed'
+  comment?: string
+}
+
+export const assignRequirement = async (id: number, data: AssignRequirementRequest): Promise<Requirement> => {
+  return request.post(`/requirements/${id}/assign`, data)
+}
+

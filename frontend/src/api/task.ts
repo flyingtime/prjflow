@@ -147,3 +147,13 @@ export const addTaskHistoryNote = async (id: number, data: AddTaskHistoryNoteReq
   return request.post(`/tasks/${id}/history/note`, data)
 }
 
+export interface AssignTaskRequest {
+  assignee_id: number
+  status?: 'wait' | 'doing' | 'done' | 'pause' | 'cancel' | 'closed'
+  comment?: string
+}
+
+export const assignTask = async (id: number, data: AssignTaskRequest): Promise<Task> => {
+  return request.post(`/tasks/${id}/assign`, data)
+}
+
