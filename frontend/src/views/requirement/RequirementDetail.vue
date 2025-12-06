@@ -480,54 +480,6 @@ const handleDelete = async () => {
   }
 }
 
-// 获取状态颜色
-const getStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    draft: 'orange',
-    reviewing: 'purple',
-    active: 'blue',
-    changing: 'cyan',
-    closed: 'default'
-  }
-  return colors[status] || 'default'
-}
-
-// 获取状态文本
-const getStatusText = (status: string) => {
-  const texts: Record<string, string> = {
-    draft: '草稿',
-    reviewing: '评审中',
-    active: '激活',
-    changing: '变更中',
-    closed: '已关闭',
-    in_progress: '进行中',
-    completed: '已完成',
-    cancelled: '已取消'
-  }
-  return texts[status] || status
-}
-
-// 获取优先级颜色
-const getPriorityColor = (priority: string) => {
-  const colors: Record<string, string> = {
-    low: 'default',
-    medium: 'blue',
-    high: 'orange',
-    urgent: 'red'
-  }
-  return colors[priority] || 'default'
-}
-
-// 获取优先级文本
-const getPriorityText = (priority: string) => {
-  const texts: Record<string, string> = {
-    low: '低',
-    medium: '中',
-    high: '高',
-    urgent: '紧急'
-  }
-  return texts[priority] || priority
-}
 
 onMounted(() => {
   loadRequirement()

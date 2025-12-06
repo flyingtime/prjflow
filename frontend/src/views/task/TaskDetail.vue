@@ -529,58 +529,6 @@ const loadRequirements = async (projectId: number) => {
   }
 }
 
-// 判断历史记录是否有详情
-const hasHistoryDetails = (action: Action): boolean => {
-  return !!(action.histories && action.histories.length > 0) || !!action.comment
-}
-
-// 切换历史记录详情展开/收起
-const toggleHistoryDetail = (actionId: number) => {
-  const newSet = new Set(expandedHistoryIds.value)
-  if (newSet.has(actionId)) {
-    newSet.delete(actionId)
-  } else {
-    newSet.add(actionId)
-  }
-  expandedHistoryIds.value = newSet
-}
-
-// 获取字段显示名称
-const getFieldDisplayName = (fieldName: string): string => {
-  const fieldNames: Record<string, string> = {
-    title: '任务标题',
-    description: '任务描述',
-    status: '状态',
-    priority: '优先级',
-    assignee_id: '负责人',
-    start_date: '开始日期',
-    end_date: '结束日期',
-    due_date: '截止日期',
-    progress: '进度',
-    estimated_hours: '预估工时',
-    actual_hours: '实际工时',
-    requirement_id: '关联需求'
-  }
-  return fieldNames[fieldName] || fieldName
-}
-
-// 获取操作描述
-const getActionDescription = (action: Action): string => {
-  const actorName = action.actor
-    ? `${action.actor.username}${action.actor.nickname ? `(${action.actor.nickname})` : ''}`
-    : '系统'
-
-  switch (action.action) {
-    case 'created':
-      return `由 ${actorName} 创建。`
-    case 'edited':
-      return `由 ${actorName} 编辑。`
-    case 'commented':
-      return `由 ${actorName} 添加了备注：${action.comment || ''}`
-    default:
-      return `由 ${actorName} 执行了 ${action.action} 操作。`
-  }
-}
 
 // 添加备注
 const handleAddNote = () => {

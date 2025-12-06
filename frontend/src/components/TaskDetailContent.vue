@@ -166,7 +166,7 @@ interface Props {
   historyLoading?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   loading: false,
   historyList: () => [],
   historyLoading: false
