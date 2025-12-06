@@ -57,8 +57,19 @@ func ProcessWeChatCallback(
 		DB:           db,
 	}
 
-	// 1. 从state中提取ticket
-	if state != "" && len(state) > 7 && state[:7] == "ticket:" {
+	// 1. 从state中提取ticket和用户ID
+	if state != "" && len(state) > 8 && state[:8] == "adduser:" {
+		// 添加用户场景：格式 adduser:{ticket}:{user_id}
+		parts := state[8:] // 去掉 "adduser:" 前缀
+		// 找到第一个冒号，前面是ticket，后面是user_id
+		colonIndex := strings.Index(parts, ":")
+		if colonIndex > 0 {
+			ctx.Ticket = parts[:colonIndex]
+		} else {
+			ctx.Ticket = parts
+		}
+	} else if state != "" && len(state) > 7 && state[:7] == "ticket:" {
+		// 登录场景：格式 ticket:{ticket}
 		ctx.Ticket = state[7:]
 	} else if state != "" {
 		ctx.Ticket = state
@@ -245,44 +256,22 @@ func GetDefaultErrorHTML(title, message string) string {
 }
 
 // GenerateUniqueUsername 生成唯一的用户名
-// 如果基础用户名已存在，自动添加数字后缀（如：用户名_1, 用户名_2）
-// 如果基础用户名为空，使用OpenID的一部分生成
-// 为了提高唯一性，默认使用时间戳作为后缀的一部分
+// 使用OpenID的后8位 + 年月日（格式：{openid后8位}_{YYYYMMDD}）
+// 如果用户名冲突，不自动添加后缀，直接返回错误提示联系管理员
 func GenerateUniqueUsername(db *gorm.DB, baseUsername string, openID string) string {
-	username := baseUsername
-	if username == "" {
-		// 如果用户名为空，使用OpenID的一部分 + 时间戳确保唯一性
-		openIDSuffix := openID
-		if len(openID) > 8 {
-			openIDSuffix = openID[len(openID)-8:]
-		}
-		// 使用时间戳的后6位 + OpenID后缀，提高唯一性
-		timestampSuffix := time.Now().Unix() % 1000000 // 取后6位
-		username = fmt.Sprintf("用户_%d_%s", timestampSuffix, openIDSuffix)
+	// 无论是否有baseUsername，都使用OpenID后8位+日期格式
+	// 获取OpenID的后8位
+	openIDSuffix := openID
+	if len(openID) > 8 {
+		openIDSuffix = openID[len(openID)-8:]
+	} else if len(openID) < 8 {
+		// 如果OpenID长度不足8位，前面补0
+		openIDSuffix = fmt.Sprintf("%08s", openID)
 	}
-
-	// 检查用户名是否已存在，如果存在则添加数字后缀（包括软删除的记录）
-	originalUsername := username
-	suffix := 1
-	maxAttempts := 100
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		var checkUser model.User
-		// 使用 Unscoped() 检查包括软删除的记录，因为唯一索引仍然存在
-		if err := db.Unscoped().Where("username = ?", username).First(&checkUser).Error; err == gorm.ErrRecordNotFound {
-			// 用户名可用
-			return username
-		} else if err != nil && err != gorm.ErrRecordNotFound {
-			// 查询出错，使用时间戳作为后缀
-			username = fmt.Sprintf("%s_%d", originalUsername, time.Now().Unix())
-			return username
-		}
-		// 用户名已存在（包括软删除的），添加数字后缀
-		suffix++
-		username = fmt.Sprintf("%s_%d", originalUsername, suffix)
-	}
-
-	// 如果尝试100次后仍然冲突，使用时间戳 + 随机数
-	username = fmt.Sprintf("%s_%d_%d", originalUsername, time.Now().Unix(), suffix)
+	// 获取当前日期（格式：YYYYMMDD）
+	dateStr := time.Now().Format("20060102")
+	username := fmt.Sprintf("%s_%s", openIDSuffix, dateStr)
+	
 	return username
 }
 

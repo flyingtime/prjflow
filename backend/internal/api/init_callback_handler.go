@@ -75,7 +75,17 @@ func (h *InitCallbackHandlerImpl) Process(ctx *WeChatCallbackContext) (interface
 	}
 	if err := tx.Create(&adminUser).Error; err != nil {
 		tx.Rollback()
-		return nil, &CallbackError{Message: "创建管理员用户失败", Err: err}
+		// 检查错误类型
+		errStr := err.Error()
+		isUsernameError := errStr == "UNIQUE constraint failed: users.username" ||
+			contains(errStr, "UNIQUE constraint failed: users.username") ||
+			contains(errStr, "Duplicate entry") && contains(errStr, "username") ||
+			contains(errStr, "duplicate key") && contains(errStr, "username")
+		
+		if isUsernameError {
+			return nil, &CallbackError{Message: "用户名冲突，请联系管理员处理", Err: err}
+		}
+		return nil, &CallbackError{Message: "创建管理员用户失败，请联系管理员", Err: err}
 	}
 
 	// 3. 分配管理员角色

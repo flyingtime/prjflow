@@ -1,18 +1,12 @@
 package api
 
 import (
-	"strings"
-
 	"gorm.io/gorm"
 	"project-management/internal/model"
+	"project-management/pkg/permission"
 
 	"github.com/gin-gonic/gin"
 )
-
-// contains 检查字符串是否包含子字符串（不区分大小写）
-func contains(s, substr string) bool {
-	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
-}
 
 // AddUserCallbackHandler 添加用户场景的微信回调处理
 type AddUserCallbackHandler struct {
@@ -20,7 +14,55 @@ type AddUserCallbackHandler struct {
 }
 
 func (h *AddUserCallbackHandler) Validate(ctx *WeChatCallbackContext) error {
-	// 添加用户场景无需特殊验证
+	// 从state中提取用户ID（格式：adduser:{ticket}:{user_id}）
+	var userIDStr string
+	if len(ctx.State) > 8 && ctx.State[:8] == "adduser:" {
+		parts := ctx.State[8:] // 去掉 "adduser:" 前缀
+		// 找到最后一个冒号，后面是user_id
+		lastColonIndex := -1
+		for i := len(parts) - 1; i >= 0; i-- {
+			if parts[i] == ':' {
+				lastColonIndex = i
+				break
+			}
+		}
+		if lastColonIndex > 0 {
+			userIDStr = parts[lastColonIndex+1:]
+		}
+	}
+	
+	if userIDStr == "" {
+		return &CallbackError{Message: "缺少用户信息，无法验证权限"}
+	}
+	
+	// 查询用户
+	var user model.User
+	if err := ctx.DB.First(&user, userIDStr).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return &CallbackError{Message: "用户不存在"}
+		}
+		return &CallbackError{Message: "查询用户失败", Err: err}
+	}
+	
+	// 获取用户角色
+	var roles []model.Role
+	ctx.DB.Model(&user).Association("Roles").Find(&roles)
+	
+	roleCodes := make([]string, 0, len(roles))
+	for _, role := range roles {
+		roleCodes = append(roleCodes, role.Code)
+	}
+	
+	// 检查用户是否有创建用户的权限
+	hasPermission, err := permission.CheckPermissionWithDB(ctx.DB, roleCodes, "user:create")
+	if err != nil {
+		return &CallbackError{Message: "权限检查失败", Err: err}
+	}
+	
+	if !hasPermission {
+		return &CallbackError{Message: "没有权限添加用户，请联系管理员"}
+	}
+	
 	return nil
 }
 
@@ -88,48 +130,54 @@ func (h *AddUserCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{
 		nickname = "用户"
 	}
 
-	// 生成唯一的用户名并创建用户（带重试机制处理并发冲突）
-	var user model.User
-	maxRetries := 5
-	for i := 0; i < maxRetries; i++ {
-	// 生成唯一的用户名（如果昵称已存在，自动添加数字后缀）
-		username := GenerateUniqueUsername(ctx.DB, nickname, ctx.UserInfo.OpenID)
-		
-		// 如果昵称为空，使用用户名
-		if nickname == "" {
-			nickname = username
-		}
+	// 生成唯一的用户名并创建用户（处理并发冲突）
+	username := GenerateUniqueUsername(ctx.DB, nickname, ctx.UserInfo.OpenID)
+	
+	// 如果昵称为空，使用用户名
+	if nickname == "" {
+		nickname = username
+	}
 
 	// 创建新用户
-		wechatOpenID := ctx.UserInfo.OpenID
-		user = model.User{
+	wechatOpenID := ctx.UserInfo.OpenID
+	user := model.User{
 		WeChatOpenID: &wechatOpenID,
 		Username:     username,
-			Nickname:     nickname, // 设置昵称（从微信昵称获取，如果为空则使用用户名）
+		Nickname:     nickname, // 设置昵称（从微信昵称获取，如果为空则使用用户名）
 		Avatar:       ctx.UserInfo.HeadImgURL,
 		Status:       1,
 	}
-		
-		err := ctx.DB.Create(&user).Error
-		if err == nil {
-			// 创建成功
-			break
-		}
-		
-		// 如果是唯一约束错误，重试
+	
+	err := ctx.DB.Create(&user).Error
+	if err != nil {
+		// 检查错误类型
 		errStr := err.Error()
-		isUniqueError := errStr == "UNIQUE constraint failed: users.username" ||
-			contains(errStr, "UNIQUE constraint failed") ||
-			contains(errStr, "Duplicate entry") ||
-			contains(errStr, "duplicate key")
+		isWeChatOpenIDError := errStr == "UNIQUE constraint failed: users.wechat_open_id" ||
+			contains(errStr, "UNIQUE constraint failed: users.wechat_open_id") ||
+			contains(errStr, "Duplicate entry") && contains(errStr, "wechat_open_id") ||
+			contains(errStr, "duplicate key") && contains(errStr, "wechat_open_id")
 		
-		if i < maxRetries-1 && isUniqueError {
-			// 等待一小段时间后重试（避免立即重试导致相同结果）
-			continue
+		isUsernameError := errStr == "UNIQUE constraint failed: users.username" ||
+			contains(errStr, "UNIQUE constraint failed: users.username") ||
+			contains(errStr, "Duplicate entry") && contains(errStr, "username") ||
+			contains(errStr, "duplicate key") && contains(errStr, "username")
+
+		if isWeChatOpenIDError {
+			// wechat_open_id 冲突：可能是同一用户并发添加，重新查询用户
+			var existingUser model.User
+			if err := ctx.DB.Where("wechat_open_id = ?", ctx.UserInfo.OpenID).First(&existingUser).Error; err == nil {
+				// 用户已存在，直接使用
+				user = existingUser
+			} else {
+				return nil, &CallbackError{Message: "创建用户失败，请稍后重试或联系管理员", Err: err}
+			}
+		} else if isUsernameError {
+			// username 冲突：两个不同的 OpenID 后8位相同，提示联系管理员
+			return nil, &CallbackError{Message: "用户名冲突，请联系管理员处理", Err: err}
+		} else {
+			// 其他错误
+			return nil, &CallbackError{Message: "创建用户失败，请联系管理员", Err: err}
 		}
-		
-		// 其他错误或达到最大重试次数
-		return nil, &CallbackError{Message: "创建用户失败", Err: err}
 	}
 
 	// 加载用户信息（包含关联数据）

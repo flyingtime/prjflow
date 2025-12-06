@@ -10,6 +10,7 @@ import (
 	"project-management/internal/utils"
 	"project-management/internal/websocket"
 	"project-management/pkg/auth"
+	"project-management/pkg/permission"
 	"project-management/pkg/wechat"
 
 	"github.com/gin-gonic/gin"
@@ -84,11 +85,52 @@ func (h *AuthHandler) GetQRCode(c *gin.Context) {
 		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
 	}
 
+	// 判断是否是添加用户场景（根据 redirect_uri 是否包含 add-user）
+	queryRedirectURI := c.Query("redirect_uri")
+	isAddUser := strings.Contains(queryRedirectURI, "add-user")
+	
+	// 如果是添加用户场景，需要检查权限
+	if isAddUser {
+		// 检查用户是否已登录
+		userID, exists := c.Get("user_id")
+		if !exists {
+			utils.Error(c, 401, "未授权，请先登录")
+			return
+		}
+		
+		// 查询用户
+		var user model.User
+		if err := h.db.First(&user, userID).Error; err != nil {
+			utils.Error(c, 401, "用户不存在")
+			return
+		}
+		
+		// 获取用户角色
+		var roles []model.Role
+		h.db.Model(&user).Association("Roles").Find(&roles)
+		
+		roleCodes := make([]string, 0, len(roles))
+		for _, role := range roles {
+			roleCodes = append(roleCodes, role.Code)
+		}
+		
+		// 检查用户是否有创建用户的权限
+		hasPermission, err := permission.CheckPermissionWithDB(h.db, roleCodes, "user:create")
+		if err != nil {
+			utils.Error(c, utils.CodeError, "权限检查失败")
+			return
+		}
+		
+		if !hasPermission {
+			utils.Error(c, 403, "没有权限添加用户")
+			return
+		}
+	}
+
 	// 获取回调地址（前端地址）
 	// 优先级：1. 配置文件中的 callback_domain 2. 查询参数 3. Referer 头 4. 默认值
 	// 如果配置了 callback_domain，强制使用配置的域名，确保与微信后台配置一致
 	var redirectURI string
-	queryRedirectURI := c.Query("redirect_uri")
 
 	if config.AppConfig.WeChat.CallbackDomain != "" {
 		// 优先使用配置文件中的回调域名
@@ -151,11 +193,22 @@ func (h *AuthHandler) GetQRCode(c *gin.Context) {
 
 	// 生成唯一的ticket（使用时间戳，前端会通过WebSocket连接）
 	ticket := qrCode.Ticket
-	// 将ticket作为state参数的一部分，这样回调时可以获取到ticket
-	// 注意：微信的state参数会原样返回，格式：ticket:timestamp
-	stateWithTicket := "ticket:" + ticket
+	
+	var stateWithTicket string
+	if isAddUser {
+		// 添加用户场景：需要传递当前用户ID，用于权限验证
+		// 注意：权限检查已经在上面完成
+		userID, _ := c.Get("user_id") // 已经检查过，这里不会为空
+		// state格式：adduser:{ticket}:{user_id}
+		userIDStr := fmt.Sprintf("%v", userID)
+		stateWithTicket = fmt.Sprintf("adduser:%s:%s", ticket, userIDStr)
+	} else {
+		// 登录场景：只传递ticket
+		// 注意：微信的state参数会原样返回，格式：ticket:timestamp
+		stateWithTicket = "ticket:" + ticket
+	}
 
-	// 重新生成二维码，将ticket包含在state中
+	// 重新生成二维码，将ticket和用户ID（如果是添加用户场景）包含在state中
 	qrCode, err = h.wechatClient.GetQRCode(redirectURI, stateWithTicket)
 	if err != nil {
 		utils.Error(c, utils.CodeError, "获取二维码失败: "+err.Error())
@@ -171,6 +224,11 @@ func (h *AuthHandler) GetQRCode(c *gin.Context) {
 	})
 }
 
+// contains 检查字符串是否包含子字符串（不区分大小写）
+func contains(s, substr string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+}
+
 // LoginCallbackHandler 登录场景的微信回调处理
 type LoginCallbackHandler struct {
 	db *gorm.DB
@@ -182,39 +240,20 @@ func (h *LoginCallbackHandler) Validate(ctx *WeChatCallbackContext) error {
 }
 
 func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{}, error) {
-	// 查找或创建用户
+	// 查找用户（不自动创建）
 	var user model.User
 	result := ctx.DB.Where("wechat_open_id = ?", ctx.UserInfo.OpenID).First(&user)
 	if result.Error == gorm.ErrRecordNotFound {
-		// 生成唯一的用户名（如果昵称已存在，自动添加数字后缀）
-		username := GenerateUniqueUsername(ctx.DB, ctx.UserInfo.Nickname, ctx.UserInfo.OpenID)
-
-		// 确保昵称不为空（如果微信昵称为空，使用用户名作为默认昵称）
-		nickname := ctx.UserInfo.Nickname
-		if nickname == "" {
-			nickname = username
-		}
-
-		// 创建新用户
-		wechatOpenID := ctx.UserInfo.OpenID
-		user = model.User{
-			WeChatOpenID: &wechatOpenID,
-			Username:     username,
-			Nickname:     nickname, // 设置昵称（从微信昵称获取，如果为空则使用用户名）
-			Avatar:       ctx.UserInfo.HeadImgURL,
-			Status:       1,
-		}
-		if err := ctx.DB.Create(&user).Error; err != nil {
-			return nil, &CallbackError{Message: "创建用户失败", Err: err}
-		}
+		// 用户不存在，返回错误提示
+		return nil, &CallbackError{Message: "用户不存在，请联系管理员添加用户"}
 	} else if result.Error != nil {
 		return nil, &CallbackError{Message: "查询用户失败", Err: result.Error}
-	} else {
-		// 更新用户信息（如果用户名变化，需要检查是否重复）
-		// 注意：这里不更新用户名，因为用户名可能已被用户修改过
-		user.Avatar = ctx.UserInfo.HeadImgURL
-		ctx.DB.Save(&user)
 	}
+	
+	// 更新用户信息（如果用户名变化，需要检查是否重复）
+	// 注意：这里不更新用户名，因为用户名可能已被用户修改过
+	user.Avatar = ctx.UserInfo.HeadImgURL
+	ctx.DB.Save(&user)
 
 	// 获取用户角色
 	var roles []model.Role
@@ -410,40 +449,27 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 		return
 	}
 
-	// 查找或创建用户
+	// 查找用户（不自动创建）
 	var user model.User
 	result := h.db.Where("wechat_open_id = ?", userInfo.OpenID).First(&user)
 	if result.Error == gorm.ErrRecordNotFound {
-		// 生成唯一的用户名（如果昵称已存在，自动添加数字后缀）
-		username := GenerateUniqueUsername(h.db, userInfo.Nickname, userInfo.OpenID)
-
-		// 确保昵称不为空（如果微信昵称为空，使用用户名作为默认昵称）
-		nickname := userInfo.Nickname
-		if nickname == "" {
-			nickname = username
+		// 用户不存在，返回错误提示
+		if ticket != "" {
+			websocket.GetHub().SendMessage(ticket, "error", nil, "用户不存在，请联系管理员添加用户")
 		}
-
-		// 创建新用户
-		wechatOpenID := userInfo.OpenID
-		user = model.User{
-			WeChatOpenID: &wechatOpenID,
-			Username:     username,
-			Nickname:     nickname, // 设置昵称（从微信昵称获取，如果为空则使用用户名）
-			Avatar:       userInfo.HeadImgURL,
-			Status:       1,
-		}
-		if err := h.db.Create(&user).Error; err != nil {
-			utils.Error(c, utils.CodeError, "创建用户失败")
-			return
-		}
+		utils.Error(c, utils.CodeError, "用户不存在，请联系管理员添加用户")
+		return
 	} else if result.Error != nil {
+		if ticket != "" {
+			websocket.GetHub().SendMessage(ticket, "error", nil, "查询用户失败")
+		}
 		utils.Error(c, utils.CodeError, "查询用户失败")
 		return
-	} else {
-		// 更新用户信息（不更新用户名，因为用户名可能已被用户修改过）
-		user.Avatar = userInfo.HeadImgURL
-		h.db.Save(&user)
 	}
+	
+	// 更新用户信息（不更新用户名，因为用户名可能已被用户修改过）
+	user.Avatar = userInfo.HeadImgURL
+	h.db.Save(&user)
 
 	// 获取用户角色
 	var roles []model.Role
