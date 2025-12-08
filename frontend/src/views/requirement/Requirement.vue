@@ -411,7 +411,10 @@
             <a-space>
               <a-button v-permission="'requirement:update'" @click="handleDetailEdit">编辑</a-button>
               <a-button v-permission="'requirement:update'" @click="handleDetailAssign">指派</a-button>
-              <a-dropdown v-permission="'requirement:update'">
+              <a-dropdown 
+                v-permission="'requirement:update'"
+                :overlay-style="{ zIndex: 2100 }"
+              >
                 <a-button>
                   状态 <DownOutlined />
                 </a-button>
@@ -1456,6 +1459,11 @@ const getPopupContainer = (triggerNode: HTMLElement): HTMLElement => {
   padding-right: 16px;
   padding-top: 16px;
   padding-bottom: 16px;
+}
+
+/* 详情弹窗样式 */
+.markdown-content {
+  min-height: 200px;
 }
 
 /* 详情弹窗样式 */

@@ -2644,6 +2644,11 @@ onMounted(async () => {
   min-height: 200px;
 }
 
+/* 详情弹窗样式 */
+.markdown-content {
+  min-height: 200px;
+}
+
 .table-card :deep(.ant-table-tbody > tr > td > div) {
   overflow: hidden;
   text-overflow: ellipsis;

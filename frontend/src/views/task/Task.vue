@@ -487,7 +487,9 @@
               <a-button @click="handleDetailEdit">编辑</a-button>
               <a-button @click="handleDetailAssign">指派</a-button>
               <a-button @click="handleDetailUpdateProgress">更新进度</a-button>
-              <a-dropdown>
+              <a-dropdown
+                :overlay-style="{ zIndex: 2100 }"
+              >
                 <a-button>
                   状态 <DownOutlined />
                 </a-button>
@@ -1592,6 +1594,11 @@ const getPopupContainer = (triggerNode: HTMLElement): HTMLElement => {
 .table-card {
   margin-top: 16px;
 }
+/* 详情弹窗样式 */
+.markdown-content {
+  min-height: 200px;
+}
+
 /* 详情弹窗样式 */
 .markdown-content {
   min-height: 200px;
