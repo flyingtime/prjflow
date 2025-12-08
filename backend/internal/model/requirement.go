@@ -67,6 +67,9 @@ type Bug struct {
 	SolutionNote   string `gorm:"type:text" json:"solution_note"` // 解决方案备注
 	ResolvedVersionID *uint   `gorm:"index" json:"resolved_version_id"` // 解决版本ID
 	ResolvedVersion   *Version `gorm:"foreignKey:ResolvedVersionID" json:"resolved_version,omitempty"`
+
+	// 所属版本（多对多关系）
+	Versions []Version `gorm:"many2many:version_bugs;" json:"versions,omitempty"`
 }
 
 // BugAssignee Bug分配表

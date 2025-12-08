@@ -24,7 +24,7 @@ func NewBugHandler(db *gorm.DB) *BugHandler {
 // GetBugs 获取Bug列表
 func (h *BugHandler) GetBugs(c *gin.Context) {
 	var bugs []model.Bug
-	query := h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module")
+	query := h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("Versions")
 
 	// 权限过滤：普通用户只能看到自己创建或参与的Bug
 	query = utils.FilterBugsByUser(h.db, c, query)
@@ -67,6 +67,66 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 	// 创建人筛选
 	if creatorID := c.Query("creator_id"); creatorID != "" {
 		query = query.Where("creator_id = ?", creatorID)
+	}
+
+	// 版本筛选（通过关联表）
+	hasVersionFilter := false
+	var versionBugIDs []uint
+	if versionID := c.Query("version_id"); versionID != "" {
+		// 当有版本筛选时，先查询符合条件的 Bug ID
+		idQuery := h.db.Model(&model.Bug{}).Select("DISTINCT bugs.id")
+
+		// 应用权限过滤
+		idQuery = utils.FilterBugsByUser(h.db, c, idQuery)
+
+		// 应用所有筛选条件
+		if keyword := c.Query("keyword"); keyword != "" {
+			idQuery = idQuery.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+		}
+		if projectID := c.Query("project_id"); projectID != "" {
+			idQuery = idQuery.Where("project_id = ?", projectID)
+		}
+		if status := c.Query("status"); status != "" {
+			idQuery = idQuery.Where("status = ?", status)
+		}
+		if priority := c.Query("priority"); priority != "" {
+			idQuery = idQuery.Where("priority = ?", priority)
+		}
+		if severity := c.Query("severity"); severity != "" {
+			idQuery = idQuery.Where("severity = ?", severity)
+		}
+		if requirementID := c.Query("requirement_id"); requirementID != "" {
+			idQuery = idQuery.Where("requirement_id = ?", requirementID)
+		}
+		if moduleID := c.Query("module_id"); moduleID != "" {
+			idQuery = idQuery.Where("module_id = ?", moduleID)
+		}
+		if creatorID := c.Query("creator_id"); creatorID != "" {
+			idQuery = idQuery.Where("creator_id = ?", creatorID)
+		}
+
+		// JOIN 版本关联表
+		idQuery = idQuery.Joins("JOIN version_bugs ON version_bugs.bug_id = bugs.id").
+			Where("version_bugs.version_id = ?", versionID)
+
+		// 获取符合条件的 Bug ID 列表
+		if err := idQuery.Pluck("bugs.id", &versionBugIDs).Error; err != nil {
+			utils.Error(c, utils.CodeError, "查询失败")
+			return
+		}
+
+		// 如果没有符合条件的 Bug，直接返回空结果
+		if len(versionBugIDs) == 0 {
+			utils.Success(c, gin.H{
+				"list":      []model.Bug{},
+				"total":     0,
+				"page":      utils.GetPage(c),
+				"page_size": utils.GetPageSize(c),
+			})
+			return
+		}
+
+		hasVersionFilter = true
 	}
 
 	// 分配人筛选（通过关联表）
@@ -131,6 +191,37 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 		hasAssigneeFilter = true
 	}
 
+	// 如果有版本筛选，需要合并到查询条件中
+	if hasVersionFilter {
+		if hasAssigneeFilter {
+			// 如果同时有分配人和版本筛选，取交集
+			var intersectionIDs []uint
+			for _, id := range bugIDs {
+				for _, vid := range versionBugIDs {
+					if id == vid {
+						intersectionIDs = append(intersectionIDs, id)
+						break
+					}
+				}
+			}
+			if len(intersectionIDs) == 0 {
+				utils.Success(c, gin.H{
+					"list":      []model.Bug{},
+					"total":     0,
+					"page":      utils.GetPage(c),
+					"page_size": utils.GetPageSize(c),
+				})
+				return
+			}
+			query = query.Where("bugs.id IN ?", intersectionIDs)
+			bugIDs = intersectionIDs
+		} else {
+			query = query.Where("bugs.id IN ?", versionBugIDs)
+			bugIDs = versionBugIDs
+		}
+		hasAssigneeFilter = true // 标记为已过滤，以便在countQuery中使用
+	}
+
 	// 分页
 	page := utils.GetPage(c)
 	pageSize := utils.GetPageSize(c)
@@ -165,7 +256,7 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 	if creatorID := c.Query("creator_id"); creatorID != "" {
 		countQuery = countQuery.Where("creator_id = ?", creatorID)
 	}
-	// 分配人筛选（通过关联表）
+	// 分配人和版本筛选（通过关联表）
 	if hasAssigneeFilter {
 		// 使用已查询的 ID 列表进行计数
 		countQuery = countQuery.Where("id IN ?", bugIDs)
@@ -192,7 +283,7 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 func (h *BugHandler) GetBug(c *gin.Context) {
 	id := c.Param("id")
 	var bug model.Bug
-	if err := h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").First(&bug, id).Error; err != nil {
+	if err := h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("Versions").First(&bug, id).Error; err != nil {
 		utils.Error(c, 404, "Bug不存在")
 		return
 	}
@@ -219,6 +310,7 @@ func (h *BugHandler) CreateBug(c *gin.Context) {
 		ModuleID       *uint    `json:"module_id"`
 		AssigneeIDs    []uint   `json:"assignee_ids"`
 		EstimatedHours *float64 `json:"estimated_hours"`
+		VersionIDs     []uint   `json:"version_ids" binding:"required,min=1"` // 所属版本ID列表（必填，至少一个）
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -317,6 +409,21 @@ func (h *BugHandler) CreateBug(c *gin.Context) {
 		}
 	}
 
+	// 验证版本是否存在且属于同一项目（必填，至少一个）
+	if len(req.VersionIDs) == 0 {
+		utils.Error(c, 400, "必须至少选择一个所属版本")
+		return
+	}
+	var versions []model.Version
+	if err := h.db.Where("id IN ? AND project_id = ?", req.VersionIDs, req.ProjectID).Find(&versions).Error; err != nil {
+		utils.Error(c, 400, "版本查询失败")
+		return
+	}
+	if len(versions) != len(req.VersionIDs) {
+		utils.Error(c, 400, "版本不存在或不属于当前项目")
+		return
+	}
+
 	bug := model.Bug{
 		Title:          req.Title,
 		Description:    req.Description,
@@ -347,8 +454,14 @@ func (h *BugHandler) CreateBug(c *gin.Context) {
 		// 不需要改变状态
 	}
 
+	// 关联版本到Bug（多对多关系）
+	if err := h.db.Model(&bug).Association("Versions").Replace(versions); err != nil {
+		utils.Error(c, utils.CodeError, "关联版本失败")
+		return
+	}
+
 	// 重新加载关联数据
-	h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("ResolvedVersion").First(&bug, bug.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("ResolvedVersion").Preload("Versions").First(&bug, bug.ID)
 
 	// 记录创建操作
 	dbValue, _ := c.Get("db")
@@ -416,6 +529,7 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 		EstimatedHours *float64 `json:"estimated_hours"`
 		ActualHours    *float64 `json:"actual_hours"` // 实际工时，会自动创建资源分配
 		WorkDate       *string  `json:"work_date"`    // 工作日期（YYYY-MM-DD），用于资源分配
+		VersionIDs     *[]uint  `json:"version_ids"`  // 所属版本ID列表
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -638,8 +752,34 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 		// 分配Bug不会自动改变状态，状态需要手动更新
 	}
 
+	// 更新版本关联
+	if req.VersionIDs != nil {
+		// 验证版本是否存在且属于同一项目
+		projectID := bug.ProjectID
+		if req.ProjectID != nil {
+			projectID = *req.ProjectID
+		}
+		if len(*req.VersionIDs) == 0 {
+			utils.Error(c, 400, "必须至少选择一个所属版本")
+			return
+		}
+		var versions []model.Version
+		if err := h.db.Where("id IN ? AND project_id = ?", *req.VersionIDs, projectID).Find(&versions).Error; err != nil {
+			utils.Error(c, 400, "版本查询失败")
+			return
+		}
+		if len(versions) != len(*req.VersionIDs) {
+			utils.Error(c, 400, "版本不存在或不属于当前项目")
+			return
+		}
+		if err := h.db.Model(&bug).Association("Versions").Replace(versions); err != nil {
+			utils.Error(c, utils.CodeError, "更新版本关联失败")
+			return
+		}
+	}
+
 	// 重新加载关联数据
-	h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("ResolvedVersion").First(&bug, bug.ID)
+	h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("ResolvedVersion").Preload("Versions").First(&bug, bug.ID)
 
 	// 记录编辑操作和字段变更
 	userID, exists := c.Get("user_id")

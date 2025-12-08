@@ -33,6 +33,20 @@
             </a>
             <span v-else>-</span>
           </a-descriptions-item>
+          <a-descriptions-item label="所属版本">
+            <a-space v-if="bug?.versions && bug.versions.length > 0">
+              <a-tag
+                v-for="version in bug.versions"
+                :key="version.id"
+                color="blue"
+                style="cursor: pointer"
+                @click="handleVersionClick(version.id)"
+              >
+                {{ version.version_number }}
+              </a-tag>
+            </a-space>
+            <span v-else>-</span>
+          </a-descriptions-item>
           <a-descriptions-item label="指派给">
             <a-space>
               <a-tag
@@ -187,6 +201,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'refresh': []
   'requirement-click': [requirementId: number]
+  'version-click': [versionId: number]
 }>()
 
 // 历史记录相关
@@ -408,6 +423,11 @@ const handleRequirementClick = () => {
   if (props.bug?.requirement?.id) {
     emit('requirement-click', props.bug.requirement.id)
   }
+}
+
+// 处理版本点击
+const handleVersionClick = (versionId: number) => {
+  emit('version-click', versionId)
 }
 
 // 暴露方法给父组件

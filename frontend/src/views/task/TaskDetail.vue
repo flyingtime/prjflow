@@ -356,6 +356,7 @@ import {
 import { getProjects, type Project } from '@/api/project'
 import { getRequirements, createRequirement, type Requirement, type CreateRequirementRequest } from '@/api/requirement'
 import { createBug, type CreateBugRequest } from '@/api/bug'
+import { getVersions } from '@/api/version'
 
 const route = useRoute()
 const router = useRouter()
@@ -822,6 +823,21 @@ const handleConvertToBug = async () => {
   if (!confirmed) return
   
   try {
+    // 获取项目下的版本列表
+    const versionsResponse = await getVersions({ project_id: task.value.project_id, size: 1000 })
+    const versions = versionsResponse.list || []
+    
+    if (versions.length === 0) {
+      message.error('该项目下没有版本，请先创建版本后再转换')
+      return
+    }
+    
+    const firstVersion = versions[0]
+    if (!firstVersion) {
+      message.error('无法获取版本信息')
+      return
+    }
+    
     // 创建新Bug，基于任务的信息
     const bugData: CreateBugRequest = {
       title: `[转Bug] ${task.value.title}`,
@@ -836,6 +852,7 @@ const handleConvertToBug = async () => {
       assignee_ids: task.value.assignee_id 
         ? [task.value.assignee_id] 
         : undefined,
+      version_ids: [firstVersion.id], // 使用第一个版本
       estimated_hours: task.value.estimated_hours
     }
     

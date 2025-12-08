@@ -23,6 +23,7 @@ export interface Bug {
   solution_note?: string
   resolved_version_id?: number
   resolved_version?: any
+  versions?: any[]  // 所属版本列表（多对多关系）
   created_at?: string
   updated_at?: string
 }
@@ -44,6 +45,7 @@ export interface CreateBugRequest {
   requirement_id?: number
   module_id?: number
   assignee_ids?: number[]
+  version_ids: number[]  // 所属版本ID列表（必填，至少一个）
   estimated_hours?: number
   actual_hours?: number
   work_date?: string
@@ -78,6 +80,7 @@ export const getBugs = async (params?: {
   module_id?: number
   creator_id?: number
   assignee_id?: number
+  version_id?: number  // 版本ID筛选
   page?: number
   size?: number
 }): Promise<BugListResponse> => {
@@ -92,7 +95,11 @@ export const createBug = async (data: CreateBugRequest): Promise<Bug> => {
   return request.post('/bugs', data)
 }
 
-export const updateBug = async (id: number, data: Partial<CreateBugRequest>): Promise<Bug> => {
+export interface UpdateBugRequest extends Partial<CreateBugRequest> {
+  version_ids?: number[]  // 所属版本ID列表（可选，更新时提供）
+}
+
+export const updateBug = async (id: number, data: UpdateBugRequest): Promise<Bug> => {
   // 确保 requirement_id 和 module_id 字段始终被包含，即使值为 0
   // 使用 Object.assign 确保字段被显式设置
   const requestData: any = Object.assign({}, data)

@@ -67,6 +67,7 @@
             :loading="loading"
             @refresh="handleRefresh"
             @requirement-click="handleRequirementClick"
+            @version-click="handleVersionClick"
           />
         </div>
       </a-layout-content>
@@ -628,6 +629,11 @@ const handleRequirementClick = (requirementId: number) => {
   router.push(`/requirement/${requirementId}`)
 }
 
+// 处理版本点击事件
+const handleVersionClick = (versionId: number) => {
+  router.push(`/version/${versionId}`)
+}
+
 // 加载用户列表
 const loadUsers = async () => {
   try {
@@ -652,6 +658,7 @@ const editFormData = reactive<CreateBugRequest & { id?: number; attachment_ids?:
   requirement_id: undefined,
   module_id: undefined,
   assignee_ids: [],
+  version_ids: [],
   estimated_hours: undefined,
   actual_hours: undefined,
   work_date: undefined,
@@ -677,6 +684,7 @@ const handleEdit = async () => {
   editFormData.requirement_id = bug.value.requirement_id
   editFormData.module_id = bug.value.module_id
   editFormData.assignee_ids = bug.value.assignees?.map(a => a.id) || []
+  editFormData.version_ids = bug.value.versions?.map(v => v.id) || []
   editFormData.estimated_hours = bug.value.estimated_hours
   editFormData.actual_hours = bug.value.actual_hours
   editFormData.work_date = undefined
@@ -731,6 +739,7 @@ const handleEditSubmit = async () => {
       severity: editFormData.severity,
       project_id: editFormData.project_id,
       assignee_ids: editFormData.assignee_ids,
+      version_ids: editFormData.version_ids,
       estimated_hours: editFormData.estimated_hours,
       actual_hours: editFormData.actual_hours,
       work_date: editFormData.work_date && typeof editFormData.work_date !== 'string' && 'isValid' in editFormData.work_date && (editFormData.work_date as Dayjs).isValid() ? (editFormData.work_date as Dayjs).format('YYYY-MM-DD') : (typeof editFormData.work_date === 'string' ? editFormData.work_date : undefined)

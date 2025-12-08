@@ -235,6 +235,27 @@
                         </a-select>
                       </a-form-item>
                     </a-col>
+                    <a-col :span="6">
+                      <a-form-item label="版本号">
+                        <a-select
+                          v-model:value="searchForm.version_id"
+                          placeholder="选择版本号"
+                          allow-clear
+                          show-search
+                          :filter-option="filterSearchVersionOption"
+                          :loading="searchVersionLoading"
+                          @focus="loadVersionsForSearch"
+                        >
+                          <a-select-option
+                            v-for="version in searchVersions"
+                            :key="version.id"
+                            :value="version.id"
+                          >
+                            {{ version.version_number }}
+                          </a-select-option>
+                        </a-select>
+                      </a-form-item>
+                    </a-col>
                     <a-col :span="12">
                       <a-form-item label="指派给">
                         <a-space direction="vertical" style="width: 100%">
@@ -301,6 +322,19 @@
                 </template>
                 <template v-else-if="column.key === 'project'">
                   {{ record.project?.name || '-' }}
+                </template>
+                <template v-else-if="column.key === 'versions'">
+                  <a-space v-if="record.versions && record.versions.length > 0" size="small">
+                    <a-tag
+                      v-for="version in record.versions"
+                      :key="version.id"
+                      color="blue"
+                      style="margin-right: 4px"
+                    >
+                      {{ version.version_number }}
+                    </a-tag>
+                  </a-space>
+                  <span v-else>-</span>
                 </template>
                 <template v-else-if="column.key === 'creator'">
                   {{ record.creator ? `${record.creator.username}${record.creator.nickname ? `(${record.creator.nickname})` : ''}` : '-' }}
@@ -489,6 +523,38 @@
             placeholder="选择指派给"
             :show-role="true"
           />
+        </a-form-item>
+        <a-form-item label="所属版本" name="version_ids">
+          <a-space direction="vertical" style="width: 100%">
+            <a-select
+              v-model:value="formData.version_ids"
+              mode="multiple"
+              placeholder="选择所属版本（必填，至少一个）"
+              show-search
+              :filter-option="filterFormVersionOption"
+              :loading="formVersionLoading"
+              :disabled="formData.create_version"
+              :getPopupContainer="getPopupContainer"
+              :dropdownStyle="{ zIndex: 2100 }"
+              @focus="loadVersionsForFormProject"
+            >
+              <a-select-option
+                v-for="version in formVersions"
+                :key="version.id"
+                :value="version.id"
+              >
+                {{ version.version_number }}
+              </a-select-option>
+            </a-select>
+            <a-checkbox v-model:checked="formData.create_version">
+              创建新版本
+            </a-checkbox>
+            <a-input
+              v-if="formData.create_version"
+              v-model:value="formData.version_number"
+              placeholder="请输入版本号（如：v1.0.0）"
+            />
+          </a-space>
         </a-form-item>
         <a-form-item label="预估工时" name="estimated_hours">
           <a-input-number
@@ -764,6 +830,7 @@
           :loading="detailLoading"
           @refresh="handleDetailRefresh"
           @requirement-click="handleDetailRequirementClick"
+          @version-click="handleDetailVersionClick"
         />
       </div>
     </a-modal>
@@ -803,7 +870,7 @@ import { getProjects, getProjectMembers, type Project } from '@/api/project'
 import { getUsers, type User } from '@/api/user'
 import { getRequirements, createRequirement, type Requirement, type CreateRequirementRequest } from '@/api/requirement'
 import { getModules, type Module } from '@/api/module'
-import { getVersions, type Version } from '@/api/version'
+import { getVersions, createVersion, type Version } from '@/api/version'
 import { getAttachments, attachToEntity, uploadFile, type Attachment } from '@/api/attachment'
 
 const route = useRoute()
@@ -819,6 +886,10 @@ const modules = ref<Module[]>([])
 const moduleLoading = ref(false)
 const versions = ref<Version[]>([])
 const versionLoading = ref(false)
+const formVersions = ref<Version[]>([])  // 表单中的版本列表
+const formVersionLoading = ref(false)
+const searchVersions = ref<Version[]>([])  // 搜索表单中的版本列表
+const searchVersionLoading = ref(false)
 const statistics = ref<BugStatistics | null>(null)
 const activeTab = ref<string>('list')
 const searchFormVisible = ref(false) // 搜索栏显示/隐藏状态，默认折叠
@@ -839,6 +910,7 @@ const searchForm = reactive({
   status: undefined as string | undefined,
   priority: undefined as string | undefined,
   severity: undefined as string | undefined,
+  version_id: undefined as number | undefined,
   assignee_id: undefined as number | undefined,
   assignToMe: false // 指派给我
 })
@@ -856,6 +928,7 @@ const pagination = reactive({
 const columns = [
   { title: 'Bug标题', dataIndex: 'title', key: 'title', width: 300, ellipsis: true },
   { title: '项目', key: 'project', width: 120 },
+  { title: '版本号', key: 'versions', width: 150 },
   { title: '状态', key: 'status', width: 100 },
   { title: '优先级', key: 'priority', width: 100 },
   { title: '严重程度', key: 'severity', width: 100 },
@@ -870,7 +943,7 @@ const modalVisible = ref(false)
 const modalTitle = ref('新增Bug')
 const formRef = ref()
 const descriptionEditorRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
-const formData = reactive<CreateBugRequest & { id?: number; attachment_ids?: number[] }>({
+const formData = reactive<CreateBugRequest & { id?: number; attachment_ids?: number[]; create_version?: boolean; version_number?: string }>({
   title: '',
   description: '',
   status: 'active',
@@ -880,8 +953,11 @@ const formData = reactive<CreateBugRequest & { id?: number; attachment_ids?: num
   requirement_id: undefined,
   module_id: undefined,
   assignee_ids: [],
+  version_ids: [],  // 所属版本ID列表（必填）
   estimated_hours: undefined,
-  attachment_ids: [] as number[]
+  attachment_ids: [] as number[],
+  create_version: false,
+  version_number: undefined
 })
 
 const bugAttachments = ref<Attachment[]>([]) // Bug附件列表
@@ -899,6 +975,22 @@ const formRules = {
       validator: (_rule: any, value: number[]) => {
         if (!value || value.length === 0) {
           return Promise.reject('请选择指派给')
+        }
+        return Promise.resolve()
+      }
+    }
+  ],
+  version_ids: [
+    {
+      required: true,
+      message: '请至少选择一个所属版本',
+      trigger: 'change',
+      validator: (_rule: any, value: number[]) => {
+        if (!value || value.length === 0) {
+          // 如果选择了创建新版本，则不需要选择已有版本
+          if (!formData.create_version || !formData.version_number) {
+            return Promise.reject('请至少选择一个所属版本或创建新版本')
+          }
         }
         return Promise.resolve()
       }
@@ -958,6 +1050,9 @@ const loadBugs = async () => {
     }
     if (searchForm.severity) {
       params.severity = searchForm.severity
+    }
+    if (searchForm.version_id) {
+      params.version_id = searchForm.version_id
     }
     if (searchForm.assignee_id) {
       params.assignee_id = searchForm.assignee_id
@@ -1047,14 +1142,67 @@ const loadModulesForProject = async () => {
   }
 }
 
-// 监听项目变化，重新加载需求
+// 加载表单中的版本列表（根据项目）
+const loadVersionsForFormProject = async () => {
+  if (!formData.project_id) {
+    formVersions.value = []
+    return
+  }
+  formVersionLoading.value = true
+  try {
+    const response = await getVersions({ project_id: formData.project_id, size: 1000 })
+    formVersions.value = response.list || []
+  } catch (error: any) {
+    console.error('加载版本列表失败:', error)
+  } finally {
+    formVersionLoading.value = false
+  }
+}
+
+// 版本筛选（表单）
+const filterFormVersionOption = (input: string, option: any) => {
+  const version = formVersions.value.find(v => v.id === option.value)
+  if (!version) return false
+  const searchText = input.toLowerCase()
+  return version.version_number.toLowerCase().includes(searchText)
+}
+
+// 加载搜索表单中的版本列表（根据项目）
+const loadVersionsForSearch = async () => {
+  if (!searchForm.project_id) {
+    searchVersions.value = []
+    return
+  }
+  searchVersionLoading.value = true
+  try {
+    const response = await getVersions({ project_id: searchForm.project_id, size: 1000 })
+    searchVersions.value = response.list || []
+  } catch (error: any) {
+    console.error('加载版本列表失败:', error)
+  } finally {
+    searchVersionLoading.value = false
+  }
+}
+
+// 版本筛选（搜索表单）
+const filterSearchVersionOption = (input: string, option: any) => {
+  const version = searchVersions.value.find(v => v.id === option.value)
+  if (!version) return false
+  const searchText = input.toLowerCase()
+  return version.version_number.toLowerCase().includes(searchText)
+}
+
+// 监听项目变化，重新加载需求和版本
 watch(() => formData.project_id, () => {
   formData.requirement_id = undefined
+  formData.version_ids = []
   // 功能模块是系统资源，不需要清空
   if (formData.project_id) {
     loadRequirementsForProject()
+    loadVersionsForFormProject()
   } else {
     requirements.value = []
+    formVersions.value = []
     formData.assignee_ids = []
   }
 })
@@ -1167,6 +1315,13 @@ const handleSearchProjectChange = (value: number | undefined) => {
   if (!searchForm.assignToMe) {
     searchForm.assignee_id = undefined
   }
+  // 清空版本选择并重新加载版本列表
+  searchForm.version_id = undefined
+  if (value) {
+    loadVersionsForSearch()
+  } else {
+    searchVersions.value = []
+  }
 }
 
 // 编辑表单项目选择改变
@@ -1181,8 +1336,10 @@ const handleReset = () => {
   searchForm.status = undefined
   searchForm.priority = undefined
   searchForm.severity = undefined
+  searchForm.version_id = undefined
   searchForm.assignee_id = undefined
   searchForm.assignToMe = false // 重置"指派给我"
+  searchVersions.value = []
   pagination.current = 1
   // 清除保存的搜索项目选择
   saveLastSelected('last_selected_bug_project_search', undefined)
@@ -1211,11 +1368,17 @@ const handleCreate = () => {
   formData.requirement_id = undefined
   formData.module_id = undefined
   formData.assignee_ids = []
+  formData.version_ids = []
   formData.estimated_hours = undefined
   formData.actual_hours = undefined
   formData.work_date = undefined
   formData.attachment_ids = []
+  formData.create_version = false
+  formData.version_number = undefined
   bugAttachments.value = []
+  if (formData.project_id) {
+    loadVersionsForFormProject()
+  }
   modalVisible.value = true
 }
 
@@ -1232,9 +1395,12 @@ const handleEdit = async (record: Bug) => {
   formData.requirement_id = record.requirement_id
   formData.module_id = record.module_id
   formData.assignee_ids = record.assignees?.map(a => a.id) || []
+  formData.version_ids = record.versions?.map(v => v.id) || []
   formData.estimated_hours = record.estimated_hours
   formData.actual_hours = record.actual_hours
   formData.work_date = undefined
+  formData.create_version = false
+  formData.version_number = undefined
   
   // 加载Bug附件
   try {
@@ -1249,6 +1415,7 @@ const handleEdit = async (record: Bug) => {
   modalVisible.value = true
   if (formData.project_id) {
     loadRequirementsForProject()
+    loadVersionsForFormProject()
   }
 }
 
@@ -1285,6 +1452,29 @@ const handleSubmit = async () => {
       }
     }
     
+    // 处理版本：如果选择了创建新版本，先创建版本
+    let versionIds = [...(formData.version_ids || [])]
+    if (formData.create_version && formData.version_number) {
+      try {
+        const newVersion = await createVersion({
+          version_number: formData.version_number,
+          project_id: formData.project_id,
+          status: 'wait'
+        })
+        versionIds.push(newVersion.id)
+        message.success(`版本 ${newVersion.version_number} 创建成功`)
+      } catch (error: any) {
+        message.error('创建版本失败: ' + (error.message || '未知错误'))
+        return
+      }
+    }
+    
+    // 确保至少有一个版本
+    if (versionIds.length === 0) {
+      message.error('请至少选择一个所属版本或创建新版本')
+      return
+    }
+    
     // 确保 description 字段总是存在（即使是空字符串）
     const data: CreateBugRequest = {
       title: formData.title,
@@ -1296,6 +1486,7 @@ const handleSubmit = async () => {
       requirement_id: formData.requirement_id,
       module_id: formData.module_id,
       assignee_ids: formData.assignee_ids,
+      version_ids: versionIds,
       estimated_hours: formData.estimated_hours,
       actual_hours: formData.actual_hours,
       work_date: formData.work_date && typeof formData.work_date !== 'string' && 'isValid' in formData.work_date && (formData.work_date as Dayjs).isValid() ? (formData.work_date as Dayjs).format('YYYY-MM-DD') : (typeof formData.work_date === 'string' ? formData.work_date : undefined)
@@ -1670,6 +1861,12 @@ const handleDetailRefresh = async () => {
 const handleDetailRequirementClick = (requirementId: number) => {
   detailModalVisible.value = false
   router.push(`/requirement/${requirementId}`)
+}
+
+// 处理版本点击事件
+const handleDetailVersionClick = (versionId: number) => {
+  detailModalVisible.value = false
+  router.push(`/version/${versionId}`)
 }
 
 // 加载相邻bug（上一个和下一个）
