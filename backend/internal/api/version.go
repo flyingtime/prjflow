@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -81,7 +82,9 @@ func (h *VersionHandler) GetVersion(c *gin.Context) {
 	id := c.Param("id")
 	var version model.Version
 	if err := h.db.Preload("Project").
-		Preload("Requirements").Preload("Bugs").First(&version, id).Error; err != nil {
+		Preload("Requirements").Preload("Bugs").
+		Preload("Attachments").Preload("Attachments.Creator").
+		First(&version, id).Error; err != nil {
 		utils.Error(c, 404, "版本不存在")
 		return
 	}
@@ -99,6 +102,7 @@ func (h *VersionHandler) CreateVersion(c *gin.Context) {
 		ReleaseDate    *string  `json:"release_date"` // 接收字符串格式的日期
 		RequirementIDs []uint   `json:"requirement_ids"` // 关联的需求ID列表
 		BugIDs         []uint   `json:"bug_ids"`         // 关联的Bug ID列表
+		AttachmentIDs  *[]uint  `json:"attachment_ids"`  // 附件ID列表
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -157,9 +161,54 @@ func (h *VersionHandler) CreateVersion(c *gin.Context) {
 		}
 	}
 
-	// 重新加载关联数据
-	h.db.Preload("Project").
-		Preload("Requirements").Preload("Bugs").First(&version, version.ID)
+	// 关联附件
+	if req.AttachmentIDs != nil {
+		projectID := version.ProjectID
+		var attachments []model.Attachment
+		if len(*req.AttachmentIDs) > 0 {
+			// 验证附件是否存在且属于同一项目
+			if err := h.db.Where("id IN ?", *req.AttachmentIDs).Find(&attachments).Error; err != nil {
+				utils.Error(c, 400, "附件查询失败: "+err.Error())
+				return
+			}
+			if len(attachments) != len(*req.AttachmentIDs) {
+				// 检查是否有附件被软删除
+				var deletedAttachments []model.Attachment
+				h.db.Unscoped().Where("id IN ? AND deleted_at IS NOT NULL", *req.AttachmentIDs).Find(&deletedAttachments)
+				if len(deletedAttachments) > 0 {
+					utils.Error(c, 400, fmt.Sprintf("部分附件已被删除：期望 %d 个，实际找到 %d 个，已删除 %d 个", len(*req.AttachmentIDs), len(attachments), len(deletedAttachments)))
+					return
+				}
+				utils.Error(c, 400, fmt.Sprintf("附件不存在：期望 %d 个，实际找到 %d 个", len(*req.AttachmentIDs), len(attachments)))
+				return
+			}
+			// 验证附件是否属于同一项目（通过检查附件是否关联到项目）
+			for _, attachment := range attachments {
+				var count int64
+				if err := h.db.Table("project_attachments").
+					Where("attachment_id = ? AND project_id = ?", attachment.ID, projectID).
+					Count(&count).Error; err != nil {
+					utils.Error(c, 400, "验证附件项目关联失败: "+err.Error())
+					return
+				}
+				if count == 0 {
+					utils.Error(c, 400, fmt.Sprintf("附件 %d 不属于项目 %d", attachment.ID, projectID))
+					return
+				}
+			}
+		}
+		// 使用Replace方法同步附件关联（空数组表示移除所有附件）
+		if err := h.db.Model(&version).Association("Attachments").Replace(attachments); err != nil {
+			utils.Error(c, utils.CodeError, "更新附件关联失败: "+err.Error())
+			return
+		}
+	}
+
+	// 重新加载关联数据（包含附件）
+	h.db.Session(&gorm.Session{}).Preload("Project").
+		Preload("Requirements").Preload("Bugs").
+		Preload("Attachments").Preload("Attachments.Creator").
+		First(&version, version.ID)
 
 	utils.Success(c, version)
 }
@@ -180,6 +229,7 @@ func (h *VersionHandler) UpdateVersion(c *gin.Context) {
 		ReleaseDate    *string `json:"release_date"` // 接收字符串格式的日期
 		RequirementIDs []uint  `json:"requirement_ids"` // 关联的需求ID列表
 		BugIDs         []uint  `json:"bug_ids"`         // 关联的Bug ID列表
+		AttachmentIDs  *[]uint  `json:"attachment_ids"` // 附件ID列表
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -250,9 +300,54 @@ func (h *VersionHandler) UpdateVersion(c *gin.Context) {
 		}
 	}
 
-	// 重新加载关联数据
-	h.db.Preload("Project").
-		Preload("Requirements").Preload("Bugs").First(&version, version.ID)
+	// 更新附件关联
+	if req.AttachmentIDs != nil {
+		projectID := version.ProjectID
+		var attachments []model.Attachment
+		if len(*req.AttachmentIDs) > 0 {
+			// 验证附件是否存在且属于同一项目
+			if err := h.db.Where("id IN ?", *req.AttachmentIDs).Find(&attachments).Error; err != nil {
+				utils.Error(c, 400, "附件查询失败: "+err.Error())
+				return
+			}
+			if len(attachments) != len(*req.AttachmentIDs) {
+				// 检查是否有附件被软删除
+				var deletedAttachments []model.Attachment
+				h.db.Unscoped().Where("id IN ? AND deleted_at IS NOT NULL", *req.AttachmentIDs).Find(&deletedAttachments)
+				if len(deletedAttachments) > 0 {
+					utils.Error(c, 400, fmt.Sprintf("部分附件已被删除：期望 %d 个，实际找到 %d 个，已删除 %d 个", len(*req.AttachmentIDs), len(attachments), len(deletedAttachments)))
+					return
+				}
+				utils.Error(c, 400, fmt.Sprintf("附件不存在：期望 %d 个，实际找到 %d 个", len(*req.AttachmentIDs), len(attachments)))
+				return
+			}
+			// 验证附件是否属于同一项目（通过检查附件是否关联到项目）
+			for _, attachment := range attachments {
+				var count int64
+				if err := h.db.Table("project_attachments").
+					Where("attachment_id = ? AND project_id = ?", attachment.ID, projectID).
+					Count(&count).Error; err != nil {
+					utils.Error(c, 400, "验证附件项目关联失败: "+err.Error())
+					return
+				}
+				if count == 0 {
+					utils.Error(c, 400, fmt.Sprintf("附件 %d 不属于项目 %d", attachment.ID, projectID))
+					return
+				}
+			}
+		}
+		// 使用Replace方法同步附件关联（空数组表示移除所有附件）
+		if err := h.db.Model(&version).Association("Attachments").Replace(attachments); err != nil {
+			utils.Error(c, utils.CodeError, "更新附件关联失败: "+err.Error())
+			return
+		}
+	}
+
+	// 重新加载关联数据（包含附件）
+	h.db.Session(&gorm.Session{}).Preload("Project").
+		Preload("Requirements").Preload("Bugs").
+		Preload("Attachments").Preload("Attachments.Creator").
+		First(&version, version.ID)
 
 	utils.Success(c, version)
 }

@@ -391,6 +391,24 @@ func (h *AttachmentHandler) GetAttachments(c *gin.Context) {
 		}
 	}
 
+	if versionID := c.Query("version_id"); versionID != "" {
+		var vid uint
+		if _, err := fmt.Sscanf(versionID, "%d", &vid); err == nil {
+			// 验证版本访问权限（通过版本的项目ID）
+			var version model.Version
+			if err := h.db.First(&version, vid).Error; err != nil {
+				utils.Error(c, 404, "版本不存在")
+				return
+			}
+			if !utils.CheckProjectAccess(h.db, c, version.ProjectID) {
+				utils.Error(c, 403, "没有权限访问该版本")
+				return
+			}
+			query = query.Joins("JOIN version_attachments ON version_attachments.attachment_id = attachments.id").
+				Where("version_attachments.version_id = ?", vid)
+		}
+	}
+
 	var attachments []model.Attachment
 	if err := query.Find(&attachments).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询失败: "+err.Error())
@@ -416,6 +434,7 @@ func (h *AttachmentHandler) AttachToEntity(c *gin.Context) {
 		RequirementID *uint `json:"requirement_id"`
 		TaskID        *uint `json:"task_id"`
 		BugID         *uint `json:"bug_id"`
+		VersionID     *uint `json:"version_id"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -509,8 +528,26 @@ func (h *AttachmentHandler) AttachToEntity(c *gin.Context) {
 		}
 	}
 
+	// 关联到版本
+	if req.VersionID != nil {
+		var version model.Version
+		if err := h.db.First(&version, *req.VersionID).Error; err != nil {
+			utils.Error(c, 404, "版本不存在")
+			return
+		}
+		// 验证版本访问权限（通过版本的项目ID）
+		if !utils.CheckProjectAccess(h.db, c, version.ProjectID) {
+			utils.Error(c, 403, "没有权限访问该版本")
+			return
+		}
+		if err := h.db.Model(&attachment).Association("Versions").Append(&version); err != nil {
+			utils.Error(c, utils.CodeError, "关联失败: "+err.Error())
+			return
+		}
+	}
+
 	// 重新加载附件信息
-	h.db.Preload("Projects").Preload("Requirements").Preload("Tasks").Preload("Bugs").First(&attachment, attachment.ID)
+	h.db.Preload("Projects").Preload("Requirements").Preload("Tasks").Preload("Bugs").Preload("Versions").First(&attachment, attachment.ID)
 
 	utils.Success(c, attachment)
 }

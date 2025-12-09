@@ -415,6 +415,48 @@
             </a-list>
             <a-empty v-else description="暂无关联Bug" />
           </a-card>
+
+          <!-- 附件 -->
+          <a-card title="附件" :bordered="false" style="margin-bottom: 16px">
+            <a-list
+              v-if="detailVersion.attachments && detailVersion.attachments.length > 0"
+              :data-source="detailVersion.attachments"
+              :pagination="false"
+            >
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-list-item-meta>
+                    <template #avatar>
+                      <PaperClipOutlined style="font-size: 20px; color: #1890ff" />
+                    </template>
+                    <template #title>
+                      <a-space>
+                        <span>{{ item.file_name }}</span>
+                        <span style="color: #999; font-size: 12px">({{ formatFileSize(item.file_size) }})</span>
+                      </a-space>
+                    </template>
+                    <template #description>
+                      <a-space>
+                        <span style="color: #999; font-size: 12px">
+                          {{ item.creator?.nickname || item.creator?.username || '未知用户' }}
+                        </span>
+                        <span style="color: #999; font-size: 12px">
+                          {{ formatDateTime(item.created_at) }}
+                        </span>
+                      </a-space>
+                    </template>
+                  </a-list-item-meta>
+                  <template #actions>
+                    <a-button type="link" size="small" @click="handleDownloadAttachment(item)">
+                      <template #icon><DownloadOutlined /></template>
+                      下载
+                    </a-button>
+                  </template>
+                </a-list-item>
+              </template>
+            </a-list>
+            <a-empty v-else description="暂无附件" />
+          </a-card>
         </div>
       </a-spin>
     </a-modal>
@@ -425,14 +467,14 @@
 import { ref, reactive, onMounted, nextTick, computed, watch } from 'vue'
 import { saveLastSelected, getLastSelected } from '@/utils/storage'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, DownOutlined, UpOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DownOutlined, UpOutlined, PaperClipOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useRouter } from 'vue-router'
 import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
-import { getAttachments, type Attachment } from '@/api/attachment'
+import { getAttachments, downloadFile, type Attachment } from '@/api/attachment'
 import {
   getVersions,
   getVersion,
@@ -862,6 +904,24 @@ const handleDetailDelete = async () => {
     loadVersions()
   } catch (error: any) {
     message.error(error.message || '删除失败')
+  }
+}
+
+// 格式化文件大小
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+}
+
+// 下载附件
+const handleDownloadAttachment = async (attachment: Attachment) => {
+  try {
+    await downloadFile(attachment.id, attachment.file_name)
+  } catch (error: any) {
+    message.error(error.message || '下载失败')
   }
 }
 

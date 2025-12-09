@@ -25,5 +25,8 @@ type Version struct {
 	// 关联需求和Bug
 	Requirements []Requirement `gorm:"many2many:version_requirements;" json:"requirements,omitempty"`
 	Bugs         []Bug         `gorm:"many2many:version_bugs;" json:"bugs,omitempty"`
+
+	// 附件（多对多关系）
+	Attachments []Attachment `gorm:"many2many:version_attachments;" json:"attachments"`
 }
 

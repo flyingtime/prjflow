@@ -11,6 +11,7 @@ export interface Version {
   release_date?: string
   requirements?: any[]
   bugs?: any[]
+  attachments?: any[] // 附件列表
   created_at?: string
   updated_at?: string
 }
@@ -30,6 +31,7 @@ export interface CreateVersionRequest {
   release_date?: string
   requirement_ids?: number[]
   bug_ids?: number[]
+  attachment_ids?: number[] // 附件ID列表
 }
 
 export interface UpdateVersionRequest {
@@ -39,6 +41,7 @@ export interface UpdateVersionRequest {
   release_date?: string
   requirement_ids?: number[]
   bug_ids?: number[]
+  attachment_ids?: number[] // 附件ID列表
 }
 
 // 获取版本列表

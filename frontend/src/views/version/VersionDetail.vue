@@ -141,6 +141,48 @@
               </a-list>
               <a-empty v-else description="暂无关联Bug" />
             </a-card>
+
+            <!-- 附件 -->
+            <a-card title="附件" :bordered="false" style="margin-bottom: 16px">
+              <a-list
+                v-if="version?.attachments && version.attachments.length > 0"
+                :data-source="version.attachments"
+                :pagination="false"
+              >
+                <template #renderItem="{ item }">
+                  <a-list-item>
+                    <a-list-item-meta>
+                      <template #avatar>
+                        <PaperClipOutlined style="font-size: 20px; color: #1890ff" />
+                      </template>
+                      <template #title>
+                        <a-space>
+                          <span>{{ item.file_name }}</span>
+                          <span style="color: #999; font-size: 12px">({{ formatFileSize(item.file_size) }})</span>
+                        </a-space>
+                      </template>
+                      <template #description>
+                        <a-space>
+                          <span style="color: #999; font-size: 12px">
+                            {{ item.creator?.nickname || item.creator?.username || '未知用户' }}
+                          </span>
+                          <span style="color: #999; font-size: 12px">
+                            {{ formatDateTime(item.created_at) }}
+                          </span>
+                        </a-space>
+                      </template>
+                    </a-list-item-meta>
+                    <template #actions>
+                      <a-button type="link" size="small" @click="handleDownloadAttachment(item)">
+                        <template #icon><DownloadOutlined /></template>
+                        下载
+                      </a-button>
+                    </template>
+                  </a-list-item>
+                </template>
+              </a-list>
+              <a-empty v-else description="暂无附件" />
+            </a-card>
           </a-spin>
         </div>
       </a-layout-content>
@@ -244,20 +286,33 @@
             </a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="附件">
+          <AttachmentUpload
+            v-if="editFormData.project_id && editFormData.project_id > 0"
+            :project-id="editFormData.project_id"
+            :model-value="editFormData.attachment_ids"
+            :existing-attachments="versionAttachments"
+            @update:modelValue="(value) => { editFormData.attachment_ids = value }"
+            @attachment-deleted="handleAttachmentDeleted"
+          />
+          <span v-else style="color: #999;">请先选择项目后再上传附件</span>
+        </a-form-item>
       </a-form>
     </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { DownOutlined } from '@ant-design/icons-vue'
+import { DownOutlined, PaperClipOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import dayjs, { type Dayjs } from 'dayjs'
 import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import AttachmentUpload from '@/components/AttachmentUpload.vue'
+import { getAttachments, downloadFile, type Attachment } from '@/api/attachment'
 import {
   getVersion,
   updateVersion,
@@ -287,6 +342,7 @@ const editFormData = reactive<Omit<UpdateVersionRequest, 'release_date'> & {
   release_date?: Dayjs | undefined
   requirement_ids?: number[]
   bug_ids?: number[]
+  attachment_ids?: number[]
   project_id?: number  // 用于显示，不会提交
 }>({
   version_number: '',
@@ -295,8 +351,10 @@ const editFormData = reactive<Omit<UpdateVersionRequest, 'release_date'> & {
   release_date: undefined,
   requirement_ids: [],
   bug_ids: [],
+  attachment_ids: [],
   project_id: undefined
 })
+const versionAttachments = ref<Attachment[]>([])
 const editFormRules = {
   version_number: [{ required: true, message: '请输入版本号', trigger: 'blur' }]
 }
@@ -335,6 +393,22 @@ const handleEdit = async () => {
   editFormData.requirement_ids = version.value.requirements?.map((r: any) => r.id) || []
   editFormData.bug_ids = version.value.bugs?.map((b: any) => b.id) || []
   
+  // 加载版本附件
+  try {
+    if (version.value.attachments && version.value.attachments.length > 0) {
+      versionAttachments.value = version.value.attachments
+      editFormData.attachment_ids = version.value.attachments.map((a: any) => a.id)
+    } else {
+      versionAttachments.value = await getAttachments({ version_id: version.value.id })
+      editFormData.attachment_ids = versionAttachments.value.map(a => a.id)
+    }
+  } catch (error: any) {
+    console.error('加载附件失败:', error)
+    versionAttachments.value = []
+    editFormData.attachment_ids = []
+  }
+  
+  await nextTick() // 确保附件数据已加载
   editModalVisible.value = true
   if (projects.value.length === 0) {
     await loadProjects()
@@ -368,13 +442,21 @@ const handleEditSubmit = async () => {
       }
     }
     
-    const updateData: UpdateVersionRequest = {
+    const updateData: any = {
       version_number: editFormData.version_number,
       release_notes: releaseNotes,
       status: editFormData.status,
       release_date: editFormData.release_date && editFormData.release_date.isValid() ? editFormData.release_date.format('YYYY-MM-DD') : undefined,
       requirement_ids: editFormData.requirement_ids || [],
       bug_ids: editFormData.bug_ids || []
+    }
+    
+    // 始终发送 attachment_ids，如果为 undefined 或 null，发送空数组
+    const attachmentIdsValue = editFormData.attachment_ids
+    if (attachmentIdsValue === undefined || attachmentIdsValue === null) {
+      updateData.attachment_ids = []
+    } else {
+      updateData.attachment_ids = Array.isArray(attachmentIdsValue) ? attachmentIdsValue : []
     }
     
     await updateVersion(version.value.id, updateData)
@@ -425,6 +507,34 @@ const loadAvailableRequirementsAndBugs = async () => {
 // 项目筛选
 const filterProjectOption = (input: string, option: any) => {
   return option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+}
+
+// 处理附件删除事件
+const handleAttachmentDeleted = (attachmentId: number) => {
+  // 从versionAttachments中移除已删除的附件
+  versionAttachments.value = versionAttachments.value.filter(a => a.id !== attachmentId)
+  // 从editFormData.attachment_ids中移除
+  if (editFormData.attachment_ids) {
+    editFormData.attachment_ids = editFormData.attachment_ids.filter(id => id !== attachmentId)
+  }
+}
+
+// 格式化文件大小
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+}
+
+// 下载附件
+const handleDownloadAttachment = async (attachment: Attachment) => {
+  try {
+    await downloadFile(attachment.id, attachment.file_name)
+  } catch (error: any) {
+    message.error(error.message || '下载失败')
+  }
 }
 
 // 需求筛选

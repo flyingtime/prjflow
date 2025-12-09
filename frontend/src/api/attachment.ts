@@ -23,6 +23,7 @@ export interface AttachToEntityRequest {
   requirement_id?: number
   task_id?: number
   bug_id?: number
+  version_id?: number
 }
 
 // 上传文件
@@ -102,6 +103,7 @@ export const getAttachments = async (params?: {
   requirement_id?: number
   task_id?: number
   bug_id?: number
+  version_id?: number
 }): Promise<Attachment[]> => {
   return request.get('/attachments', { params })
 }
