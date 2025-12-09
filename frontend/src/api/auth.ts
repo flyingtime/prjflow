@@ -8,6 +8,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string
+  refresh_token: string
   user: User
   is_first_login?: boolean
 }
@@ -62,6 +63,20 @@ export interface ChangePasswordRequest {
 
 export const changePassword = async (data: ChangePasswordRequest): Promise<{ message: string }> => {
   return request.post('/auth/change-password', data)
+}
+
+// 刷新Token
+export interface RefreshTokenRequest {
+  refresh_token: string
+}
+
+export interface RefreshTokenResponse {
+  token: string
+  refresh_token: string
+}
+
+export const refreshToken = async (data: RefreshTokenRequest): Promise<RefreshTokenResponse> => {
+  return request.post('/auth/refresh', data)
 }
 
 // 微信绑定相关

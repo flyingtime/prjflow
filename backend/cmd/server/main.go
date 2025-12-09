@@ -772,9 +772,10 @@ func main() {
 	userHandler := api.NewUserHandler(db)
 	authGroup := r.Group("/api/auth")
 	{
-		authGroup.POST("/login", authHandler.Login) // 用户名密码登录
-		// GetQRCode 不需要中间件认证：登录场景允许未登录访问，添加用户场景在函数内部检查权限
-		authGroup.GET("/wechat/qrcode", authHandler.GetQRCode)
+	authGroup.POST("/login", authHandler.Login)                    // 用户名密码登录
+	authGroup.POST("/refresh", authHandler.RefreshToken)          // 刷新Token（不需要认证）
+	// GetQRCode 不需要中间件认证：登录场景允许未登录访问，添加用户场景在函数内部检查权限
+	authGroup.GET("/wechat/qrcode", authHandler.GetQRCode)
 		authGroup.GET("/wechat/callback", authHandler.WeChatCallback)                   // 微信登录回调接口（GET请求，微信直接重定向到这里）
 		authGroup.GET("/wechat/add-user/callback", userHandler.AddUserByWeChatCallback) // 微信添加用户回调接口（GET请求，微信直接重定向到这里）
 		authGroup.POST("/wechat/login", authHandler.WeChatLogin)                        // 微信登录（POST请求，保留用于其他场景）

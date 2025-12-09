@@ -6,6 +6,7 @@ import { usePermissionStore } from './permission'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
+  const refreshToken = ref<string | null>(localStorage.getItem('refresh_token'))
   const user = ref<User | null>(null)
   const isAuthenticated = ref<boolean>(!!token.value)
   const isFirstLogin = ref<boolean>(false)
@@ -14,6 +15,16 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = newToken
     localStorage.setItem('token', newToken)
     isAuthenticated.value = true
+  }
+
+  const setRefreshToken = (newRefreshToken: string) => {
+    refreshToken.value = newRefreshToken
+    localStorage.setItem('refresh_token', newRefreshToken)
+  }
+
+  const setTokens = (newToken: string, newRefreshToken: string) => {
+    setToken(newToken)
+    setRefreshToken(newRefreshToken)
   }
 
   const setUser = (userData: User) => {
@@ -32,6 +43,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const logout = async () => {
+    // 如果已经logout过（token和refreshToken都为空），避免重复调用
+    if (!token.value && !refreshToken.value) {
+      return
+    }
+    
     try {
       // 调用后端退出登录API
       await logoutAPI()
@@ -41,8 +57,10 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       // 清除本地状态
       token.value = null
+      refreshToken.value = null
       user.value = null
       localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
       isAuthenticated.value = false
       isFirstLogin.value = false
     }
@@ -72,10 +90,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token,
+    refreshToken,
     user,
     isAuthenticated,
     isFirstLogin,
     setToken,
+    setRefreshToken,
+    setTokens,
     setUser,
     logout,
     loadUserInfo,

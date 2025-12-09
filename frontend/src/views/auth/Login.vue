@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getWeChatQRCode, passwordLogin } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
@@ -51,6 +51,7 @@ import { usePermissionStore } from '@/stores/permission'
 import WeChatQRCode from '@/components/WeChatQRCode.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const permissionStore = usePermissionStore()
 
@@ -89,8 +90,12 @@ const handlePasswordLogin = async () => {
 // 处理登录成功
 const handleLoginSuccess = async (data: any) => {
   if (data.token && data.user) {
-    // 保存token和用户信息
-    authStore.setToken(data.token)
+    // 保存token和refresh token
+    if (data.refresh_token) {
+      authStore.setTokens(data.token, data.refresh_token)
+    } else {
+      authStore.setToken(data.token)
+    }
     // 将 is_first_login 添加到 user 对象中，以便 setUser 可以正确设置状态
     const userData = { ...data.user, is_first_login: data.is_first_login }
     authStore.setUser(userData)
@@ -110,9 +115,14 @@ const handleLoginSuccess = async (data: any) => {
         router.push('/auth/change-password')
       }, 1000)
     } else {
-      // 否则跳转到工作台
+      // 否则跳转到指定页面（如果有 redirect 参数）或工作台
       setTimeout(() => {
-        router.push('/dashboard')
+        const redirect = route.query.redirect as string | undefined
+        if (redirect && redirect !== '/login') {
+          router.push(redirect)
+        } else {
+          router.push('/dashboard')
+        }
       }, 1000)
     }
   }

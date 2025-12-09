@@ -10,9 +10,10 @@ import (
 )
 
 type Claims struct {
-	UserID   uint     `json:"user_id"`
-	Username string   `json:"username"`
-	Roles    []string `json:"roles"`
+	UserID    uint     `json:"user_id"`
+	Username  string   `json:"username"`
+	Roles     []string `json:"roles"`
+	TokenType string   `json:"token_type"` // "access" 或 "refresh"
 	jwt.RegisteredClaims
 }
 
@@ -24,18 +25,46 @@ func getJWTSecret() []byte {
 	return []byte(config.AppConfig.JWT.Secret)
 }
 
-// GenerateToken 生成JWT Token
+// GenerateToken 生成JWT Token (Access Token)
 func GenerateToken(userID uint, username string, roles []string) (string, error) {
 	if config.AppConfig == nil {
 		return "", errors.New("config not initialized")
 	}
 
+	// Access Token 有效期从配置文件读取（默认 24 小时）
 	expirationTime := time.Now().Add(time.Duration(config.AppConfig.JWT.Expiration) * time.Hour)
 
 	claims := &Claims{
-		UserID:   userID,
-		Username: username,
-		Roles:    roles,
+		UserID:    userID,
+		Username:  username,
+		Roles:     roles,
+		TokenType: "access",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(getJWTSecret())
+}
+
+// GenerateRefreshToken 生成Refresh Token
+// Refresh Token 的有效期通常比 Access Token 长得多（例如 7 天或 30 天）
+func GenerateRefreshToken(userID uint, username string, roles []string) (string, error) {
+	if config.AppConfig == nil {
+		return "", errors.New("config not initialized")
+	}
+
+	// Refresh Token 有效期设置为 7 天
+	expirationTime := time.Now().Add(7 * 24 * time.Hour)
+
+	claims := &Claims{
+		UserID:    userID,
+		Username:  username,
+		Roles:     roles,
+		TokenType: "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

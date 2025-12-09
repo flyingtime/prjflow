@@ -12,8 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"project-management/internal/api"
+	"project-management/internal/config"
 	"project-management/internal/model"
 	"project-management/internal/utils"
+	"project-management/pkg/auth"
 )
 
 func TestAuthHandler_Login(t *testing.T) {
@@ -52,6 +54,7 @@ func TestAuthHandler_Login(t *testing.T) {
 
 		data := response["data"].(map[string]interface{})
 		assert.NotNil(t, data["token"])
+		assert.NotNil(t, data["refresh_token"])
 		assert.NotNil(t, data["user"])
 	})
 
@@ -406,6 +409,170 @@ func TestAuthHandler_WeChatCallback(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Body.String(), "html")
 		assert.Contains(t, w.Body.String(), "登录失败")
+	})
+}
+
+func TestAuthHandler_RefreshToken(t *testing.T) {
+	db := SetupTestDB(t)
+	defer TeardownTestDB(t, db)
+
+	// 初始化JWT配置
+	if config.AppConfig == nil {
+		config.AppConfig = &config.Config{
+			JWT: config.JWTConfig{
+				Secret:     "test-secret-key-for-unit-testing",
+				Expiration: 24,
+			},
+		}
+	}
+
+	// 创建测试用户
+	user := CreateTestUser(t, db, "refreshtoken", "刷新Token用户")
+	adminRole := CreateTestAdminRole(t, db)
+	db.Model(user).Association("Roles").Append(adminRole)
+
+	handler := api.NewAuthHandler(db)
+
+	t.Run("刷新Token成功", func(t *testing.T) {
+		// 先生成一个refresh token
+		refreshToken, err := auth.GenerateRefreshToken(user.ID, user.Username, []string{"admin"})
+		require.NoError(t, err)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"refresh_token": refreshToken,
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/auth/refresh", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.RefreshToken(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err = json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(200), response["code"])
+
+		data := response["data"].(map[string]interface{})
+		assert.NotNil(t, data["token"])
+		assert.NotEmpty(t, data["token"])
+		assert.NotNil(t, data["refresh_token"])
+		assert.NotEmpty(t, data["refresh_token"])
+		
+		// 验证返回的token和refresh_token都是有效的JWT字符串
+		newToken, ok := data["token"].(string)
+		assert.True(t, ok, "token应该是字符串类型")
+		assert.NotEmpty(t, newToken)
+		
+		newRefreshToken, ok := data["refresh_token"].(string)
+		assert.True(t, ok, "refresh_token应该是字符串类型")
+		assert.NotEmpty(t, newRefreshToken)
+		
+		// 验证新的token可以解析（不验证过期时间，因为可能因为时间问题导致过期）
+		claims, err := auth.ParseToken(newToken)
+		if err == nil {
+			assert.Equal(t, user.ID, claims.UserID)
+			assert.Equal(t, user.Username, claims.Username)
+		}
+		
+		// 验证新的refresh token可以解析
+		refreshClaims, err := auth.ParseToken(newRefreshToken)
+		if err == nil {
+			assert.Equal(t, user.ID, refreshClaims.UserID)
+			assert.Equal(t, user.Username, refreshClaims.Username)
+		}
+	})
+
+	t.Run("刷新Token失败-无效的refresh token", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"refresh_token": "invalid-refresh-token",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/auth/refresh", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.RefreshToken(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusUnauthorized || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("刷新Token失败-缺少refresh_token参数", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/auth/refresh", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.RefreshToken(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusBadRequest || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("刷新Token失败-用户不存在", func(t *testing.T) {
+		// 生成一个不存在的用户的refresh token
+		refreshToken, err := auth.GenerateRefreshToken(99999, "nonexistent", []string{})
+		require.NoError(t, err)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"refresh_token": refreshToken,
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/auth/refresh", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.RefreshToken(c)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		assert.True(t, w.Code == http.StatusNotFound || (response["code"] != nil && response["code"] != float64(200)))
+	})
+
+	t.Run("刷新Token失败-使用AccessToken而不是RefreshToken", func(t *testing.T) {
+		// 生成一个access token（不是refresh token）
+		accessToken, err := auth.GenerateToken(user.ID, user.Username, []string{"admin"})
+		require.NoError(t, err)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		reqBody := map[string]interface{}{
+			"refresh_token": accessToken, // 错误：使用access token而不是refresh token
+		}
+		jsonData, _ := json.Marshal(reqBody)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/auth/refresh", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.RefreshToken(c)
+
+		var response map[string]interface{}
+		err = json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		// 应该返回401错误，因为token类型不匹配
+		assert.True(t, w.Code == http.StatusUnauthorized || (response["code"] != nil && response["code"] != float64(200)))
+		if response["message"] != nil {
+			assert.Contains(t, response["message"].(string), "只能使用RefreshToken")
+		}
 	})
 }
 

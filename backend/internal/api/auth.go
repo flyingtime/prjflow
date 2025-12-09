@@ -29,15 +29,15 @@ func NewAuthHandler(db *gorm.DB) *AuthHandler {
 	}
 }
 
-// GetQRCode 获取微信登录二维码
-func (h *AuthHandler) GetQRCode(c *gin.Context) {
+// loadWeChatConfig 从数据库或配置文件加载微信配置
+// 返回错误信息，如果配置加载成功则返回空字符串
+func (h *AuthHandler) loadWeChatConfig() string {
 	// 从数据库读取微信配置
 	var wechatAppIDConfig model.SystemConfig
 	if err := h.db.Where("key = ?", "wechat_app_id").First(&wechatAppIDConfig).Error; err != nil {
 		// 如果数据库中没有配置，尝试使用配置文件中的配置
 		if config.AppConfig.WeChat.AppID == "" || config.AppConfig.WeChat.AppSecret == "" {
-			utils.Error(c, 400, "请先配置微信AppID和AppSecret")
-			return
+			return "请先配置微信AppID和AppSecret"
 		}
 		h.wechatClient.AppID = config.AppConfig.WeChat.AppID
 		h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
@@ -47,8 +47,7 @@ func (h *AuthHandler) GetQRCode(c *gin.Context) {
 		if err := h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig).Error; err != nil {
 			// 如果数据库中没有AppSecret，尝试使用配置文件中的配置
 			if config.AppConfig.WeChat.AppSecret == "" {
-				utils.Error(c, 400, "请先配置微信AppSecret")
-				return
+				return "请先配置微信AppSecret"
 			}
 			h.wechatClient.AppID = wechatAppIDConfig.Value
 			h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
@@ -59,8 +58,7 @@ func (h *AuthHandler) GetQRCode(c *gin.Context) {
 		}
 		// 验证配置是否为空
 		if h.wechatClient.AppID == "" || h.wechatClient.AppSecret == "" {
-			utils.Error(c, 400, "微信AppID或AppSecret配置为空，请检查配置")
-			return
+			return "微信AppID或AppSecret配置为空，请检查配置"
 		}
 	}
 
@@ -83,6 +81,17 @@ func (h *AuthHandler) GetQRCode(c *gin.Context) {
 	}
 	if h.wechatClient.Scope == "" {
 		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
+	}
+
+	return ""
+}
+
+// GetQRCode 获取微信登录二维码
+func (h *AuthHandler) GetQRCode(c *gin.Context) {
+	// 加载微信配置
+	if errMsg := h.loadWeChatConfig(); errMsg != "" {
+		utils.Error(c, 400, errMsg)
+		return
 	}
 
 	// 判断是否是添加用户场景（根据 redirect_uri 是否包含 add-user）
@@ -287,12 +296,20 @@ func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{},
 	// 只有用户名密码登录的首次登录才需要修改密码
 	isFirstLogin := false
 
-	// 生成JWT Token
+	// 生成JWT Token (Access Token)
 	token, err := auth.GenerateToken(user.ID, user.Username, roleNames)
 	if err != nil {
 		// 记录登录失败
 		utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, nil, false, "生成Token失败", "")
 		return nil, &CallbackError{Message: "生成Token失败", Err: err}
+	}
+
+	// 生成Refresh Token
+	refreshToken, err := auth.GenerateRefreshToken(user.ID, user.Username, roleNames)
+	if err != nil {
+		// 记录登录失败
+		utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, nil, false, "生成RefreshToken失败", "")
+		return nil, &CallbackError{Message: "生成RefreshToken失败", Err: err}
 	}
 
 	// 记录登录成功（微信登录）
@@ -302,7 +319,8 @@ func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{},
 	if ctx.Ticket != "" && ctx.Hub != nil {
 		ctx.Hub.SendMessage(ctx.Ticket, "info", nil, "正在登录...")
 		ctx.Hub.SendMessage(ctx.Ticket, "success", gin.H{
-			"token": token,
+			"token":         token,
+			"refresh_token": refreshToken,
 			"user": gin.H{
 				"id":       user.ID,
 				"username": user.Username,
@@ -315,7 +333,8 @@ func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{},
 	}
 
 	return gin.H{
-		"token": token,
+		"token":         token,
+		"refresh_token": refreshToken,
 		"user": gin.H{
 			"id":       user.ID,
 			"username": user.Username,
@@ -365,58 +384,10 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 		return
 	}
 
-	// 从数据库读取微信配置
-	var wechatAppIDConfig model.SystemConfig
-	if err := h.db.Where("key = ?", "wechat_app_id").First(&wechatAppIDConfig).Error; err != nil {
-		// 如果数据库中没有配置，尝试使用配置文件中的配置
-		if config.AppConfig.WeChat.AppID == "" || config.AppConfig.WeChat.AppSecret == "" {
-			utils.Error(c, 400, "请先配置微信AppID和AppSecret")
-			return
-		}
-		h.wechatClient.AppID = config.AppConfig.WeChat.AppID
-		h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
-	} else {
-		// 从数据库读取配置
-		var wechatAppSecretConfig model.SystemConfig
-		if err := h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig).Error; err != nil {
-			// 如果数据库中没有AppSecret，尝试使用配置文件中的配置
-			if config.AppConfig.WeChat.AppSecret == "" {
-				utils.Error(c, 400, "请先配置微信AppSecret")
-				return
-			}
-			h.wechatClient.AppID = wechatAppIDConfig.Value
-			h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
-		} else {
-			// 从数据库读取配置，去除首尾空格
-			h.wechatClient.AppID = strings.TrimSpace(wechatAppIDConfig.Value)
-			h.wechatClient.AppSecret = strings.TrimSpace(wechatAppSecretConfig.Value)
-		}
-		// 验证配置是否为空
-		if h.wechatClient.AppID == "" || h.wechatClient.AppSecret == "" {
-			utils.Error(c, 400, "微信AppID或AppSecret配置为空，请检查配置")
-			return
-		}
-	}
-
-	// 设置AccountType和Scope（优先从数据库读取，其次从配置文件，最后使用默认值）
-	var accountTypeConfig model.SystemConfig
-	if err := h.db.Where("key = ?", "wechat_account_type").First(&accountTypeConfig).Error; err == nil {
-		h.wechatClient.AccountType = strings.TrimSpace(accountTypeConfig.Value)
-	} else {
-		h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
-	}
-	if h.wechatClient.AccountType == "" {
-		h.wechatClient.AccountType = "open_platform" // 默认使用开放平台
-	}
-
-	var scopeConfig model.SystemConfig
-	if err := h.db.Where("key = ?", "wechat_scope").First(&scopeConfig).Error; err == nil {
-		h.wechatClient.Scope = strings.TrimSpace(scopeConfig.Value)
-	} else {
-		h.wechatClient.Scope = config.AppConfig.WeChat.Scope
-	}
-	if h.wechatClient.Scope == "" {
-		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
+	// 加载微信配置
+	if errMsg := h.loadWeChatConfig(); errMsg != "" {
+		utils.Error(c, 400, errMsg)
+		return
 	}
 
 	// 从state中提取ticket（如果存在）
@@ -518,7 +489,7 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 	// 只有用户名密码登录的首次登录才需要修改密码
 	isFirstLogin := false
 
-	// 生成JWT Token
+	// 生成JWT Token (Access Token)
 	token, err := auth.GenerateToken(user.ID, user.Username, roleNames)
 	if err != nil {
 		// 如果存在ticket，通知错误
@@ -529,11 +500,23 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 		return
 	}
 
+	// 生成Refresh Token
+	refreshToken, err := auth.GenerateRefreshToken(user.ID, user.Username, roleNames)
+	if err != nil {
+		// 如果存在ticket，通知错误
+		if ticket != "" {
+			websocket.GetHub().SendMessage(ticket, "error", nil, "生成RefreshToken失败")
+		}
+		utils.Error(c, utils.CodeError, "生成RefreshToken失败")
+		return
+	}
+
 	// 如果存在ticket，通过WebSocket通知登录页面
 	if ticket != "" {
 		websocket.GetHub().SendMessage(ticket, "info", nil, "正在登录...")
 		websocket.GetHub().SendMessage(ticket, "success", gin.H{
-			"token": token,
+			"token":        token,
+			"refresh_token": refreshToken,
 			"user": gin.H{
 				"id":       user.ID,
 				"username": user.Username,
@@ -546,7 +529,8 @@ func (h *AuthHandler) WeChatLogin(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{
-		"token": token,
+		"token":         token,
+		"refresh_token": refreshToken,
 		"user": gin.H{
 			"id":       user.ID,
 			"username": user.Username,
@@ -660,7 +644,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 判断是否是首次登录（更新后LoginCount == 1）
 	isFirstLogin := user.LoginCount == 1
 
-	// 生成JWT Token
+	// 生成JWT Token (Access Token)
 	token, err := auth.GenerateToken(user.ID, user.Username, roleNames)
 	if err != nil {
 		utils.Error(c, utils.CodeError, "生成Token失败")
@@ -669,11 +653,21 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// 生成Refresh Token
+	refreshToken, err := auth.GenerateRefreshToken(user.ID, user.Username, roleNames)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "生成RefreshToken失败")
+		// 记录登录失败
+		utils.RecordAuditLog(h.db, user.ID, user.Username, "login", "user", user.ID, c, false, "生成RefreshToken失败", "")
+		return
+	}
+
 	// 记录登录成功
 	utils.RecordAuditLog(h.db, user.ID, user.Username, "login", "user", user.ID, c, true, "", "")
 
 	utils.Success(c, gin.H{
-		"token": token,
+		"token":         token,
+		"refresh_token": refreshToken,
 		"user": gin.H{
 			"id":       user.ID,
 			"username": user.Username,
@@ -779,6 +773,66 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	})
 }
 
+// RefreshToken 刷新Token
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refresh_token" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, 400, "参数错误: "+err.Error())
+		return
+	}
+
+	// 解析Refresh Token
+	claims, err := auth.ParseToken(req.RefreshToken)
+	if err != nil {
+		utils.Error(c, 401, "无效的RefreshToken")
+		return
+	}
+
+	// 验证Token类型：只能使用refresh token来刷新
+	if claims.TokenType != "refresh" {
+		utils.Error(c, 401, "只能使用RefreshToken来刷新，不能使用AccessToken")
+		return
+	}
+
+	// 验证用户是否存在
+	var user model.User
+	if err := h.db.First(&user, claims.UserID).Error; err != nil {
+		utils.Error(c, 404, "用户不存在")
+		return
+	}
+
+	// 获取用户角色
+	var roles []model.Role
+	h.db.Model(&user).Association("Roles").Find(&roles)
+
+	roleNames := make([]string, 0, len(roles))
+	for _, role := range roles {
+		roleNames = append(roleNames, role.Code)
+	}
+
+	// 生成新的Access Token
+	newToken, err := auth.GenerateToken(user.ID, user.Username, roleNames)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "生成Token失败")
+		return
+	}
+
+	// 生成新的Refresh Token
+	newRefreshToken, err := auth.GenerateRefreshToken(user.ID, user.Username, roleNames)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "生成RefreshToken失败")
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"token":         newToken,
+		"refresh_token": newRefreshToken,
+	})
+}
+
 // GetWeChatBindQRCode 获取微信绑定二维码
 func (h *AuthHandler) GetWeChatBindQRCode(c *gin.Context) {
 	// 检查用户是否已登录
@@ -800,58 +854,10 @@ func (h *AuthHandler) GetWeChatBindQRCode(c *gin.Context) {
 		return
 	}
 
-	// 从数据库读取微信配置
-	var wechatAppIDConfig model.SystemConfig
-	if err := h.db.Where("key = ?", "wechat_app_id").First(&wechatAppIDConfig).Error; err != nil {
-		// 如果数据库中没有配置，尝试使用配置文件中的配置
-		if config.AppConfig.WeChat.AppID == "" || config.AppConfig.WeChat.AppSecret == "" {
-			utils.Error(c, 400, "请先配置微信AppID和AppSecret")
-			return
-		}
-		h.wechatClient.AppID = config.AppConfig.WeChat.AppID
-		h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
-	} else {
-		// 从数据库读取配置
-		var wechatAppSecretConfig model.SystemConfig
-		if err := h.db.Where("key = ?", "wechat_app_secret").First(&wechatAppSecretConfig).Error; err != nil {
-			// 如果数据库中没有AppSecret，尝试使用配置文件中的配置
-			if config.AppConfig.WeChat.AppSecret == "" {
-				utils.Error(c, 400, "请先配置微信AppSecret")
-				return
-			}
-			h.wechatClient.AppID = wechatAppIDConfig.Value
-			h.wechatClient.AppSecret = config.AppConfig.WeChat.AppSecret
-		} else {
-			// 从数据库读取配置，去除首尾空格
-			h.wechatClient.AppID = strings.TrimSpace(wechatAppIDConfig.Value)
-			h.wechatClient.AppSecret = strings.TrimSpace(wechatAppSecretConfig.Value)
-		}
-		// 验证配置是否为空
-		if h.wechatClient.AppID == "" || h.wechatClient.AppSecret == "" {
-			utils.Error(c, 400, "微信AppID或AppSecret配置为空，请检查配置")
-			return
-		}
-	}
-
-	// 设置AccountType和Scope（优先从数据库读取，其次从配置文件，最后使用默认值）
-	var accountTypeConfig model.SystemConfig
-	if err := h.db.Where("key = ?", "wechat_account_type").First(&accountTypeConfig).Error; err == nil {
-		h.wechatClient.AccountType = strings.TrimSpace(accountTypeConfig.Value)
-	} else {
-		h.wechatClient.AccountType = config.AppConfig.WeChat.AccountType
-	}
-	if h.wechatClient.AccountType == "" {
-		h.wechatClient.AccountType = "open_platform" // 默认使用开放平台
-	}
-
-	var scopeConfig model.SystemConfig
-	if err := h.db.Where("key = ?", "wechat_scope").First(&scopeConfig).Error; err == nil {
-		h.wechatClient.Scope = strings.TrimSpace(scopeConfig.Value)
-	} else {
-		h.wechatClient.Scope = config.AppConfig.WeChat.Scope
-	}
-	if h.wechatClient.Scope == "" {
-		h.wechatClient.Scope = "snsapi_userinfo" // 默认需要用户确认
+	// 加载微信配置
+	if errMsg := h.loadWeChatConfig(); errMsg != "" {
+		utils.Error(c, 400, errMsg)
+		return
 	}
 
 	// 获取回调地址（指向绑定回调接口）

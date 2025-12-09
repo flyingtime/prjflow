@@ -138,8 +138,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PaperClipOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { formatDateTime } from '@/utils/date'
@@ -152,12 +150,10 @@ interface Props {
   loading?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   version: null,
   loading: false
 })
-
-const router = useRouter()
 
 // 格式化文件大小
 const formatFileSize = (bytes: number): string => {
