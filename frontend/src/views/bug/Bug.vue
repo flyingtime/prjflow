@@ -599,8 +599,10 @@
           <AttachmentUpload
             v-if="formData.project_id && formData.project_id > 0"
             :project-id="formData.project_id"
-            v-model="formData.attachment_ids"
+            :model-value="formData.attachment_ids"
             :existing-attachments="bugAttachments"
+            @update:modelValue="(value) => { formData.attachment_ids = value }"
+            @attachment-deleted="handleAttachmentDeleted"
           />
           <span v-else style="color: #999;">请先选择项目后再上传附件</span>
         </a-form-item>
@@ -1042,6 +1044,17 @@ const formData = reactive<CreateBugRequest & { id?: number; attachment_ids?: num
 })
 
 const bugAttachments = ref<Attachment[]>([]) // Bug附件列表
+
+// 处理附件删除事件
+const handleAttachmentDeleted = (attachmentId: number) => {
+  // 从bugAttachments中移除已删除的附件
+  bugAttachments.value = bugAttachments.value.filter(a => a.id !== attachmentId)
+}
+
+// 监听 attachment_ids 的变化
+watch(() => formData.attachment_ids, () => {
+  // 监听 attachment_ids 的变化
+}, { deep: true })
 
 const formRules = {
   title: [{ required: true, message: '请输入Bug标题', trigger: 'blur' }],
@@ -1733,7 +1746,7 @@ const handleSubmit = async () => {
     }
     
     // 确保 description 字段总是存在（即使是空字符串）
-    const data: CreateBugRequest = {
+    const data: any = {
       title: formData.title,
       description: description || '', // 确保 description 字段总是存在
       status: formData.status,
@@ -1749,14 +1762,14 @@ const handleSubmit = async () => {
       work_date: formData.work_date && typeof formData.work_date !== 'string' && 'isValid' in formData.work_date && (formData.work_date as Dayjs).isValid() ? (formData.work_date as Dayjs).format('YYYY-MM-DD') : (typeof formData.work_date === 'string' ? formData.work_date : undefined)
     }
     
-    // 调试：检查提交的数据
-    console.log('提交Bug数据:', {
-      id: formData.id,
-      description: data.description,
-      descriptionLength: data.description?.length,
-      hasDescription: !!data.description,
-      formDataDescription: formData.description
-    })
+    // 始终发送 attachment_ids，如果为 undefined 或 null，发送空数组
+    // 注意：必须显式设置，不能依赖对象字面量，因为 undefined 值会被 JSON 序列化忽略
+    const attachmentIdsValue = formData.attachment_ids
+    if (attachmentIdsValue === undefined || attachmentIdsValue === null) {
+      data.attachment_ids = []
+    } else {
+      data.attachment_ids = Array.isArray(attachmentIdsValue) ? attachmentIdsValue : []
+    }
     
     let bugId: number
     if (formData.id) {

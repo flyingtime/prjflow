@@ -13,9 +13,9 @@ type Requirement struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Title       string `gorm:"size:200;not null" json:"title"`        // 需求标题
-	Description string `gorm:"type:text" json:"description"`        // 需求描述（Markdown）
-	Status      string `gorm:"size:20;default:'draft'" json:"status"` // 状态：draft(草稿), reviewing(评审中), active(激活), changing(变更中), closed(已关闭)
+	Title       string `gorm:"size:200;not null" json:"title"`           // 需求标题
+	Description string `gorm:"type:text" json:"description"`             // 需求描述（Markdown）
+	Status      string `gorm:"size:20;default:'draft'" json:"status"`    // 状态：draft(草稿), reviewing(评审中), active(激活), changing(变更中), closed(已关闭)
 	Priority    string `gorm:"size:20;default:'medium'" json:"priority"` // 优先级：low, medium, high, urgent
 
 	ProjectID uint    `gorm:"index;not null" json:"project_id"` // 必填关联项目
@@ -38,12 +38,12 @@ type Bug struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Title       string `gorm:"size:200;not null" json:"title"`        // Bug标题
-	Description string `gorm:"type:text" json:"description"`         // Bug描述（Markdown）
-	Status      string `gorm:"size:20;default:'active'" json:"status"` // 状态：active(激活), resolved(已解决), closed(已关闭)
+	Title       string `gorm:"size:200;not null" json:"title"`           // Bug标题
+	Description string `gorm:"type:text" json:"description"`             // Bug描述（Markdown）
+	Status      string `gorm:"size:20;default:'active'" json:"status"`   // 状态：active(激活), resolved(已解决), closed(已关闭)
 	Priority    string `gorm:"size:20;default:'medium'" json:"priority"` // 优先级：low, medium, high, urgent
 	Severity    string `gorm:"size:20;default:'medium'" json:"severity"` // 严重程度：low, medium, high, critical
-	Confirmed   bool   `gorm:"default:false" json:"confirmed"`      // 是否确认：false(未确认), true(已确认)
+	Confirmed   bool   `gorm:"default:false" json:"confirmed"`           // 是否确认：false(未确认), true(已确认)
 
 	ProjectID uint    `gorm:"index;not null" json:"project_id"`
 	Project   Project `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
@@ -53,29 +53,31 @@ type Bug struct {
 
 	Assignees []User `gorm:"many2many:bug_assignees;" json:"assignees,omitempty"`
 
-	RequirementID *uint       `gorm:"index" json:"requirement_id"` // 关联需求
+	RequirementID *uint        `gorm:"index" json:"requirement_id"` // 关联需求
 	Requirement   *Requirement `gorm:"foreignKey:RequirementID" json:"requirement,omitempty"`
 
-	ModuleID *uint  `gorm:"index" json:"module_id"` // 关联功能模块
+	ModuleID *uint   `gorm:"index" json:"module_id"` // 关联功能模块
 	Module   *Module `gorm:"foreignKey:ModuleID" json:"module,omitempty"`
 
 	EstimatedHours *float64 `gorm:"default:0" json:"estimated_hours"` // 预估工时（小时）
 	ActualHours    *float64 `gorm:"default:0" json:"actual_hours"`    // 实际工时（小时），从资源分配自动计算
 
 	// 解决方案相关
-	Solution       string `gorm:"size:50" json:"solution"`        // 解决方案：设计如此、重复Bug、外部原因、已解决、无法重现、延期处理、不予解决、转为研发需求
-	SolutionNote   string `gorm:"type:text" json:"solution_note"` // 解决方案备注
-	ResolvedVersionID *uint   `gorm:"index" json:"resolved_version_id"` // 解决版本ID
+	Solution          string   `gorm:"size:50" json:"solution"`          // 解决方案：设计如此、重复Bug、外部原因、已解决、无法重现、延期处理、不予解决、转为研发需求
+	SolutionNote      string   `gorm:"type:text" json:"solution_note"`   // 解决方案备注
+	ResolvedVersionID *uint    `gorm:"index" json:"resolved_version_id"` // 解决版本ID
 	ResolvedVersion   *Version `gorm:"foreignKey:ResolvedVersionID" json:"resolved_version,omitempty"`
 
 	// 所属版本（多对多关系）
 	Versions []Version `gorm:"many2many:version_bugs;" json:"versions,omitempty"`
+
+	// 附件（多对多关系）
+	Attachments []Attachment `gorm:"many2many:bug_attachments;" json:"attachments"`
 }
 
 // BugAssignee Bug分配表
 type BugAssignee struct {
-	BugID    uint `gorm:"primaryKey" json:"bug_id"`
-	UserID   uint `gorm:"primaryKey" json:"user_id"`
+	BugID      uint      `gorm:"primaryKey" json:"bug_id"`
+	UserID     uint      `gorm:"primaryKey" json:"user_id"`
 	AssignedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"assigned_at"`
 }
-

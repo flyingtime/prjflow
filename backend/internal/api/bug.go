@@ -283,9 +283,45 @@ func (h *BugHandler) GetBugs(c *gin.Context) {
 func (h *BugHandler) GetBug(c *gin.Context) {
 	id := c.Param("id")
 	var bug model.Bug
-	if err := h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("Versions").First(&bug, id).Error; err != nil {
+
+	// 在 Preload 之前检查关联表
+	var beforePreloadCount int64
+	if err := h.db.Table("bug_attachments").Where("bug_id = ?", id).Count(&beforePreloadCount).Error; err == nil {
+		fmt.Printf("GetBug: Preload 之前，bug_attachments 表中的记录数: %d\n", beforePreloadCount)
+		if beforePreloadCount > 0 {
+			var attachmentIDs []uint
+			h.db.Table("bug_attachments").Where("bug_id = ?", id).Pluck("attachment_id", &attachmentIDs)
+			fmt.Printf("GetBug: Preload 之前，关联的附件ID: %v\n", attachmentIDs)
+		}
+	}
+
+	if err := h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("Versions").Preload("Attachments").Preload("Attachments.Creator").First(&bug, id).Error; err != nil {
 		utils.Error(c, 404, "Bug不存在")
 		return
+	}
+
+	// 调试：检查附件是否加载成功
+	fmt.Printf("GetBug: Preload 后，bug.Attachments 长度: %d\n", len(bug.Attachments))
+	if len(bug.Attachments) > 0 {
+		ids := make([]uint, len(bug.Attachments))
+		for i, att := range bug.Attachments {
+			ids[i] = att.ID
+			fmt.Printf("GetBug: 附件 %d: ID=%d, FileName=%s, DeletedAt=%v\n", i, att.ID, att.FileName, att.DeletedAt)
+		}
+		fmt.Printf("GetBug: 成功加载 %d 个附件，附件ID: %v\n", len(bug.Attachments), ids)
+	} else if beforePreloadCount > 0 {
+		fmt.Printf("GetBug: 警告 - 附件列表为空，但关联表中有 %d 条记录\n", beforePreloadCount)
+		// 检查关联表中的附件是否被软删除
+		var attachmentIDs []uint
+		h.db.Table("bug_attachments").Where("bug_id = ?", id).Pluck("attachment_id", &attachmentIDs)
+		if len(attachmentIDs) > 0 {
+			var attachments []model.Attachment
+			if err := h.db.Unscoped().Where("id IN ?", attachmentIDs).Find(&attachments).Error; err == nil {
+				for _, att := range attachments {
+					fmt.Printf("GetBug: 附件 %d: FileName=%s, DeletedAt=%v\n", att.ID, att.FileName, att.DeletedAt)
+				}
+			}
+		}
 	}
 
 	// 权限检查：普通用户只能查看自己创建或参与的Bug
@@ -527,9 +563,10 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 		ModuleID       *uint    `json:"module_id"`
 		AssigneeIDs    *[]uint  `json:"assignee_ids"`
 		EstimatedHours *float64 `json:"estimated_hours"`
-		ActualHours    *float64 `json:"actual_hours"` // 实际工时，会自动创建资源分配
-		WorkDate       *string  `json:"work_date"`    // 工作日期（YYYY-MM-DD），用于资源分配
-		VersionIDs     *[]uint  `json:"version_ids"`  // 所属版本ID列表
+		ActualHours    *float64 `json:"actual_hours"`   // 实际工时，会自动创建资源分配
+		WorkDate       *string  `json:"work_date"`      // 工作日期（YYYY-MM-DD），用于资源分配
+		VersionIDs     *[]uint  `json:"version_ids"`    // 所属版本ID列表
+		AttachmentIDs  *[]uint  `json:"attachment_ids"` // 附件ID列表
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -778,8 +815,125 @@ func (h *BugHandler) UpdateBug(c *gin.Context) {
 		}
 	}
 
-	// 重新加载关联数据
-	h.db.Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("ResolvedVersion").Preload("Versions").First(&bug, bug.ID)
+	// 更新附件关联
+	if req.AttachmentIDs != nil {
+		projectID := bug.ProjectID
+		if req.ProjectID != nil {
+			projectID = *req.ProjectID
+		}
+		var attachments []model.Attachment
+		if len(*req.AttachmentIDs) > 0 {
+			// 验证附件是否存在且属于同一项目
+			// 注意：附件可能已经关联到项目，也可能还没有，所以先查询附件是否存在
+			// 注意：使用 Unscoped() 查询所有附件（包括软删除的），但只关联未删除的附件
+			if err := h.db.Where("id IN ?", *req.AttachmentIDs).Find(&attachments).Error; err != nil {
+				utils.Error(c, 400, "附件查询失败: "+err.Error())
+				return
+			}
+			if len(attachments) != len(*req.AttachmentIDs) {
+				// 检查是否有附件被软删除
+				var deletedAttachments []model.Attachment
+				h.db.Unscoped().Where("id IN ? AND deleted_at IS NOT NULL", *req.AttachmentIDs).Find(&deletedAttachments)
+				if len(deletedAttachments) > 0 {
+					utils.Error(c, 400, fmt.Sprintf("部分附件已被删除：期望 %d 个，实际找到 %d 个，已删除 %d 个", len(*req.AttachmentIDs), len(attachments), len(deletedAttachments)))
+					return
+				}
+				utils.Error(c, 400, fmt.Sprintf("附件不存在：期望 %d 个，实际找到 %d 个", len(*req.AttachmentIDs), len(attachments)))
+				return
+			}
+			// 验证附件是否属于同一项目（通过检查附件是否关联到项目）
+			for _, attachment := range attachments {
+				var count int64
+				if err := h.db.Table("project_attachments").
+					Where("attachment_id = ? AND project_id = ?", attachment.ID, projectID).
+					Count(&count).Error; err != nil {
+					utils.Error(c, 400, "验证附件项目关联失败: "+err.Error())
+					return
+				}
+				if count == 0 {
+					utils.Error(c, 400, fmt.Sprintf("附件 %d 不属于项目 %d", attachment.ID, projectID))
+					return
+				}
+			}
+		}
+		// 使用Replace方法同步附件关联（空数组表示移除所有附件）
+		if err := h.db.Model(&bug).Association("Attachments").Replace(attachments); err != nil {
+			utils.Error(c, utils.CodeError, "更新附件关联失败: "+err.Error())
+			return
+		}
+		fmt.Printf("UpdateBug: 附件关联已更新，attachment_ids=%v, 附件数量=%d\n", *req.AttachmentIDs, len(attachments))
+
+		// 验证关联是否建立成功
+		var count int64
+		if err := h.db.Table("bug_attachments").Where("bug_id = ?", bug.ID).Count(&count).Error; err == nil {
+			fmt.Printf("UpdateBug: 验证关联表，bug_attachments 表中的记录数: %d\n", count)
+		}
+	}
+
+	// 重新加载关联数据（包括附件）
+	// 注意：必须在 Replace 之后重新查询，才能获取到最新的附件关联
+	// 使用 Session 确保使用新的查询上下文，避免缓存问题
+	// 注意：Preload 会自动过滤软删除的记录（DeletedAt IS NULL）
+
+	// 在 Preload 之前检查关联表
+	if req.AttachmentIDs != nil {
+		var beforePreloadCount int64
+		if err := h.db.Table("bug_attachments").Where("bug_id = ?", bug.ID).Count(&beforePreloadCount).Error; err == nil {
+			fmt.Printf("UpdateBug: Preload 之前，bug_attachments 表中的记录数: %d\n", beforePreloadCount)
+			if beforePreloadCount > 0 {
+				var attachmentIDs []uint
+				h.db.Table("bug_attachments").Where("bug_id = ?", bug.ID).Pluck("attachment_id", &attachmentIDs)
+				fmt.Printf("UpdateBug: Preload 之前，关联的附件ID: %v\n", attachmentIDs)
+			}
+		}
+	}
+
+	if err := h.db.Session(&gorm.Session{}).Preload("Project").Preload("Creator").Preload("Assignees").Preload("Requirement").Preload("Module").Preload("ResolvedVersion").Preload("Versions").Preload("Attachments").Preload("Attachments.Creator").First(&bug, bug.ID).Error; err != nil {
+		utils.Error(c, utils.CodeError, "重新加载Bug数据失败: "+err.Error())
+		return
+	}
+
+	// 调试：检查附件是否加载成功
+	fmt.Printf("UpdateBug: Preload 后，bug.Attachments 长度: %d\n", len(bug.Attachments))
+	if len(bug.Attachments) > 0 {
+		ids := make([]uint, len(bug.Attachments))
+		for i, att := range bug.Attachments {
+			ids[i] = att.ID
+			fmt.Printf("UpdateBug: 附件 %d: ID=%d, FileName=%s, DeletedAt=%v\n", i, att.ID, att.FileName, att.DeletedAt)
+		}
+		fmt.Printf("UpdateBug: 成功加载 %d 个附件，附件ID: %v\n", len(bug.Attachments), ids)
+	} else if req.AttachmentIDs != nil && len(*req.AttachmentIDs) > 0 {
+		fmt.Printf("UpdateBug: 警告 - 附件列表为空，但请求中包含 attachment_ids=%v\n", *req.AttachmentIDs)
+		// 检查关联表中是否有记录
+		var bugAttachmentCount int64
+		if err := h.db.Table("bug_attachments").Where("bug_id = ?", bug.ID).Count(&bugAttachmentCount).Error; err == nil {
+			fmt.Printf("UpdateBug: bug_attachments 表中的记录数: %d\n", bugAttachmentCount)
+			if bugAttachmentCount > 0 {
+				var attachmentIDs []uint
+				h.db.Table("bug_attachments").Where("bug_id = ?", bug.ID).Pluck("attachment_id", &attachmentIDs)
+				fmt.Printf("UpdateBug: 关联表中的附件ID: %v\n", attachmentIDs)
+
+				// 检查这些附件是否被软删除
+				var attachments []model.Attachment
+				if err := h.db.Unscoped().Where("id IN ?", attachmentIDs).Find(&attachments).Error; err == nil {
+					for _, att := range attachments {
+						fmt.Printf("UpdateBug: 附件 %d: FileName=%s, DeletedAt=%v\n", att.ID, att.FileName, att.DeletedAt)
+					}
+				}
+
+				// 尝试手动查询未删除的附件
+				var activeAttachments []model.Attachment
+				if err := h.db.Where("id IN ?", attachmentIDs).Find(&activeAttachments).Error; err == nil {
+					fmt.Printf("UpdateBug: 未删除的附件数量: %d\n", len(activeAttachments))
+				}
+			}
+		}
+		// 检查附件是否被软删除
+		var deletedCount int64
+		if err := h.db.Unscoped().Model(&model.Attachment{}).Where("id IN ? AND deleted_at IS NOT NULL", *req.AttachmentIDs).Count(&deletedCount).Error; err == nil {
+			fmt.Printf("UpdateBug: 被软删除的附件数量: %d\n", deletedCount)
+		}
+	}
 
 	// 记录编辑操作和字段变更
 	userID, exists := c.Get("user_id")
@@ -924,15 +1078,15 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 	if req.Status == "resolved" && currentStatus != "resolved" {
 		// 加载当前分配人信息
 		h.db.Preload("Assignees").First(&bug, bug.ID)
-		
+
 		// 获取旧的分配人ID列表（用于记录历史）
 		for _, assignee := range bug.Assignees {
 			oldAssigneeIDsForHistory = append(oldAssigneeIDsForHistory, assignee.ID)
 		}
-		
+
 		// 直接指派给创建者
 		assigneeIDs := []uint{bug.CreatorID}
-		
+
 		// 验证创建者是否存在
 		var assignees []model.User
 		if err := h.db.Where("id IN ?", assigneeIDs).Find(&assignees).Error; err == nil && len(assignees) > 0 {
@@ -1344,11 +1498,11 @@ func (h *BugHandler) getLastAssignedTesterIDs(bugID uint, excludeUserID uint) []
 					filteredUserIDs = append(filteredUserIDs, id)
 				}
 			}
-			
+
 			if len(filteredUserIDs) == 0 {
 				continue
 			}
-			
+
 			// 查询这些用户，并检查是否有测试工程师角色
 			var users []model.User
 			if err := h.db.Preload("Roles").Where("id IN ?", filteredUserIDs).Find(&users).Error; err == nil && len(users) > 0 {
@@ -1362,7 +1516,7 @@ func (h *BugHandler) getLastAssignedTesterIDs(bugID uint, excludeUserID uint) []
 						}
 					}
 				}
-				
+
 				// 如果找到了测试工程师，返回他们的ID列表
 				if len(testerIDs) > 0 {
 					return testerIDs
@@ -1569,7 +1723,7 @@ func (h *BugHandler) GetBugColumnSettings(c *gin.Context) {
 	}
 
 	uid := userID.(uint)
-	
+
 	// 使用原生 SQL 查询，直接读取数据库中的值，避免 GORM 的默认值干扰
 	type ColumnSettingRow struct {
 		ColumnKey string
@@ -1577,11 +1731,11 @@ func (h *BugHandler) GetBugColumnSettings(c *gin.Context) {
 		Order     int
 		Width     *int
 	}
-	
+
 	var rows []ColumnSettingRow
 	// 使用子查询去重，只取每个 column_key 的最新记录（按 id 降序），并过滤软删除的记录
 	if err := h.db.Raw(`
-		SELECT column_key, visible, ` + "`order`" + `, width 
+		SELECT column_key, visible, `+"`order`"+`, width 
 		FROM user_table_column_settings 
 		WHERE id IN (
 			SELECT MAX(id) 
@@ -1589,7 +1743,7 @@ func (h *BugHandler) GetBugColumnSettings(c *gin.Context) {
 			WHERE user_id = ? AND page = ? AND deleted_at IS NULL 
 			GROUP BY column_key
 		)
-		ORDER BY ` + "`order`" + ` ASC
+		ORDER BY `+"`order`"+` ASC
 	`, uid, "bug").Scan(&rows).Error; err != nil {
 		utils.Error(c, utils.CodeError, "查询列设置失败")
 		return
@@ -1671,7 +1825,7 @@ func (h *BugHandler) SaveBugColumnSettings(c *gin.Context) {
 		} else {
 			widthValue = nil
 		}
-		
+
 		// 使用参数化查询，兼容 SQLite 和 MySQL
 		if err := tx.Exec(`
 			INSERT INTO user_table_column_settings (user_id, page, column_key, visible, `+"`order`"+`, width, created_at, updated_at)

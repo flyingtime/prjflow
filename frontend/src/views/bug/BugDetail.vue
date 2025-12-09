@@ -371,8 +371,10 @@
           <AttachmentUpload
             v-if="editFormData.project_id && editFormData.project_id > 0"
             :project-id="editFormData.project_id"
-            v-model="editFormData.attachment_ids"
+            :model-value="editFormData.attachment_ids"
             :existing-attachments="bugAttachments"
+            @update:modelValue="handleAttachmentIdsUpdate"
+            @attachment-deleted="handleAttachmentDeleted"
           />
           <span v-else style="color: #999;">请先选择项目后再上传附件</span>
         </a-form-item>
@@ -383,7 +385,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -406,7 +408,7 @@ import { getVersions, type Version } from '@/api/version'
 import { getProjects, type Project } from '@/api/project'
 import { getRequirements, createRequirement, type Requirement, type CreateRequirementRequest } from '@/api/requirement'
 import { getModules, type Module } from '@/api/module'
-import { getAttachments, attachToEntity, uploadFile, type Attachment } from '@/api/attachment'
+import { getAttachments, uploadFile, type Attachment } from '@/api/attachment'
 import type { Dayjs } from 'dayjs'
 
 const route = useRoute()
@@ -689,15 +691,26 @@ const handleEdit = async () => {
   editFormData.actual_hours = bug.value.actual_hours
   editFormData.work_date = undefined
   
-  // 加载Bug附件
+  // 加载Bug附件：优先使用bug.value.attachments（如果已加载），否则调用API
   try {
-    bugAttachments.value = await getAttachments({ bug_id: bug.value.id })
-    editFormData.attachment_ids = bugAttachments.value.map(a => a.id)
+    if (bug.value.attachments && bug.value.attachments.length > 0) {
+      // 如果bug.value已经包含附件数据，直接使用
+      bugAttachments.value = bug.value.attachments
+      editFormData.attachment_ids = bug.value.attachments.map(a => a.id)
+    } else {
+      // 否则调用API加载附件
+      bugAttachments.value = await getAttachments({ bug_id: bug.value.id })
+      editFormData.attachment_ids = bugAttachments.value.map(a => a.id)
+    }
   } catch (error: any) {
     console.error('加载附件失败:', error)
     bugAttachments.value = []
     editFormData.attachment_ids = []
   }
+  
+  // 确保 attachment_ids 被正确设置后再打开弹窗
+  // 使用 nextTick 确保 AttachmentUpload 组件能正确接收到初始值
+  await nextTick()
   
   editModalVisible.value = true
   if (editFormData.project_id) {
@@ -731,6 +744,7 @@ const handleEditSubmit = async () => {
     }
     
     // 构建请求数据，确保 requirement_id 和 module_id 始终发送（即使是0也要发送）
+    // 确保 attachment_ids 始终发送（即使是空数组也要发送）
     const data: any = {
       title: editFormData.title,
       description: description || '',
@@ -762,27 +776,44 @@ const handleEditSubmit = async () => {
       data.module_id = moduleIdValue
     }
     
-    await updateBug(bug.value.id, data)
-    
-    // 处理附件关联
-    if (editFormData.attachment_ids && editFormData.attachment_ids.length > 0 && editFormData.project_id) {
-      try {
-        for (const attachmentId of editFormData.attachment_ids) {
-          await attachToEntity(attachmentId, { bug_id: bug.value.id })
-        }
-      } catch (error: any) {
-        console.error('关联附件到Bug失败:', error)
-      }
+    // 始终发送 attachment_ids，如果为 undefined 或 null，发送空数组
+    // 注意：必须显式设置，不能依赖对象字面量，因为 undefined 值会被 JSON 序列化忽略
+    const attachmentIdsValue = editFormData.attachment_ids
+    if (attachmentIdsValue === undefined || attachmentIdsValue === null) {
+      data.attachment_ids = []
+    } else {
+      data.attachment_ids = Array.isArray(attachmentIdsValue) ? attachmentIdsValue : []
     }
+    
+    
+    // 提交更新（包含附件关联，后端会使用Replace方法同步附件列表）
+    await updateBug(bug.value.id, data)
     
     message.success('更新成功')
     editModalVisible.value = false
-    await loadBug(bug.value.id) // 重新加载Bug详情（会自动加载历史记录）
+    
+    // 重新加载Bug详情（会自动加载历史记录和附件）
+    await loadBug(bug.value.id)
   } catch (error: any) {
     if (error.errorFields) {
       return
     }
     message.error(error.message || '更新失败')
+  }
+}
+
+// 处理附件ID更新事件
+const handleAttachmentIdsUpdate = (value: number[]) => {
+  editFormData.attachment_ids = value
+}
+
+// 处理附件删除事件
+const handleAttachmentDeleted = (attachmentId: number) => {
+  // 从bugAttachments中移除已删除的附件
+  bugAttachments.value = bugAttachments.value.filter(a => a.id !== attachmentId)
+  // 同时从 editFormData.attachment_ids 中移除
+  if (editFormData.attachment_ids) {
+    editFormData.attachment_ids = editFormData.attachment_ids.filter(id => id !== attachmentId)
   }
 }
 
@@ -832,6 +863,11 @@ const loadModulesForProject = async () => {
 }
 
 // 监听编辑表单项目变化
+// 监听 attachment_ids 的变化
+watch(() => editFormData.attachment_ids, () => {
+  // 监听 attachment_ids 的变化
+}, { deep: true, immediate: false })
+
 watch(() => editFormData.project_id, () => {
   editFormData.requirement_id = undefined
   if (editFormData.project_id) {

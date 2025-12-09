@@ -24,6 +24,7 @@ export interface Bug {
   resolved_version_id?: number
   resolved_version?: any
   versions?: any[]  // 所属版本列表（多对多关系）
+  attachments?: any[]  // 附件列表（多对多关系）
   created_at?: string
   updated_at?: string
 }
@@ -97,6 +98,7 @@ export const createBug = async (data: CreateBugRequest): Promise<Bug> => {
 
 export interface UpdateBugRequest extends Partial<CreateBugRequest> {
   version_ids?: number[]  // 所属版本ID列表（可选，更新时提供）
+  attachment_ids?: number[]  // 附件ID列表（可选，更新时提供）
 }
 
 export const updateBug = async (id: number, data: UpdateBugRequest): Promise<Bug> => {
@@ -117,6 +119,15 @@ export const updateBug = async (id: number, data: UpdateBugRequest): Promise<Bug
     requestData.module_id = 0
   } else {
     requestData.module_id = data.module_id
+  }
+  
+  // 确保 attachment_ids 字段始终被包含，即使是空数组也要发送
+  // 注意：必须显式设置，不能依赖 Object.assign，因为 undefined 值可能被忽略
+  if (data.attachment_ids !== undefined && data.attachment_ids !== null) {
+    requestData.attachment_ids = Array.isArray(data.attachment_ids) ? data.attachment_ids : []
+  } else {
+    // 如果没有提供 attachment_ids，设置为空数组，确保后端能正确处理
+    requestData.attachment_ids = []
   }
   
   return request.put(`/bugs/${id}`, requestData)

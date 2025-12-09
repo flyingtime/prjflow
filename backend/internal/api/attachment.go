@@ -106,18 +106,18 @@ func (h *AttachmentHandler) UploadFile(c *gin.Context) {
 	// 生成文件存储路径（按日期组织：YYYY/MM/DD/）
 	now := time.Now()
 	datePath := now.Format("2006/01/02")
-	
+
 	// 生成唯一文件名（UUID + 原始扩展名）
 	ext := filepath.Ext(file.Filename)
 	fileName := uuid.New().String() + ext
-	
+
 	// 构建完整存储路径
 	storagePath := config.AppConfig.Upload.StoragePath
 	if !filepath.IsAbs(storagePath) {
 		// 相对路径：相对于程序运行目录
 		storagePath = filepath.Join(".", storagePath)
 	}
-	
+
 	fullDir := filepath.Join(storagePath, datePath)
 	fullPath := filepath.Join(fullDir, fileName)
 
@@ -142,10 +142,10 @@ func (h *AttachmentHandler) UploadFile(c *gin.Context) {
 	// 创建附件记录
 	userID := utils.GetUserID(c)
 	attachment := model.Attachment{
-		FileName: file.Filename,
-		FilePath: filepath.Join(datePath, fileName), // 存储相对路径
-		FileSize: file.Size,
-		MimeType: mimeType,
+		FileName:  file.Filename,
+		FilePath:  filepath.Join(datePath, fileName), // 存储相对路径
+		FileSize:  file.Size,
+		MimeType:  mimeType,
 		CreatorID: userID,
 	}
 
@@ -175,7 +175,7 @@ func (h *AttachmentHandler) UploadFile(c *gin.Context) {
 // 权限要求：登录 + 项目成员验证
 func (h *AttachmentHandler) GetAttachment(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	var attachment model.Attachment
 	if err := h.db.Preload("Creator").Preload("Projects").First(&attachment, id).Error; err != nil {
 		utils.Error(c, 404, "附件不存在")
@@ -184,7 +184,7 @@ func (h *AttachmentHandler) GetAttachment(c *gin.Context) {
 
 	// 检查权限：用户必须是附件关联的任意一个项目的成员
 	hasAccess := false
-	
+
 	// 管理员可以访问所有附件
 	if utils.IsAdmin(c) {
 		hasAccess = true
@@ -210,7 +210,7 @@ func (h *AttachmentHandler) GetAttachment(c *gin.Context) {
 // 权限要求：登录 + 项目成员验证
 func (h *AttachmentHandler) DownloadFile(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	var attachment model.Attachment
 	if err := h.db.Preload("Projects").First(&attachment, id).Error; err != nil {
 		utils.Error(c, 404, "附件不存在")
@@ -219,7 +219,7 @@ func (h *AttachmentHandler) DownloadFile(c *gin.Context) {
 
 	// 检查权限：用户必须是附件关联的任意一个项目的成员
 	hasAccess := false
-	
+
 	// 管理员可以访问所有附件
 	if utils.IsAdmin(c) {
 		hasAccess = true
@@ -284,7 +284,7 @@ func (h *AttachmentHandler) DeleteAttachment(c *gin.Context) {
 	}
 
 	id := c.Param("id")
-	
+
 	var attachment model.Attachment
 	if err := h.db.Preload("Projects").First(&attachment, id).Error; err != nil {
 		utils.Error(c, 404, "附件不存在")
@@ -293,7 +293,7 @@ func (h *AttachmentHandler) DeleteAttachment(c *gin.Context) {
 
 	// 检查权限：用户必须是附件关联的任意一个项目的成员
 	hasAccess := false
-	
+
 	// 管理员可以删除所有附件
 	if utils.IsAdmin(c) {
 		hasAccess = true
@@ -319,15 +319,15 @@ func (h *AttachmentHandler) DeleteAttachment(c *gin.Context) {
 	}
 	fullPath := filepath.Join(storagePath, attachment.FilePath)
 
+	// 先删除附件记录（硬删除，彻底删除）
+	if err := h.db.Unscoped().Delete(&attachment).Error; err != nil {
+		utils.Error(c, utils.CodeError, "删除附件记录失败: "+err.Error())
+		return
+	}
+
 	// 删除文件（如果存在）
 	if _, err := os.Stat(fullPath); err == nil {
 		os.Remove(fullPath)
-	}
-
-	// 删除附件记录（软删除）
-	if err := h.db.Delete(&attachment).Error; err != nil {
-		utils.Error(c, utils.CodeError, "删除附件失败: "+err.Error())
-		return
 	}
 
 	utils.Success(c, gin.H{"message": "删除成功"})
@@ -404,7 +404,7 @@ func (h *AttachmentHandler) GetAttachments(c *gin.Context) {
 // 权限要求：登录 + 项目成员验证
 func (h *AttachmentHandler) AttachToEntity(c *gin.Context) {
 	attachmentID := c.Param("id")
-	
+
 	var attachment model.Attachment
 	if err := h.db.Preload("Projects").First(&attachment, attachmentID).Error; err != nil {
 		utils.Error(c, 404, "附件不存在")
@@ -514,4 +514,3 @@ func (h *AttachmentHandler) AttachToEntity(c *gin.Context) {
 
 	utils.Success(c, attachment)
 }
-

@@ -16,10 +16,10 @@
       </a-button>
     </a-upload>
 
-    <!-- 文件列表 -->
-    <div v-if="fileList.length > 0" class="file-list">
+    <!-- 文件列表（只显示新上传的文件，排除已在 existingAttachments 中的） -->
+    <div v-if="newUploadedFiles.length > 0" class="file-list">
       <div
-        v-for="(file, index) in fileList"
+        v-for="(file, index) in newUploadedFiles"
         :key="file.uid || index"
         class="file-item"
       >
@@ -60,8 +60,8 @@
       </div>
     </div>
 
-    <!-- 已存在的附件列表（只读模式） -->
-    <div v-if="readonly && existingAttachments.length > 0" class="file-list">
+    <!-- 已存在的附件列表 -->
+    <div v-if="existingAttachments.length > 0" class="file-list">
       <div
         v-for="attachment in existingAttachments"
         :key="attachment.id"
@@ -80,6 +80,17 @@
           >
             <template #icon><DownloadOutlined /></template>
           </a-button>
+          <!-- 删除按钮（非只读模式） -->
+          <a-button
+            v-if="!readonly"
+            v-permission="'attachment:delete'"
+            type="link"
+            size="small"
+            danger
+            @click="handleRemoveExistingAttachment(attachment)"
+          >
+            <template #icon><DeleteOutlined /></template>
+          </a-button>
         </div>
       </div>
     </div>
@@ -87,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   UploadOutlined,
@@ -114,6 +125,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:modelValue': [value: number[]]
+  'attachment-deleted': [attachmentId: number] // 附件删除事件
 }>()
 
 interface ExtendedUploadFile extends UploadFile {
@@ -121,6 +133,19 @@ interface ExtendedUploadFile extends UploadFile {
 }
 
 const fileList = ref<ExtendedUploadFile[]>([])
+
+// 计算属性：只显示新上传的文件，排除已在 existingAttachments 中的文件
+const newUploadedFiles = computed(() => {
+  const existingIds = props.existingAttachments?.map(a => a.id) || []
+  return fileList.value.filter(file => {
+    // 如果文件已上传完成且有ID，且不在 existingAttachments 中，则显示
+    if (file.status === 'done' && file.id) {
+      return !existingIds.includes(file.id)
+    }
+    // 正在上传的文件总是显示
+    return true
+  })
+})
 
 // 格式化文件大小
 const formatFileSize = (bytes: number): string => {
@@ -179,7 +204,7 @@ const handleUpload = async (options: UploadRequestOption) => {
     uploadFileItem.response = attachment
 
     // 更新已上传的附件ID列表
-    const currentIds = [...props.modelValue]
+    const currentIds = props.modelValue ? [...props.modelValue] : []
     currentIds.push(attachment.id)
     emit('update:modelValue', currentIds)
 
@@ -199,7 +224,7 @@ const handleRemove = async (file: ExtendedUploadFile, index: number) => {
     try {
       await deleteAttachment(file.id)
       // 从已上传的附件ID列表中移除
-      const currentIds = props.modelValue.filter(id => id !== file.id)
+      const currentIds = (props.modelValue || []).filter(id => id !== file.id)
       emit('update:modelValue', currentIds)
       message.success('删除成功')
     } catch (error: any) {
@@ -208,8 +233,11 @@ const handleRemove = async (file: ExtendedUploadFile, index: number) => {
     }
   }
 
-  // 从文件列表中移除
-  fileList.value.splice(index, 1)
+  // 从文件列表中移除（使用文件对象查找实际索引）
+  const actualIndex = fileList.value.findIndex(f => f.uid === file.uid || (f.id && f.id === file.id))
+  if (actualIndex !== -1) {
+    fileList.value.splice(actualIndex, 1)
+  }
 }
 
 // 下载文件
@@ -231,6 +259,51 @@ const handleDownloadAttachment = async (attachment: Attachment) => {
     message.error(error.message || '下载失败')
   }
 }
+
+// 删除已存在的附件
+const handleRemoveExistingAttachment = async (attachment: Attachment) => {
+  try {
+    await deleteAttachment(attachment.id)
+    // 从已上传的附件ID列表中移除
+    const currentIds = (props.modelValue || []).filter(id => id !== attachment.id)
+    emit('update:modelValue', currentIds)
+    // 通知父组件附件已删除
+    emit('attachment-deleted', attachment.id)
+    message.success('删除成功')
+  } catch (error: any) {
+    message.error(error.message || '删除失败')
+  }
+}
+
+// 监听 existingAttachments 和 modelValue 的变化，确保 modelValue 包含所有已存在的附件ID
+watch([() => props.existingAttachments, () => props.modelValue], ([newAttachments, currentIds]) => {
+  // 如果 existingAttachments 为空，不处理（但保留已有的 modelValue）
+  if (!newAttachments || newAttachments.length === 0) {
+    // 但如果 modelValue 是 undefined，需要初始化为空数组
+    if (currentIds === undefined) {
+      emit('update:modelValue', [])
+    }
+    return
+  }
+  
+  const existingIds = newAttachments.map(a => a.id)
+  const currentIdsList = currentIds || []
+  
+  // 检查是否所有已存在的附件ID都在modelValue中
+  const missingIds = existingIds.filter(id => !currentIdsList.includes(id))
+  
+  // 只有当有缺失的ID时才更新，避免覆盖已设置的值（包括新上传的附件）
+  if (missingIds.length > 0) {
+    // 合并已存在的附件ID和新上传的附件ID
+    const allIds = [...new Set([...currentIdsList, ...missingIds])]
+    emit('update:modelValue', allIds)
+  } else {
+    // 即使没有缺失的ID，也要确保 modelValue 不是 undefined
+    if (currentIds === undefined && existingIds.length > 0) {
+      emit('update:modelValue', existingIds)
+    }
+  }
+}, { deep: true, immediate: true })
 
 // 监听 modelValue 变化，清理已删除的附件
 watch(() => props.modelValue, (newIds) => {
