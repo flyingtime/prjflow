@@ -36,154 +36,7 @@
             </template>
           </a-page-header>
 
-          <a-spin :spinning="loading">
-            <!-- 基本信息 -->
-            <a-card title="基本信息" :bordered="false" style="margin-bottom: 16px">
-              <a-descriptions :column="2" bordered>
-                <a-descriptions-item label="版本号">{{ version?.version_number }}</a-descriptions-item>
-                <a-descriptions-item label="状态">
-                  <a-tag :color="getStatusColor(version?.status || '')">
-                    {{ getStatusText(version?.status || '') }}
-                  </a-tag>
-                </a-descriptions-item>
-                <a-descriptions-item label="项目">
-                  <a-button v-if="version?.project" type="link" @click="router.push(`/project/${version.project.id}`)">
-                    {{ version.project.name }}
-                  </a-button>
-                  <span v-else>-</span>
-                </a-descriptions-item>
-                <a-descriptions-item label="发布日期">
-                  {{ formatDateTime(version?.release_date) }}
-                </a-descriptions-item>
-                <a-descriptions-item label="创建时间">
-                  {{ formatDateTime(version?.created_at) }}
-                </a-descriptions-item>
-                <a-descriptions-item label="更新时间">
-                  {{ formatDateTime(version?.updated_at) }}
-                </a-descriptions-item>
-              </a-descriptions>
-            </a-card>
-
-            <!-- 发布说明 -->
-            <a-card title="发布说明" :bordered="false" style="margin-bottom: 16px">
-              <div v-if="version?.release_notes" class="markdown-content">
-                <MarkdownEditor
-                  :model-value="version.release_notes"
-                  :readonly="true"
-                />
-              </div>
-              <a-empty v-else description="暂无发布说明" />
-            </a-card>
-
-            <!-- 关联需求 -->
-            <a-card title="关联需求" :bordered="false" style="margin-bottom: 16px">
-              <a-list
-                v-if="version?.requirements && version.requirements.length > 0"
-                :data-source="version.requirements"
-                :pagination="false"
-              >
-                <template #renderItem="{ item }">
-                  <a-list-item>
-                    <a-list-item-meta>
-                      <template #title>
-                        <a-button type="link" @click="$router.push(`/requirement/${item.id}`)">
-                          {{ item.title }}
-                        </a-button>
-                      </template>
-                      <template #description>
-                        <a-space>
-                          <a-tag :color="getRequirementStatusColor(item.status)">
-                            {{ getRequirementStatusText(item.status) }}
-                          </a-tag>
-                          <a-tag :color="getPriorityColor(item.priority)">
-                            {{ getPriorityText(item.priority) }}
-                          </a-tag>
-                        </a-space>
-                      </template>
-                    </a-list-item-meta>
-                  </a-list-item>
-                </template>
-              </a-list>
-              <a-empty v-else description="暂无关联需求" />
-            </a-card>
-
-            <!-- 关联Bug -->
-            <a-card title="关联Bug" :bordered="false">
-              <a-list
-                v-if="version?.bugs && version.bugs.length > 0"
-                :data-source="version.bugs"
-                :pagination="false"
-              >
-                <template #renderItem="{ item }">
-                  <a-list-item>
-                    <a-list-item-meta>
-                      <template #title>
-                        <a-button type="link" @click="$router.push(`/bug/${item.id}`)">
-                          {{ item.title }}
-                        </a-button>
-                      </template>
-                      <template #description>
-                        <a-space>
-                          <a-tag :color="getBugStatusColor(item.status)">
-                            {{ getBugStatusText(item.status) }}
-                          </a-tag>
-                          <a-tag :color="getPriorityColor(item.priority)">
-                            {{ getPriorityText(item.priority) }}
-                          </a-tag>
-                          <a-tag :color="getSeverityColor(item.severity)">
-                            {{ getSeverityText(item.severity) }}
-                          </a-tag>
-                        </a-space>
-                      </template>
-                    </a-list-item-meta>
-                  </a-list-item>
-                </template>
-              </a-list>
-              <a-empty v-else description="暂无关联Bug" />
-            </a-card>
-
-            <!-- 附件 -->
-            <a-card title="附件" :bordered="false" style="margin-bottom: 16px">
-              <a-list
-                v-if="version?.attachments && version.attachments.length > 0"
-                :data-source="version.attachments"
-                :pagination="false"
-              >
-                <template #renderItem="{ item }">
-                  <a-list-item>
-                    <a-list-item-meta>
-                      <template #avatar>
-                        <PaperClipOutlined style="font-size: 20px; color: #1890ff" />
-                      </template>
-                      <template #title>
-                        <a-space>
-                          <span>{{ item.file_name }}</span>
-                          <span style="color: #999; font-size: 12px">({{ formatFileSize(item.file_size) }})</span>
-                        </a-space>
-                      </template>
-                      <template #description>
-                        <a-space>
-                          <span style="color: #999; font-size: 12px">
-                            {{ item.creator?.nickname || item.creator?.username || '未知用户' }}
-                          </span>
-                          <span style="color: #999; font-size: 12px">
-                            {{ formatDateTime(item.created_at) }}
-                          </span>
-                        </a-space>
-                      </template>
-                    </a-list-item-meta>
-                    <template #actions>
-                      <a-button type="link" size="small" @click="handleDownloadAttachment(item)">
-                        <template #icon><DownloadOutlined /></template>
-                        下载
-                      </a-button>
-                    </template>
-                  </a-list-item>
-                </template>
-              </a-list>
-              <a-empty v-else description="暂无附件" />
-            </a-card>
-          </a-spin>
+          <VersionDetailContent :version="version" :loading="loading" />
         </div>
       </a-layout-content>
     </a-layout>
@@ -311,8 +164,9 @@ import dayjs, { type Dayjs } from 'dayjs'
 import { formatDateTime } from '@/utils/date'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import VersionDetailContent from '@/components/VersionDetailContent.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
-import { getAttachments, downloadFile, type Attachment } from '@/api/attachment'
+import { getAttachments, type Attachment } from '@/api/attachment'
 import {
   getVersion,
   updateVersion,
@@ -519,24 +373,6 @@ const handleAttachmentDeleted = (attachmentId: number) => {
   }
 }
 
-// 格式化文件大小
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
-}
-
-// 下载附件
-const handleDownloadAttachment = async (attachment: Attachment) => {
-  try {
-    await downloadFile(attachment.id, attachment.file_name)
-  } catch (error: any) {
-    message.error(error.message || '下载失败')
-  }
-}
-
 // 需求筛选
 const filterRequirementOption = (input: string, option: any) => {
   return option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
@@ -586,110 +422,6 @@ const handleRelease = async () => {
   } catch (error: any) {
     message.error(error.response?.data?.message || '发布失败')
   }
-}
-
-// 状态颜色和文本
-const getStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    wait: 'orange',
-    normal: 'green',
-    fail: 'red',
-    terminate: 'default'
-  }
-  return colors[status] || 'default'
-}
-
-const getStatusText = (status: string) => {
-  const texts: Record<string, string> = {
-    wait: '未开始',
-    normal: '已发布',
-    fail: '发布失败',
-    terminate: '停止维护',
-    archived: '已归档'
-  }
-  return texts[status] || status
-}
-
-const getRequirementStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    pending: 'default',
-    in_progress: 'processing',
-    completed: 'success',
-    cancelled: 'default'
-  }
-  return colors[status] || 'default'
-}
-
-const getRequirementStatusText = (status: string) => {
-  const texts: Record<string, string> = {
-    pending: '待处理',
-    in_progress: '进行中',
-    completed: '已完成',
-    cancelled: '已取消'
-  }
-  return texts[status] || status
-}
-
-const getBugStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    open: 'default',
-    assigned: 'processing',
-    in_progress: 'processing',
-    resolved: 'success',
-    closed: 'default'
-  }
-  return colors[status] || 'default'
-}
-
-const getBugStatusText = (status: string) => {
-  const texts: Record<string, string> = {
-    open: '待处理',
-    assigned: '已分配',
-    in_progress: '进行中',
-    resolved: '已解决',
-    closed: '已关闭'
-  }
-  return texts[status] || status
-}
-
-const getPriorityColor = (priority: string) => {
-  const colors: Record<string, string> = {
-    low: 'default',
-    medium: 'blue',
-    high: 'orange',
-    urgent: 'red'
-  }
-  return colors[priority] || 'default'
-}
-
-const getPriorityText = (priority: string) => {
-  const texts: Record<string, string> = {
-    low: '低',
-    medium: '中',
-    high: '高',
-    urgent: '紧急'
-  }
-  return texts[priority] || priority
-}
-
-const getSeverityColor = (severity: string) => {
-  const colors: Record<string, string> = {
-    low: 'default',
-    medium: 'orange',
-    high: 'red',
-    critical: 'red'
-  }
-  return colors[severity] || 'default'
-}
-
-const getSeverityText = (severity: string) => {
-  const texts: Record<string, string> = {
-    low: '低',
-    medium: '中',
-    high: '高',
-    critical: '严重'
-  }
-  return texts[severity] || severity
 }
 
 onMounted(() => {
