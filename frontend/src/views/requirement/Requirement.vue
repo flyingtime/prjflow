@@ -379,8 +379,10 @@
           <AttachmentUpload
             v-if="formData.project_id && (formData.id || formData.project_id)"
             :project-id="formData.project_id"
-            v-model="formData.attachment_ids"
+            :model-value="formData.attachment_ids"
             :existing-attachments="requirementAttachments"
+            @update:modelValue="(value) => { formData.attachment_ids = value }"
+            @attachment-deleted="handleAttachmentDeleted"
           />
           <span v-else style="color: #999;">请先选择项目后再上传附件</span>
         </a-form-item>
@@ -657,6 +659,12 @@ const formData = reactive<Partial<CreateRequirementRequest> & { id?: number; act
 
 const requirementAttachments = ref<Attachment[]>([]) // 需求附件列表
 
+// 处理附件删除事件
+const handleAttachmentDeleted = (attachmentId: number) => {
+  // 从requirementAttachments中移除已删除的附件
+  requirementAttachments.value = requirementAttachments.value.filter(a => a.id !== attachmentId)
+}
+
 const formRules = {
   title: [{ required: true, message: '请输入需求标题', trigger: 'blur' }],
   project_id: [{ required: true, message: '请选择项目', trigger: 'change' }]
@@ -855,11 +863,14 @@ const handleSubmit = async () => {
       actual_hours: formData.actual_hours,
       work_date: formData.work_date ? formData.work_date.format('YYYY-MM-DD') : undefined
     }
-    // 调试：检查提交的数据
-    console.log('提交的数据:', {
-      description: data.description,
-      hasImages: data.description?.includes('/uploads/')
-    })
+    
+    // 始终发送 attachment_ids，如果为 undefined 或 null，发送空数组
+    const attachmentIdsValue = formData.attachment_ids
+    if (attachmentIdsValue === undefined || attachmentIdsValue === null) {
+      data.attachment_ids = []
+    } else {
+      data.attachment_ids = Array.isArray(attachmentIdsValue) ? attachmentIdsValue : []
+    }
     
     let requirementId: number
     if (formData.id) {

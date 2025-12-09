@@ -117,6 +117,17 @@
             style="width: 100%"
           />
         </a-form-item>
+        <a-form-item label="附件">
+          <AttachmentUpload
+            v-if="editFormData.project_id && editFormData.project_id > 0"
+            :project-id="editFormData.project_id"
+            :model-value="editFormData.attachment_ids"
+            :existing-attachments="requirementAttachments"
+            @update:modelValue="(value) => { editFormData.attachment_ids = value }"
+            @attachment-deleted="handleAttachmentDeleted"
+          />
+          <span v-else style="color: #999;">请先选择项目后再上传附件</span>
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -206,6 +217,8 @@ import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import ProjectMemberSelect from '@/components/ProjectMemberSelect.vue'
 import RequirementDetailContent from '@/components/RequirementDetailContent.vue'
+import AttachmentUpload from '@/components/AttachmentUpload.vue'
+import { getAttachments, type Attachment } from '@/api/attachment'
 import {
   getRequirement,
   updateRequirement,
@@ -244,15 +257,17 @@ const noteFormRules = {
 const editModalVisible = ref(false)
 const editFormRef = ref()
 const editDescriptionEditorRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
-const editFormData = reactive<CreateRequirementRequest>({
+const editFormData = reactive<CreateRequirementRequest & { attachment_ids?: number[] }>({
   title: '',
   description: '',
   status: 'draft',
   priority: 'medium',
   project_id: 0,
   assignee_id: undefined,
-  estimated_hours: undefined
+  estimated_hours: undefined,
+  attachment_ids: []
 })
+const requirementAttachments = ref<Attachment[]>([])
 const editFormRules = {
   title: [{ required: true, message: '请输入需求标题', trigger: 'blur' }],
   project_id: [{ required: true, message: '请选择项目', trigger: 'change' }]
@@ -319,6 +334,21 @@ const handleEdit = async () => {
   editFormData.assignee_id = requirement.value.assignee_id
   editFormData.estimated_hours = requirement.value.estimated_hours
   
+  // 加载需求附件
+  try {
+    if (requirement.value.attachments && requirement.value.attachments.length > 0) {
+      requirementAttachments.value = requirement.value.attachments
+      editFormData.attachment_ids = requirement.value.attachments.map((a: any) => a.id)
+    } else {
+      requirementAttachments.value = await getAttachments({ requirement_id: requirement.value.id })
+      editFormData.attachment_ids = requirementAttachments.value.map(a => a.id)
+    }
+  } catch (error: any) {
+    console.error('加载附件失败:', error)
+    requirementAttachments.value = []
+    editFormData.attachment_ids = []
+  }
+  
   editModalVisible.value = true
 }
 
@@ -348,13 +378,21 @@ const handleEditSubmit = async () => {
       }
     }
     
-    const data: Partial<CreateRequirementRequest> = {
+    const data: any = {
       title: editFormData.title,
       description: description || '',
       status: editFormData.status,
       priority: editFormData.priority,
       assignee_id: editFormData.assignee_id,
       estimated_hours: editFormData.estimated_hours
+    }
+    
+    // 始终发送 attachment_ids，如果为 undefined 或 null，发送空数组
+    const attachmentIdsValue = editFormData.attachment_ids
+    if (attachmentIdsValue === undefined || attachmentIdsValue === null) {
+      data.attachment_ids = []
+    } else {
+      data.attachment_ids = Array.isArray(attachmentIdsValue) ? attachmentIdsValue : []
     }
     
     await updateRequirement(requirement.value.id, data)
@@ -367,6 +405,16 @@ const handleEditSubmit = async () => {
       return
     }
     message.error(error.message || '更新失败')
+  }
+}
+
+// 处理附件删除事件
+const handleAttachmentDeleted = (attachmentId: number) => {
+  // 从requirementAttachments中移除已删除的附件
+  requirementAttachments.value = requirementAttachments.value.filter(a => a.id !== attachmentId)
+  // 同时从 editFormData.attachment_ids 中移除
+  if (editFormData.attachment_ids) {
+    editFormData.attachment_ids = editFormData.attachment_ids.filter(id => id !== attachmentId)
   }
 }
 

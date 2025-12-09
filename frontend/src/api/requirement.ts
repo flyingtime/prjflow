@@ -14,6 +14,7 @@ export interface Requirement {
   assignee?: any
   estimated_hours?: number
   actual_hours?: number
+  attachments?: any[] // 附件列表
   created_at?: string
   updated_at?: string
 }
@@ -33,6 +34,7 @@ export interface CreateRequirementRequest {
   project_id: number // 必填
   assignee_id?: number
   estimated_hours?: number
+  attachment_ids?: number[] // 附件ID列表
 }
 
 export interface UpdateRequirementStatusRequest {

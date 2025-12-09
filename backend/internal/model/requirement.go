@@ -29,6 +29,9 @@ type Requirement struct {
 
 	EstimatedHours *float64 `gorm:"default:0" json:"estimated_hours"` // 预估工时（小时）
 	ActualHours    *float64 `gorm:"default:0" json:"actual_hours"`    // 实际工时（小时），从资源分配自动计算
+
+	// 附件（多对多关系）
+	Attachments []Attachment `gorm:"many2many:requirement_attachments;" json:"attachments"`
 }
 
 // Bug Bug表
