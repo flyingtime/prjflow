@@ -10,6 +10,7 @@ import (
 	"project-management/internal/websocket"
 	"project-management/pkg/wechat"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -23,6 +24,7 @@ type WeChatCallbackContext struct {
 	DB           *gorm.DB
 	AccessToken  *wechat.AccessTokenResponse
 	UserInfo     *wechat.UserInfoResponse
+	Context      *gin.Context // Gin上下文，用于获取IP和请求路径等信息
 }
 
 // WeChatCallbackHandler 微信回调业务处理接口
@@ -48,6 +50,7 @@ func ProcessWeChatCallback(
 	code string,
 	state string,
 	handler WeChatCallbackHandler,
+	c *gin.Context, // Gin上下文，用于获取IP和请求路径等信息
 ) (*WeChatCallbackContext, interface{}, error) {
 	ctx := &WeChatCallbackContext{
 		Code:         code,
@@ -55,6 +58,7 @@ func ProcessWeChatCallback(
 		WeChatClient: wechatClient,
 		Hub:          hub,
 		DB:           db,
+		Context:      c, // 保存Gin上下文，用于记录审计日志时获取IP和请求路径
 	}
 
 	// 1. 从state中提取ticket和用户ID

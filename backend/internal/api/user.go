@@ -333,7 +333,7 @@ func (h *UserHandler) AddUserByWeChatCallback(c *gin.Context) {
 	state := c.Query("state")
 
 	handler := &AddUserCallbackHandler{db: h.db}
-	ctx, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), code, state, handler)
+	ctx, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), code, state, handler, c)
 
 	if err != nil {
 		c.Data(200, "text/html; charset=utf-8", []byte(handler.GetErrorHTML(ctx, err)))
@@ -359,7 +359,7 @@ func (h *UserHandler) AddUserByWeChat(c *gin.Context) {
 
 	// 使用通用处理函数
 	handler := &AddUserCallbackHandler{db: h.db}
-	_, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), req.Code, req.State, handler)
+	_, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), req.Code, req.State, handler, c)
 
 	if err != nil {
 		utils.Error(c, utils.CodeError, err.Error())

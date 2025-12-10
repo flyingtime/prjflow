@@ -62,7 +62,7 @@ func TestProcessWeChatCallback_Success(t *testing.T) {
 		code := "test_code"
 		state := "ticket:test_ticket_123"
 
-		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler)
+		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler, nil)
 
 		// 验证没有错误
 		assert.NoError(t, err)
@@ -133,7 +133,7 @@ func TestProcessWeChatCallback_Success(t *testing.T) {
 		code := "test_code_2"
 		state := "" // 空state，没有ticket
 
-		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, userHandler)
+		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, userHandler, nil)
 
 		// 验证没有错误
 		assert.NoError(t, err)
@@ -163,7 +163,7 @@ func TestProcessWeChatCallback_Errors(t *testing.T) {
 		code := ""
 		state := "ticket:test_ticket"
 
-		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler)
+		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler, nil)
 
 		// 验证返回错误
 		assert.Error(t, err)
@@ -187,7 +187,7 @@ func TestProcessWeChatCallback_Errors(t *testing.T) {
 		code := "test_code"
 		state := "ticket:test_ticket"
 
-		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler)
+		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler, nil)
 
 		// 验证返回错误
 		assert.Error(t, err)
@@ -221,7 +221,7 @@ func TestProcessWeChatCallback_Errors(t *testing.T) {
 		code := "test_code"
 		state := "ticket:test_ticket"
 
-		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler)
+		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler, nil)
 
 		// 验证返回错误
 		assert.Error(t, err)
@@ -262,7 +262,7 @@ func TestProcessWeChatCallback_Errors(t *testing.T) {
 		code := "test_code"
 		state := "ticket:test_ticket"
 
-		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler)
+		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler, nil)
 
 		// 验证返回错误
 		assert.Error(t, err)
@@ -304,7 +304,7 @@ func TestProcessWeChatCallback_Errors(t *testing.T) {
 		code := "test_code"
 		state := "ticket:test_ticket"
 
-		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler)
+		ctx, result, err := api.ProcessWeChatCallback(db, mockWeChatClient, mockHub, code, state, handler, nil)
 
 		// 验证返回错误（系统已初始化）
 		assert.Error(t, err)

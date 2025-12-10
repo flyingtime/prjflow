@@ -31,7 +31,7 @@ func (h *InitCallbackHandler) HandleCallback(c *gin.Context) {
 	state := c.Query("state")
 
 	handler := &InitCallbackHandlerImpl{db: h.db}
-	ctx, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), code, state, handler)
+	ctx, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), code, state, handler, c)
 	
 	if err != nil {
 		c.Data(200, "text/html; charset=utf-8", []byte(handler.GetErrorHTML(ctx, err)))

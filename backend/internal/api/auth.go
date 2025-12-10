@@ -300,7 +300,7 @@ func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{},
 	token, err := auth.GenerateToken(user.ID, user.Username, roleNames)
 	if err != nil {
 		// 记录登录失败
-		utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, nil, false, "生成Token失败", "")
+		utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, ctx.Context, false, "生成Token失败", "")
 		return nil, &CallbackError{Message: "生成Token失败", Err: err}
 	}
 
@@ -308,12 +308,12 @@ func (h *LoginCallbackHandler) Process(ctx *WeChatCallbackContext) (interface{},
 	refreshToken, err := auth.GenerateRefreshToken(user.ID, user.Username, roleNames)
 	if err != nil {
 		// 记录登录失败
-		utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, nil, false, "生成RefreshToken失败", "")
+		utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, ctx.Context, false, "生成RefreshToken失败", "")
 		return nil, &CallbackError{Message: "生成RefreshToken失败", Err: err}
 	}
 
 	// 记录登录成功（微信登录）
-	utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, nil, true, "微信登录", "")
+	utils.RecordAuditLog(ctx.DB, user.ID, user.Username, "login", "user", user.ID, ctx.Context, true, "微信登录", "")
 
 	// 通过WebSocket通知PC前端登录成功
 	if ctx.Ticket != "" && ctx.Hub != nil {
@@ -361,7 +361,7 @@ func (h *AuthHandler) WeChatCallback(c *gin.Context) {
 	state := c.Query("state")
 
 	handler := &LoginCallbackHandler{db: h.db}
-	ctx, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), code, state, handler)
+	ctx, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), code, state, handler, c)
 
 	if err != nil {
 		c.Data(200, "text/html; charset=utf-8", []byte(handler.GetErrorHTML(ctx, err)))
@@ -1093,7 +1093,7 @@ func (h *AuthHandler) WeChatBindCallback(c *gin.Context) {
 	state := c.Query("state")
 
 	handler := &BindCallbackHandler{db: h.db}
-	ctx, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), code, state, handler)
+	ctx, result, err := ProcessWeChatCallback(h.db, h.wechatClient, websocket.GetHub(), code, state, handler, c)
 
 	if err != nil {
 		c.Data(200, "text/html; charset=utf-8", []byte(handler.GetErrorHTML(ctx, err)))
