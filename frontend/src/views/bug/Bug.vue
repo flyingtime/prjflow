@@ -170,7 +170,7 @@
                     </a-space>
                   </a-space>
                 </template>
-                <a-form v-show="searchFormVisible" :model="searchForm" layout="vertical">
+                <a-form v-show="searchFormVisible" :model="searchForm" :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
                   <a-row :gutter="16">
                     <a-col :span="6">
                       <a-form-item label="关键词">
@@ -265,12 +265,9 @@
                         </a-select>
                       </a-form-item>
                     </a-col>
-                    <a-col :span="12">
-                      <a-form-item label="指派给">
-                        <a-space direction="vertical" style="width: 100%">
-                          <a-checkbox v-model:checked="searchForm.assignToMe" @change="handleAssignToMeChange">
-                            指派给我
-                          </a-checkbox>
+                    <a-col :span="6">
+                      <a-form-item label="指派给" class="assignee-form-item">
+                        <div class="assignee-wrapper">
                           <ProjectMemberSelect
                             v-model="searchForm.assignee_id"
                             :project-id="searchForm.project_id"
@@ -278,13 +275,19 @@
                             placeholder="选择指派给"
                             :show-role="true"
                             :show-hint="!searchForm.assignToMe"
+                            class="assignee-select"
                             @change="handleAssigneeChange"
                           />
-                        </a-space>
+                          <a-checkbox v-model:checked="searchForm.assignToMe" @change="handleAssignToMeChange" class="assign-to-me-checkbox">
+                            指派给我
+                          </a-checkbox>
+                        </div>
                       </a-form-item>
                     </a-col>
-                    <a-col :span="6">
-                      <a-form-item label=" " style="margin-bottom: 0">
+                  </a-row>
+                  <a-row>
+                    <a-col :span="24">
+                      <a-form-item :wrapper-col="{ offset: 0 }">
                         <a-space>
                           <a-button type="primary" @click="handleSearch">查询</a-button>
                           <a-button @click="handleReset">重置</a-button>
@@ -2684,6 +2687,48 @@ onMounted(async () => {
   width: 300px !important;
   min-width: 300px !important;
   max-width: 300px !important;
+}
+
+/* 指派给字段对齐样式 */
+.assignee-form-item {
+  margin-bottom: 0;
+}
+
+.assignee-form-item :deep(.ant-form-item-control) {
+  margin: 0;
+  padding: 0;
+}
+
+.assignee-form-item :deep(.ant-form-item-control-input) {
+  margin: 0;
+  padding: 0;
+}
+
+.assignee-form-item :deep(.ant-form-item-control-input-content) {
+  margin: 0;
+  padding: 0;
+  line-height: 32px;
+}
+
+.assignee-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.assignee-select {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.assign-to-me-checkbox {
+  flex-shrink: 0;
+  margin: 0;
+  white-space: nowrap;
 }
 </style>
 
