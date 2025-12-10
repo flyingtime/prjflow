@@ -21,7 +21,7 @@
 ```bash
 # 前端地址配置
 # 必须与微信后台配置的授权回调域名一致
-VITE_FRONTEND_URL=https://project.smartxy.com.cn
+VITE_FRONTEND_URL=<https://你的域名>
 ```
 
 ### 2. 配置说明
@@ -31,7 +31,7 @@ VITE_FRONTEND_URL=https://project.smartxy.com.cn
 如果通过 nginx 访问，使用公网域名：
 
 ```bash
-VITE_FRONTEND_URL=https://project.smartxy.com.cn
+VITE_FRONTEND_URL=<https://你的域名>
 ```
 
 #### 开发环境
@@ -41,7 +41,7 @@ VITE_FRONTEND_URL=https://project.smartxy.com.cn
 如果开发环境也通过 nginx 访问公网域名：
 
 ```bash
-VITE_FRONTEND_URL=https://project.smartxy.com.cn
+VITE_FRONTEND_URL=<https://你的域名>
 ```
 
 **选项 2：使用内网穿透**
@@ -106,7 +106,7 @@ console.log(import.meta.env.VITE_FRONTEND_URL)
 在浏览器 Network 标签中，查看 `/api/auth/wechat/qrcode` 请求的 Query Parameters：
 
 ```
-redirect_uri=https://project.smartxy.com.cn/auth/wechat/callback
+redirect_uri=<https://你的域名>/auth/wechat/callback
 ```
 
 ### 3. 检查微信授权 URL
@@ -122,7 +122,7 @@ https://open.weixin.qq.com/connect/oauth2/authorize?
   state=ticket:xxx#wechat_redirect
 ```
 
-解码后的 `redirect_uri` 应该是：`https://project.smartxy.com.cn/auth/wechat/callback`
+解码后的 `redirect_uri` 应该是：`<https://你的域名>/auth/wechat/callback`
 
 ## 注意事项
 
@@ -171,13 +171,13 @@ VITE_FRONTEND_URL=https://abc123.ngrok.io
 
 ```bash
 # frontend/.env.production
-VITE_FRONTEND_URL=https://project.smartxy.com.cn
+VITE_FRONTEND_URL=<https://你的域名>
 ```
 
 ### 本地开发（通过 nginx）
 
 ```bash
 # frontend/.env.local
-VITE_FRONTEND_URL=https://project.smartxy.com.cn
+VITE_FRONTEND_URL=<https://你的域名>
 ```
 

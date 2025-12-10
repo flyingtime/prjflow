@@ -41,10 +41,10 @@ wechat:
   # 仅当 account_type 为 "official_account" 时有效
   scope: "snsapi_userinfo"
   # callback_domain: 回调域名，必须与微信后台配置的授权回调域名一致
-  # 例如：https://project.smartxy.com.cn 或 https://abc123.ngrok.io
+  # 例如：<https://你的域名> 或 https://abc123.ngrok.io
   # 如果不设置，系统会从 Referer 头自动获取（可能不准确）
   # 生产环境强烈建议设置此值，确保与微信后台配置一致
-  callback_domain: "https://project.smartxy.com.cn/"  # 使用公网服务器域名（通过 nginx 反向代理）
+  callback_domain: "<https://你的域名>/"  # 使用公网服务器域名（通过 nginx 反向代理）
 
 upload:
   # 文件存储路径（相对路径或绝对路径）

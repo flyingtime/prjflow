@@ -85,7 +85,7 @@ sudo certbot renew --dry-run
 
 ```yaml
 wechat:
-  callback_domain: "https://project.smartxy.com.cn/"
+  callback_domain: "<https://你的域名>/"
 ```
 
 ### 6. 配置微信后台
@@ -170,18 +170,18 @@ sudo systemctl status nginx
 
 ```bash
 # 测试后端 API
-curl https://project.smartxy.com.cn/api/health
+curl <https://你的域名>/api/health
 
 # 测试前端
-curl https://project.smartxy.com.cn/
+curl <https://你的域名>/
 
 # 测试微信验证文件（如果已上传）
-curl https://project.smartxy.com.cn/MP_verify_xxxxx.txt
+curl <https://你的域名>/MP_verify_xxxxx.txt
 ```
 
 ### 3. 测试微信回调
 
-1. 访问系统初始化页面：`https://project.smartxy.com.cn/init`
+1. 访问系统初始化页面：`<https://你的域名>/init`
 2. 配置微信 AppID 和 AppSecret
 3. 获取二维码
 4. 用手机微信扫码

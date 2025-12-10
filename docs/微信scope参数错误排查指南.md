@@ -62,7 +62,7 @@
 
 **示例**：
 - ✅ 正确：`project.smartxy.com.cn`
-- ❌ 错误：`https://project.smartxy.com.cn`
+- ❌ 错误：`<https://你的域名>`
 - ❌ 错误：`project.smartxy.com.cn:8080`
 - ❌ 错误：`project.smartxy.com.cn/api/init/callback`
 
@@ -79,12 +79,12 @@
 
 ```yaml
 wechat:
-  callback_domain: "https://project.smartxy.com.cn/"  # 注意：包含协议和末尾斜杠
+  callback_domain: "<https://你的域名>/"  # 注意：包含协议和末尾斜杠
 ```
 
 **重要**：
 - `callback_domain` 必须与微信后台配置的授权回调域名**匹配**
-- 例如：如果微信后台配置的是 `project.smartxy.com.cn`，这里应该填写 `https://project.smartxy.com.cn/`
+- 例如：如果微信后台配置的是 `project.smartxy.com.cn`，这里应该填写 `<https://你的域名>/`
 - 系统会自动在域名后添加回调路径（如 `/api/init/callback`）
 
 ### 4. 检查接口权限
@@ -114,7 +114,7 @@ wechat:
      app_secret: "您的AppSecret"
      account_type: "open_platform"  # 或 "official_account"
      scope: "snsapi_userinfo"      # 仅公众号有效
-     callback_domain: "https://project.smartxy.com.cn/"
+     callback_domain: "<https://你的域名>/"
    ```
 
 2. 验证授权回调域名：
@@ -148,11 +148,11 @@ wechat:
 
 ### 场景2：授权回调域名配置错误
 
-**问题**：在微信后台配置了 `https://project.smartxy.com.cn`，但应该只填写域名。
+**问题**：在微信后台配置了 `<https://你的域名>`，但应该只填写域名。
 
 **解决方案**：
 1. 在微信后台修改为：`project.smartxy.com.cn`（不包含协议）
-2. 确保配置文件中的 `callback_domain` 为：`https://project.smartxy.com.cn/`
+2. 确保配置文件中的 `callback_domain` 为：`<https://你的域名>/`
 
 ### 场景3：使用了错误的 AppID
 
