@@ -35,6 +35,7 @@
       :width="'90%'"
       :style="{ top: '20px' }"
       :mask-closable="true"
+      :z-index="2300"
       @cancel="closeImagePreview"
       class="image-preview-modal"
     >

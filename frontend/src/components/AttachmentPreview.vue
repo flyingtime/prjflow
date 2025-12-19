@@ -5,7 +5,7 @@
     :width="modalWidth"
     :footer="null"
     :centered="true"
-    :z-index="2200"
+    :z-index="2300"
     @cancel="handleClose"
   >
     <template #title>
