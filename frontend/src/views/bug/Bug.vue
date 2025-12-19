@@ -638,6 +638,7 @@
       v-model:open="assignModalVisible"
       title="指派Bug"
       :mask-closable="true"
+      :z-index="2100"
       @ok="handleAssignSubmit"
       @cancel="handleAssignCancel"
     >
@@ -684,7 +685,7 @@
       title="更新Bug状态"
       :width="600"
       :mask-closable="true"
-      :z-index="2000"
+      :z-index="2100"
       @ok="handleStatusSubmit"
       @cancel="handleStatusCancel"
     >
