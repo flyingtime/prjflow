@@ -270,6 +270,10 @@ router.beforeEach(async (to, _from, next) => {
       next()
       return
     }
+    // 对于其他页面，如果检查失败，也允许继续（避免阻塞导航）
+    // 假设系统已初始化，继续正常流程
+    next()
+    return
   }
   
   // 如果访问登录页且已登录，重定向到工作台
