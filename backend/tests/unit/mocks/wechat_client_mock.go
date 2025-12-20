@@ -3,7 +3,7 @@ package mocks
 import (
 	"fmt"
 
-	"project-management/pkg/wechat"
+	"prjflow/pkg/wechat"
 )
 
 // MockWeChatClient 微信客户端Mock实现

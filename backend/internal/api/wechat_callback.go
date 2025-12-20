@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"project-management/internal/config"
-	"project-management/internal/model"
-	"project-management/internal/websocket"
-	"project-management/pkg/wechat"
+	"prjflow/internal/config"
+	"prjflow/internal/model"
+	"prjflow/internal/websocket"
+	"prjflow/pkg/wechat"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

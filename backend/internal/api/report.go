@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"project-management/internal/model"
-	"project-management/internal/utils"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

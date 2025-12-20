@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"project-management/internal/config"
-	"project-management/internal/model"
-	"project-management/internal/utils"
+	"prjflow/internal/config"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

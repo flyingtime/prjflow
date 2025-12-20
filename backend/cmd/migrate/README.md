@@ -1,8 +1,8 @@
-# zentao到goproject数据迁移工具
+# zentao到prjflow数据迁移工具
 
 ## 功能说明
 
-此工具用于将zentao数据库中的数据迁移到goproject数据库，支持以下数据的迁移：
+此工具用于将zentao数据库中的数据迁移到prjflow数据库，支持以下数据的迁移：
 
 - 部门 (zt_dept -> departments)
 - 角色 (zt_group + zt_grouppriv -> roles + permissions)
@@ -30,14 +30,14 @@ zentao:
   password: "your_password"
   dbname: zentao_db
 
-goproject:
+prjflow:
   type: sqlite
-  dsn: data.db  # SQLite数据库文件路径（相对于goproject/backend目录）
+  dsn: data.db  # SQLite数据库文件路径（相对于prjflow/backend目录）
 ```
 
 ### 2. 运行迁移
 
-在 `goproject/backend` 目录下运行：
+在 `prjflow/backend` 目录下运行：
 
 ```bash
 go run cmd/migrate/main.go -config cmd/migrate/migrate-config.yaml
@@ -77,7 +77,7 @@ go build -o migrate cmd/migrate/main.go
 - `status`: 默认1（正常）
 
 ### 角色映射
-- 如果角色名称包含"admin"、"管理员"或"管理"，则映射到goproject的默认admin角色
+- 如果角色名称包含"admin"、"管理员"或"管理"，则映射到prjflow的默认admin角色
 - 其他角色创建新角色，并根据`zt_grouppriv`表映射权限
 
 ### 用户映射
@@ -162,8 +162,8 @@ go build -o migrate cmd/migrate/main.go
 ## 注意事项
 
 1. **密码重置**: 所有迁移的用户密码都设置为"123"，首次登录后请修改密码
-2. **角色映射**: 管理员角色会映射到goproject的默认admin角色，其他角色会创建新角色
-3. **ID映射**: 工具会维护zentao ID到goproject ID的映射关系，确保外键关联正确
+2. **角色映射**: 管理员角色会映射到prjflow的默认admin角色，其他角色会创建新角色
+3. **ID映射**: 工具会维护zentao ID到prjflow ID的映射关系，确保外键关联正确
 4. **重复数据**: 如果记录已存在（基于唯一约束），会跳过并记录日志
 5. **缺失引用**: 如果引用的记录不存在（如项目、用户等），会跳过该记录并记录日志
 
@@ -171,7 +171,7 @@ go build -o migrate cmd/migrate/main.go
 
 - 迁移过程中会记录详细的日志
 - 如果某个记录迁移失败，会记录错误但继续处理其他记录
-- 建议在迁移前备份goproject数据库
+- 建议在迁移前备份prjflow数据库
 
 ## 依赖关系
 
@@ -180,6 +180,6 @@ go build -o migrate cmd/migrate/main.go
 - gorm.io/driver/mysql
 - gorm.io/driver/sqlite
 - gopkg.in/yaml.v3
-- project-management/internal/model
-- project-management/internal/utils
+- prjflow/internal/model
+- prjflow/internal/utils
 

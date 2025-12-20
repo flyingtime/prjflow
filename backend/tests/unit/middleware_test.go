@@ -9,9 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
-	"project-management/internal/config"
-	"project-management/internal/middleware"
-	"project-management/pkg/auth"
+	"prjflow/internal/config"
+	"prjflow/internal/middleware"
+	"prjflow/pkg/auth"
 )
 
 func TestAuthMiddleware(t *testing.T) {

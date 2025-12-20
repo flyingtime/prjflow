@@ -12,11 +12,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"project-management/internal/api"
-	"project-management/internal/config"
-	"project-management/internal/model"
-	"project-management/internal/utils"
-	"project-management/pkg/auth"
+	"prjflow/internal/api"
+	"prjflow/internal/config"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
+	"prjflow/pkg/auth"
 )
 
 func TestAuthHandler_Login(t *testing.T) {

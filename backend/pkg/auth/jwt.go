@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"project-management/internal/config"
+	"prjflow/internal/config"
 
 	"github.com/golang-jwt/jwt/v5"
 )

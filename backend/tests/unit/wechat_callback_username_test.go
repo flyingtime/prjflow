@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"project-management/internal/api"
-	"project-management/internal/model"
+	"prjflow/internal/api"
+	"prjflow/internal/model"
 
 	"github.com/stretchr/testify/assert"
 )

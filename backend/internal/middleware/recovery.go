@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"project-management/internal/utils"
+	"prjflow/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )

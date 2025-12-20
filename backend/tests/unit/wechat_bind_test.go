@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"project-management/internal/api"
-	"project-management/internal/model"
-	"project-management/pkg/auth"
+	"prjflow/internal/api"
+	"prjflow/internal/model"
+	"prjflow/pkg/auth"
 )
 
 // CreateTestUserWithoutWeChat 创建没有微信OpenID的测试用户

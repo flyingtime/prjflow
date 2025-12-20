@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"project-management/internal/model"
-	"project-management/internal/utils"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
 )
 
 type RequirementHandler struct {

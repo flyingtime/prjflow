@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"project-management/internal/api"
-	"project-management/internal/config"
-	"project-management/internal/model"
+	"prjflow/internal/api"
+	"prjflow/internal/config"
+	"prjflow/internal/model"
 )
 
 func TestAttachmentHandler_GetAttachments(t *testing.T) {

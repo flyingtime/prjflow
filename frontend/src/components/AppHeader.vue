@@ -1,7 +1,10 @@
 <template>
   <a-layout-header class="header">
     <div class="header-left">
-      <div class="logo">项目管理系统</div>
+      <div class="logo">
+        <img src="/prjflow512x512.png" alt="PrjFlow" class="logo-img" />
+        <span class="logo-text">项目管理系统</span>
+      </div>
       <a-menu
         mode="horizontal"
         :selected-keys="selectedKeys"
@@ -442,10 +445,22 @@ onMounted(async () => {
 }
 
 .logo {
+  display: flex;
+  align-items: center;
+  margin-right: 24px;
+}
+
+.logo-img {
+  height: 32px;
+  width: 32px;
+  margin-right: 8px;
+  object-fit: contain;
+}
+
+.logo-text {
   color: white;
   font-size: 20px;
   font-weight: bold;
-  margin-right: 24px;
 }
 
 .header-right {

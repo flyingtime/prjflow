@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"project-management/internal/config"
+	"prjflow/internal/config"
 )
 
 // gormLogrusWriter 实现GORM的logger.Writer接口，将GORM日志输出到logrus

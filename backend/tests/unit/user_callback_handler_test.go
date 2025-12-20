@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 
-	"project-management/internal/api"
-	"project-management/internal/model"
-	"project-management/pkg/wechat"
-	"project-management/tests/unit/mocks"
+	"prjflow/internal/api"
+	"prjflow/internal/model"
+	"prjflow/pkg/wechat"
+	"prjflow/tests/unit/mocks"
 )
 
 func TestAddUserCallbackHandler_Validate(t *testing.T) {

@@ -3,8 +3,8 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"project-management/internal/websocket"
-	"project-management/pkg/wechat"
+	"prjflow/internal/websocket"
+	"prjflow/pkg/wechat"
 )
 
 // InitCallbackHandler 处理微信回调

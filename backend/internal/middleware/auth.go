@@ -3,10 +3,10 @@ package middleware
 import (
 	"strings"
 
-	"project-management/internal/model"
-	"project-management/internal/utils"
-	"project-management/pkg/auth"
-	"project-management/pkg/permission"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
+	"prjflow/pkg/auth"
+	"prjflow/pkg/permission"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

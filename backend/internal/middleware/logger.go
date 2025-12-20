@@ -3,7 +3,7 @@ package middleware
 import (
 	"time"
 
-	"project-management/internal/utils"
+	"prjflow/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

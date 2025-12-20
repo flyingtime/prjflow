@@ -12,14 +12,14 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"project-management/internal/model"
-	"project-management/internal/utils"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
 )
 
 // Migrator 迁移器
 type Migrator struct {
-	zenTaoDB    *gorm.DB
-	goProjectDB *gorm.DB
+	zenTaoDB   *gorm.DB
+	prjFlowDB  *gorm.DB
 
 	// ID映射表
 	deptIDMap        map[int]uint
@@ -75,17 +75,17 @@ func NewMigrator(config *MigrateConfig) (*Migrator, error) {
 		return nil, fmt.Errorf("连接zentao数据库失败: %w", err)
 	}
 
-	// 连接goproject数据库
+	// 连接prjflow数据库
 	var dialector gorm.Dialector
-	if config.GoProject.Type == "sqlite" {
-		dialector = sqlite.Open(config.GoProject.DSN)
+	if config.PrjFlow.Type == "sqlite" {
+		dialector = sqlite.Open(config.PrjFlow.DSN)
 	} else {
-		return nil, fmt.Errorf("不支持的数据库类型: %s", config.GoProject.Type)
+		return nil, fmt.Errorf("不支持的数据库类型: %s", config.PrjFlow.Type)
 	}
 
-	m.goProjectDB, err = gorm.Open(dialector, &gorm.Config{})
+	m.prjFlowDB, err = gorm.Open(dialector, &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("连接goproject数据库失败: %w", err)
+		return nil, fmt.Errorf("连接prjflow数据库失败: %w", err)
 	}
 
 	return m, nil
@@ -182,7 +182,7 @@ func (m *Migrator) MigrateAll() error {
 		Value: "true",
 		Type:  "boolean",
 	}
-	if err := m.goProjectDB.Where("key = ?", "initialized").Assign(model.SystemConfig{Value: "true", Type: "boolean"}).FirstOrCreate(&initConfig).Error; err != nil {
+	if err := m.prjFlowDB.Where("key = ?", "initialized").Assign(model.SystemConfig{Value: "true", Type: "boolean"}).FirstOrCreate(&initConfig).Error; err != nil {
 		return fmt.Errorf("更新初始化状态失败: %w", err)
 	}
 	log.Println("初始化状态已更新为已完成")
@@ -278,13 +278,13 @@ func (m *Migrator) MigrateDepartments() error {
 
 		// 检查是否已存在（基于code）
 		var existing model.Department
-		if err := m.goProjectDB.Where("code = ?", dept.Code).First(&existing).Error; err == nil {
+		if err := m.prjFlowDB.Where("code = ?", dept.Code).First(&existing).Error; err == nil {
 			m.deptIDMap[zd.ID] = existing.ID
 			log.Printf("部门已存在: %s (ID: %d -> %d, 父部门: %v)", dept.Name, zd.ID, existing.ID, parentID)
 			continue
 		}
 
-		if err := m.goProjectDB.Create(&dept).Error; err != nil {
+		if err := m.prjFlowDB.Create(&dept).Error; err != nil {
 			log.Printf("创建部门失败: %s, 错误: %v", dept.Name, err)
 			continue
 		}
@@ -324,9 +324,9 @@ func (m *Migrator) MigrateRoles() error {
 
 	log.Printf("找到 %d 个角色组", len(zentaoGroups))
 
-	// 先获取goproject的默认admin角色
+	// 先获取prjflow的默认admin角色
 	var adminRole model.Role
-	if err := m.goProjectDB.Where("code = ?", "admin").First(&adminRole).Error; err != nil {
+	if err := m.prjFlowDB.Where("code = ?", "admin").First(&adminRole).Error; err != nil {
 		log.Println("警告: 未找到admin角色，将创建")
 		adminRole = model.Role{
 			Name:        "管理员",
@@ -334,14 +334,14 @@ func (m *Migrator) MigrateRoles() error {
 			Description: "系统管理员，拥有所有权限",
 			Status:      1,
 		}
-		if err := m.goProjectDB.Create(&adminRole).Error; err != nil {
+		if err := m.prjFlowDB.Create(&adminRole).Error; err != nil {
 			return fmt.Errorf("创建admin角色失败: %w", err)
 		}
 	}
 
 	// 获取所有权限
 	var allPermissions []model.Permission
-	if err := m.goProjectDB.Find(&allPermissions).Error; err != nil {
+	if err := m.prjFlowDB.Find(&allPermissions).Error; err != nil {
 		return fmt.Errorf("获取权限列表失败: %w", err)
 	}
 
@@ -382,13 +382,13 @@ func (m *Migrator) MigrateRoles() error {
 
 		// 检查是否已存在
 		var existing model.Role
-		if err := m.goProjectDB.Where("code = ?", roleCode).First(&existing).Error; err == nil {
+		if err := m.prjFlowDB.Where("code = ?", roleCode).First(&existing).Error; err == nil {
 			m.roleIDMap[zg.ID] = existing.ID
 			log.Printf("角色已存在: %s (ID: %d -> %d)", role.Name, zg.ID, existing.ID)
 			continue
 		}
 
-		if err := m.goProjectDB.Create(&role).Error; err != nil {
+		if err := m.prjFlowDB.Create(&role).Error; err != nil {
 			log.Printf("创建角色失败: %s, 错误: %v", role.Name, err)
 			continue
 		}
@@ -405,7 +405,7 @@ func (m *Migrator) MigrateRoles() error {
 		}
 
 		if len(rolePerms) > 0 {
-			if err := m.goProjectDB.Model(&role).Association("Permissions").Replace(rolePerms); err != nil {
+			if err := m.prjFlowDB.Model(&role).Association("Permissions").Replace(rolePerms); err != nil {
 				log.Printf("分配权限失败: %s, 错误: %v", role.Name, err)
 			}
 		}
@@ -449,7 +449,7 @@ func (m *Migrator) MigrateUsers() error {
 
 	// 获取admin角色
 	var adminRole model.Role
-	if err := m.goProjectDB.Where("code = ?", "admin").First(&adminRole).Error; err != nil {
+	if err := m.prjFlowDB.Where("code = ?", "admin").First(&adminRole).Error; err != nil {
 		return fmt.Errorf("未找到admin角色: %w", err)
 	}
 
@@ -484,12 +484,12 @@ func (m *Migrator) MigrateUsers() error {
 
 		// 检查是否已存在
 		var existing model.User
-		if err := m.goProjectDB.Where("username = ?", user.Username).First(&existing).Error; err == nil {
+		if err := m.prjFlowDB.Where("username = ?", user.Username).First(&existing).Error; err == nil {
 			m.userIDMap[zu.ID] = existing.ID
 			log.Printf("用户已存在: %s (ID: %d -> %d)", user.Username, zu.ID, existing.ID)
 
 			// 更新已存在用户的密码为默认密码"123"（确保迁移后的用户可以使用统一密码登录）
-			if err := m.goProjectDB.Model(&existing).Update("password", defaultPassword).Error; err != nil {
+			if err := m.prjFlowDB.Model(&existing).Update("password", defaultPassword).Error; err != nil {
 				log.Printf("更新用户密码失败: %s, 错误: %v", user.Username, err)
 			} else {
 				log.Printf("已更新用户密码: %s", user.Username)
@@ -498,7 +498,7 @@ func (m *Migrator) MigrateUsers() error {
 			// 如果用户已存在，检查admin账号是否有管理员角色
 			if strings.ToLower(zu.Account) == "admin" {
 				var existingRoles []model.Role
-				m.goProjectDB.Model(&existing).Association("Roles").Find(&existingRoles)
+				m.prjFlowDB.Model(&existing).Association("Roles").Find(&existingRoles)
 				hasAdminRole := false
 				for _, r := range existingRoles {
 					if r.Code == "admin" {
@@ -508,7 +508,7 @@ func (m *Migrator) MigrateUsers() error {
 				}
 				if !hasAdminRole {
 					// 为已存在的admin账号添加管理员角色
-					if err := m.goProjectDB.Model(&existing).Association("Roles").Append(&adminRole); err != nil {
+					if err := m.prjFlowDB.Model(&existing).Association("Roles").Append(&adminRole); err != nil {
 						log.Printf("为已存在的admin账号添加管理员角色失败: %v", err)
 					} else {
 						log.Printf("为已存在的admin账号添加了管理员角色")
@@ -518,7 +518,7 @@ func (m *Migrator) MigrateUsers() error {
 			continue
 		}
 
-		if err := m.goProjectDB.Create(&user).Error; err != nil {
+		if err := m.prjFlowDB.Create(&user).Error; err != nil {
 			log.Printf("创建用户失败: %s, 错误: %v", user.Username, err)
 			continue
 		}
@@ -544,7 +544,7 @@ func (m *Migrator) MigrateUsers() error {
 		for _, ug := range userGroups {
 			if roleID, ok := m.roleIDMap[ug.Group]; ok {
 				var role model.Role
-				if err := m.goProjectDB.First(&role, roleID).Error; err == nil {
+				if err := m.prjFlowDB.First(&role, roleID).Error; err == nil {
 					// 检查是否已添加
 					found := false
 					for _, r := range roles {
@@ -567,7 +567,7 @@ func (m *Migrator) MigrateUsers() error {
 		}
 
 		if len(roles) > 0 {
-			if err := m.goProjectDB.Model(&user).Association("Roles").Replace(roles); err != nil {
+			if err := m.prjFlowDB.Model(&user).Association("Roles").Replace(roles); err != nil {
 				log.Printf("分配角色失败: %s, 错误: %v", user.Username, err)
 			}
 		} else {
@@ -630,13 +630,13 @@ func (m *Migrator) MigrateProjects() error {
 
 		// 检查是否已存在（基于code）
 		var existing model.Project
-		if err := m.goProjectDB.Where("code = ?", project.Code).First(&existing).Error; err == nil {
+		if err := m.prjFlowDB.Where("code = ?", project.Code).First(&existing).Error; err == nil {
 			m.projectIDMap[zp.ID] = existing.ID
 			log.Printf("项目已存在: %s (ID: %d -> %d, code: %s)", project.Name, zp.ID, existing.ID, project.Code)
 			continue
 		}
 
-		if err := m.goProjectDB.Create(&project).Error; err != nil {
+		if err := m.prjFlowDB.Create(&project).Error; err != nil {
 			log.Printf("创建项目失败: %s, 错误: %v", project.Name, err)
 			continue
 		}
@@ -712,7 +712,7 @@ func (m *Migrator) MigrateModules() error {
 
 		// 检查是否已存在（基于名称）
 		var existing model.Module
-		if err := m.goProjectDB.Where("name = ?", module.Name).First(&existing).Error; err == nil {
+		if err := m.prjFlowDB.Where("name = ?", module.Name).First(&existing).Error; err == nil {
 			m.moduleIDMap[zm.ID] = existing.ID
 			log.Printf("模块已存在: %s (ID: %d -> %d)", module.Name, zm.ID, existing.ID)
 			continue
@@ -721,14 +721,14 @@ func (m *Migrator) MigrateModules() error {
 		// 检查编码是否已存在，如果存在则重新生成
 		if module.Code != "" {
 			var existingByCode model.Module
-			if err := m.goProjectDB.Where("code = ?", module.Code).First(&existingByCode).Error; err == nil {
+			if err := m.prjFlowDB.Where("code = ?", module.Code).First(&existingByCode).Error; err == nil {
 				// 编码已存在，重新生成
 				module.Code = GenerateModuleCode(name, zm.ID)
 				log.Printf("模块编码冲突，重新生成: %s -> %s", name, module.Code)
 			}
 		}
 
-		if err := m.goProjectDB.Create(&module).Error; err != nil {
+		if err := m.prjFlowDB.Create(&module).Error; err != nil {
 			log.Printf("创建模块失败: %s, 错误: %v", module.Name, err)
 			continue
 		}
@@ -812,13 +812,13 @@ func (m *Migrator) MigrateVersions() error {
 
 		// 检查是否已存在（基于版本号和项目ID）
 		var existing model.Version
-		if err := m.goProjectDB.Where("version_number = ? AND project_id = ?", version.VersionNumber, version.ProjectID).First(&existing).Error; err == nil {
+		if err := m.prjFlowDB.Where("version_number = ? AND project_id = ?", version.VersionNumber, version.ProjectID).First(&existing).Error; err == nil {
 			m.versionIDMap[zb.ID] = existing.ID
 			log.Printf("版本已存在: %s (ID: %d -> %d, 项目ID: %d)", version.VersionNumber, zb.ID, existing.ID, projectID)
 			continue
 		}
 
-		if err := m.goProjectDB.Create(&version).Error; err != nil {
+		if err := m.prjFlowDB.Create(&version).Error; err != nil {
 			log.Printf("创建版本失败: %s, 错误: %v", version.VersionNumber, err)
 			continue
 		}
@@ -944,7 +944,7 @@ func (m *Migrator) MigrateRequirements() error {
 			EstimatedHours: DaysToHours(zs.Estimate),
 		}
 
-		if err := m.goProjectDB.Create(&requirement).Error; err != nil {
+		if err := m.prjFlowDB.Create(&requirement).Error; err != nil {
 			log.Printf("创建需求失败: %s, 错误: %v", requirement.Title, err)
 			continue
 		}
@@ -1073,7 +1073,7 @@ func (m *Migrator) MigrateTasks() error {
 			ActualHours:    DaysToHours(zt.Consumed),
 		}
 
-		if err := m.goProjectDB.Create(&task).Error; err != nil {
+		if err := m.prjFlowDB.Create(&task).Error; err != nil {
 			log.Printf("创建任务失败: %s, 错误: %v", task.Title, err)
 			continue
 		}
@@ -1164,7 +1164,7 @@ func (m *Migrator) MigrateBugs() error {
 			SolutionNote:  zb.ResolvedBuild,
 		}
 
-		if err := m.goProjectDB.Create(&bug).Error; err != nil {
+		if err := m.prjFlowDB.Create(&bug).Error; err != nil {
 			log.Printf("创建Bug失败: %s, 错误: %v", bug.Title, err)
 			continue
 		}
@@ -1180,8 +1180,8 @@ func (m *Migrator) MigrateBugs() error {
 			if err := m.zenTaoDB.Table("zt_user").Where("account = ?", zb.AssignedTo).First(&userID).Error; err == nil {
 				if newID, ok := m.userIDMap[userID.ID]; ok {
 					var assignee model.User
-					if err := m.goProjectDB.First(&assignee, newID).Error; err == nil {
-						if err := m.goProjectDB.Model(&bug).Association("Assignees").Append(&assignee); err != nil {
+					if err := m.prjFlowDB.First(&assignee, newID).Error; err == nil {
+						if err := m.prjFlowDB.Model(&bug).Association("Assignees").Append(&assignee); err != nil {
 							log.Printf("分配Bug失败: %s, 错误: %v", bug.Title, err)
 						}
 					}
@@ -1331,17 +1331,17 @@ func (m *Migrator) MigrateProjectMembers() error {
 			continue
 		}
 
-		// 转换角色：将禅道角色映射到goproject角色
+		// 转换角色：将禅道角色映射到prjflow角色
 		// 禅道角色可能是：项目经理、开发、测试、产品、设计等
-		// goproject角色：owner, member, viewer
+		// prjflow角色：owner, member, viewer
 		role := ConvertProjectRole(zt.Role)
 
 		// 检查是否已存在
 		var existingMember model.ProjectMember
-		if err := m.goProjectDB.Where("project_id = ? AND user_id = ?", projectID, userID).First(&existingMember).Error; err == nil {
+		if err := m.prjFlowDB.Where("project_id = ? AND user_id = ?", projectID, userID).First(&existingMember).Error; err == nil {
 			// 如果已存在，更新角色
 			existingMember.Role = role
-			if err := m.goProjectDB.Save(&existingMember).Error; err != nil {
+			if err := m.prjFlowDB.Save(&existingMember).Error; err != nil {
 				log.Printf("更新项目成员失败: 项目ID %d, 用户ID %d, 错误: %v", projectID, userID, err)
 			} else {
 				m.stats.projectMemberCount++
@@ -1357,7 +1357,7 @@ func (m *Migrator) MigrateProjectMembers() error {
 			Role:      role,
 		}
 
-		if err := m.goProjectDB.Create(&member).Error; err != nil {
+		if err := m.prjFlowDB.Create(&member).Error; err != nil {
 			log.Printf("创建项目成员失败: 项目ID %d, 用户ID %d, 错误: %v", projectID, userID, err)
 			continue
 		}
@@ -1489,7 +1489,7 @@ func (m *Migrator) migrateProjectMembersFromInference() error {
 		for userID, role := range members {
 			// 检查是否已存在
 			var existingMember model.ProjectMember
-			if err := m.goProjectDB.Where("project_id = ? AND user_id = ?", projectID, userID).First(&existingMember).Error; err == nil {
+			if err := m.prjFlowDB.Where("project_id = ? AND user_id = ?", projectID, userID).First(&existingMember).Error; err == nil {
 				log.Printf("项目成员已存在: 项目ID %d, 用户ID %d，跳过", projectID, userID)
 				continue
 			}
@@ -1500,7 +1500,7 @@ func (m *Migrator) migrateProjectMembersFromInference() error {
 				Role:      role,
 			}
 
-			if err := m.goProjectDB.Create(&member).Error; err != nil {
+			if err := m.prjFlowDB.Create(&member).Error; err != nil {
 				log.Printf("创建项目成员失败: 项目ID %d, 用户ID %d, 错误: %v", projectID, userID, err)
 				continue
 			}
@@ -1609,24 +1609,24 @@ func (m *Migrator) MigrateActions() error {
 		switch objectType {
 		case "requirement":
 			var requirement model.Requirement
-			if err := m.goProjectDB.First(&requirement, objectID).Error; err == nil {
+			if err := m.prjFlowDB.First(&requirement, objectID).Error; err == nil {
 				projectID = requirement.ProjectID
 			}
 		case "task":
 			var task model.Task
-			if err := m.goProjectDB.First(&task, objectID).Error; err == nil {
+			if err := m.prjFlowDB.First(&task, objectID).Error; err == nil {
 				projectID = task.ProjectID
 			}
 		case "bug":
 			var bug model.Bug
-			if err := m.goProjectDB.First(&bug, objectID).Error; err == nil {
+			if err := m.prjFlowDB.First(&bug, objectID).Error; err == nil {
 				projectID = bug.ProjectID
 			}
 		case "project":
 			projectID = objectID
 		case "version":
 			var version model.Version
-			if err := m.goProjectDB.First(&version, objectID).Error; err == nil {
+			if err := m.prjFlowDB.First(&version, objectID).Error; err == nil {
 				projectID = version.ProjectID
 			}
 		}
@@ -1655,14 +1655,14 @@ func (m *Migrator) MigrateActions() error {
 
 		// 检查是否已存在（基于对象类型、对象ID、操作类型、操作时间）
 		var existing model.Action
-		if err := m.goProjectDB.Where("object_type = ? AND object_id = ? AND action = ? AND date = ?",
+		if err := m.prjFlowDB.Where("object_type = ? AND object_id = ? AND action = ? AND date = ?",
 			action.ObjectType, action.ObjectID, action.Action, action.Date).First(&existing).Error; err == nil {
 			m.actionIDMap[za.ID] = existing.ID
 			log.Printf("操作记录已存在: %s %d (ID: %d -> %d)", action.ObjectType, action.ObjectID, za.ID, existing.ID)
 			continue
 		}
 
-		if err := m.goProjectDB.Create(&action).Error; err != nil {
+		if err := m.prjFlowDB.Create(&action).Error; err != nil {
 			log.Printf("创建操作记录失败: %s %d, 错误: %v", action.ObjectType, action.ObjectID, err)
 			continue
 		}
@@ -1712,15 +1712,15 @@ func (m *Migrator) MigrateHistories() error {
 
 		// 检查是否已存在
 		var existing model.History
-		if err := m.goProjectDB.Where("action_id = ? AND field = ? AND old = ? AND new = ?",
+		if err := m.prjFlowDB.Where("action_id = ? AND field = ? AND old = ? AND new = ?",
 			history.ActionID, history.Field, history.Old, history.New).First(&existing).Error; err == nil {
 			log.Printf("字段变更记录已存在: Action %d, Field %s (ID: %d -> %d)", actionID, history.Field, zh.ID, existing.ID)
 			continue
 		}
 
 		// 使用ProcessHistory处理字段值转换
-		processedHistory := utils.ProcessHistory(m.goProjectDB, &history)
-		if err := m.goProjectDB.Create(processedHistory).Error; err != nil {
+		processedHistory := utils.ProcessHistory(m.prjFlowDB, &history)
+		if err := m.prjFlowDB.Create(processedHistory).Error; err != nil {
 			log.Printf("创建字段变更记录失败: Action %d, Field %s, 错误: %v", actionID, history.Field, err)
 			continue
 		}

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"project-management/internal/model"
+	"prjflow/internal/model"
 )
 
 // TestDeadlockFix_ConcurrentResourceCreation 测试并发创建资源时的死锁修复

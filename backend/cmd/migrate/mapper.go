@@ -113,7 +113,7 @@ func ConvertVersionStatus(status string) string {
 	return "wait"
 }
 
-// ConvertPriority 转换优先级 (zentao: 1-4, goproject: urgent/high/medium/low)
+// ConvertPriority 转换优先级 (zentao: 1-4, prjflow: urgent/high/medium/low)
 func ConvertPriority(pri int) string {
 	switch pri {
 	case 1:
@@ -129,7 +129,7 @@ func ConvertPriority(pri int) string {
 	}
 }
 
-// ConvertSeverity 转换严重程度 (zentao: 1-4, goproject: critical/high/medium/low)
+// ConvertSeverity 转换严重程度 (zentao: 1-4, prjflow: critical/high/medium/low)
 func ConvertSeverity(severity int) string {
 	switch severity {
 	case 1:
@@ -155,7 +155,7 @@ func ConvertUserStatus(deleted string) int {
 
 // ConvertProjectRole 转换项目角色
 // 禅道角色：项目经理、开发、测试、产品、设计等
-// goproject角色：owner, member, viewer
+// prjflow角色：owner, member, viewer
 func ConvertProjectRole(role string) string {
 	roleLower := strings.ToLower(role)
 	
@@ -271,9 +271,9 @@ func GenerateModuleCode(name string, id int) string {
 	return fmt.Sprintf("%s_%d", code, id)
 }
 
-// MapZenTaoPermissionToGoProject 将zentao权限映射到goproject权限代码
+// MapZenTaoPermissionToGoProject 将zentao权限映射到prjflow权限代码
 func MapZenTaoPermissionToGoProject(module, method string) string {
-	// 根据zentao的module和method，映射到goproject的权限代码
+	// 根据zentao的module和method，映射到prjflow的权限代码
 	// 这里需要根据实际的权限体系进行映射
 	
 	// 示例映射规则
@@ -413,7 +413,7 @@ func DaysToHours(days float64) *float64 {
 	return &hours
 }
 
-// ConvertZenTaoObjectType 转换禅道对象类型到goproject对象类型
+// ConvertZenTaoObjectType 转换禅道对象类型到prjflow对象类型
 func ConvertZenTaoObjectType(zenTaoType string) string {
 	zenTaoType = strings.ToLower(zenTaoType)
 	switch zenTaoType {
@@ -432,7 +432,7 @@ func ConvertZenTaoObjectType(zenTaoType string) string {
 	}
 }
 
-// ConvertZenTaoAction 转换禅道操作类型到goproject操作类型
+// ConvertZenTaoAction 转换禅道操作类型到prjflow操作类型
 func ConvertZenTaoAction(zenTaoAction string) string {
 	zenTaoAction = strings.ToLower(zenTaoAction)
 	switch zenTaoAction {

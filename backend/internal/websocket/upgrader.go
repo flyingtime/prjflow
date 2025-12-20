@@ -3,7 +3,7 @@ package websocket
 import (
 	"net/http"
 
-	"project-management/internal/utils"
+	"prjflow/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"

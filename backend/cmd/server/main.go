@@ -21,11 +21,11 @@ import (
 	"syscall"
 	"time"
 
-	"project-management/internal/api"
-	"project-management/internal/config"
-	"project-management/internal/middleware"
-	"project-management/internal/utils"
-	"project-management/internal/websocket"
+	"prjflow/internal/api"
+	"prjflow/internal/config"
+	"prjflow/internal/middleware"
+	"prjflow/internal/utils"
+	"prjflow/internal/websocket"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"

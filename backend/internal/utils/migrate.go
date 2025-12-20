@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"project-management/internal/config"
-	"project-management/internal/model"
+	"prjflow/internal/config"
+	"prjflow/internal/model"
 
 	"gorm.io/gorm"
 )
@@ -139,7 +139,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 		{Code: "project:manage", Name: "管理项目", Resource: "project", Action: "manage", Description: "管理项目成员和设置", Status: 1},
 
 		// 项目管理菜单（父菜单）
-		{Code: "project-management", Name: "项目管理", Resource: "project", Action: "read", Description: "项目管理", Status: 1, IsMenu: true, MenuIcon: "ProjectOutlined", MenuTitle: "项目管理", MenuOrder: 1},
+		{Code: "prjflow", Name: "项目管理", Resource: "project", Action: "read", Description: "项目管理", Status: 1, IsMenu: true, MenuIcon: "ProjectOutlined", MenuTitle: "项目管理", MenuOrder: 1},
 		// 项目列表（子菜单）
 		{Code: "project:list", Name: "项目列表", Resource: "project", Action: "read", Description: "项目列表", Status: 1, IsMenu: true, MenuPath: "/project", MenuTitle: "项目列表", MenuOrder: 0},
 		// 需求管理（子菜单）
@@ -250,7 +250,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 
 	// 设置父子菜单关系
 	// 项目管理菜单的子菜单
-	if projectManagement, ok := permMap["project-management"]; ok {
+	if projectManagement, ok := permMap["prjflow"]; ok {
 		parentID := projectManagement.ID
 		// 项目列表
 		if projectList, ok := permMap["project:list"]; ok {
@@ -362,7 +362,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 			Permissions: []string{
 				"dashboard",                    // 工作台
 				"daily-report:create",         // 写日报
-				"project-management",          // 项目管理菜单
+				"prjflow",          // 项目管理菜单
 				"project:list",                // 项目列表
 				"project:read",                // 查看项目
 				"requirement:menu",            // 需求管理菜单
@@ -392,7 +392,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 			Permissions: []string{
 				"dashboard",                    // 工作台
 				"daily-report:create",         // 写日报
-				"project-management",          // 项目管理菜单
+				"prjflow",          // 项目管理菜单
 				"project:list",                // 项目列表
 				"project:create",              // 创建项目
 				"project:read",                // 查看项目
@@ -434,7 +434,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 			Permissions: []string{
 				"dashboard",                    // 工作台
 				"daily-report:create",         // 写日报
-				"project-management",          // 项目管理菜单
+				"prjflow",          // 项目管理菜单
 				"project:list",                // 项目列表
 				"project:read",                // 查看项目
 				"requirement:menu",            // 需求管理菜单
@@ -464,7 +464,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 			Permissions: []string{
 				"dashboard",                    // 工作台
 				"daily-report:create",         // 写日报
-				"project-management",          // 项目管理菜单
+				"prjflow",          // 项目管理菜单
 				"project:list",                // 项目列表
 				"project:read",                // 查看项目
 				"project:update",              // 更新项目（用于创建版本）

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"project-management/internal/config"
+	"prjflow/internal/config"
 	"gorm.io/gorm"
 )
 

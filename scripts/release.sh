@@ -160,6 +160,6 @@ echo "分支: $CURRENT_BRANCH"
 echo ""
 echo "下一步："
 echo "  1. 运行编译脚本构建发布版本: ./scripts/build.sh $VERSION"
-echo "  2. 在 GitHub 上创建 Release: https://github.com/funnywwh/goproject/releases/new"
+echo "  2. 在 GitHub 上创建 Release: https://github.com/funnywwh/prjflow/releases/new"
 echo ""
 

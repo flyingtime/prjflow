@@ -2,8 +2,8 @@ package api
 
 import (
 	"gorm.io/gorm"
-	"project-management/internal/model"
-	"project-management/pkg/permission"
+	"prjflow/internal/model"
+	"prjflow/pkg/permission"
 
 	"github.com/gin-gonic/gin"
 )

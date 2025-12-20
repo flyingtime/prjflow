@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"project-management/internal/config"
+	"prjflow/internal/config"
 )
 
 type WeChatClient struct {

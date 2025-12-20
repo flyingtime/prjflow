@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"project-management/internal/model"
+	"prjflow/internal/model"
 )
 
 // WeChatVerifyHandler 处理微信验证文件

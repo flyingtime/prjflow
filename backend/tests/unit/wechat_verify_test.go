@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
-	"project-management/internal/api"
-	"project-management/internal/model"
+	"prjflow/internal/api"
+	"prjflow/internal/model"
 )
 
 func TestWeChatVerifyHandler_HandleVerifyFile(t *testing.T) {

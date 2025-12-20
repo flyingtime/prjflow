@@ -5,10 +5,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"project-management/internal/api"
-	"project-management/internal/model"
-	"project-management/pkg/wechat"
-	"project-management/tests/unit/mocks"
+	"prjflow/internal/api"
+	"prjflow/internal/model"
+	"prjflow/pkg/wechat"
+	"prjflow/tests/unit/mocks"
 )
 
 func TestProcessWeChatCallback_Success(t *testing.T) {

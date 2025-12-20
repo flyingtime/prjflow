@@ -1,4 +1,4 @@
-# zentao到goproject数据迁移配置文件
+# zentao到prjflow数据迁移配置文件
 # 复制此文件为 migrate-config.yaml 并修改相应的配置
 
 zentao:
@@ -8,7 +8,7 @@ zentao:
   password: ""
   dbname: zentao_db
 
-goproject:
+prjflow:
   type: sqlite
-  dsn: data.db  # SQLite数据库文件路径（相对于goproject/backend目录）
+  dsn: data.db  # SQLite数据库文件路径（相对于prjflow/backend目录）
 

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"project-management/internal/model"
+	"prjflow/internal/model"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"

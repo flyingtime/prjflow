@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"project-management/internal/api"
-	"project-management/internal/model"
-	"project-management/pkg/wechat"
-	"project-management/tests/unit/mocks"
+	"prjflow/internal/api"
+	"prjflow/internal/model"
+	"prjflow/pkg/wechat"
+	"prjflow/tests/unit/mocks"
 )
 
 func TestInitHandler_CheckInitStatus(t *testing.T) {

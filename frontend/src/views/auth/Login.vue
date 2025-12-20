@@ -2,7 +2,10 @@
   <div class="login-container">
     <a-card class="login-card" :bordered="false">
       <template #title>
-        <h2>项目管理系统</h2>
+        <div class="login-title">
+          <img src="/prjflow512x512.png" alt="PrjFlow" class="login-logo" />
+          <h2>项目管理系统</h2>
+        </div>
       </template>
       <div class="login-content">
         <a-tabs v-model:activeKey="loginType" centered>
@@ -141,6 +144,23 @@ const handleLoginSuccess = async (data: any) => {
 .login-card {
   width: 400px;
   text-align: center;
+}
+
+.login-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.login-logo {
+  height: 40px;
+  width: 40px;
+  object-fit: contain;
+}
+
+.login-title h2 {
+  margin: 0;
 }
 
 .login-content {

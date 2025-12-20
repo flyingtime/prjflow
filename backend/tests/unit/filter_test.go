@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
-	"project-management/internal/model"
-	"project-management/internal/utils"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
 )
 
 func TestIsAdmin(t *testing.T) {

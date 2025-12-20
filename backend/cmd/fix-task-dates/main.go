@@ -9,8 +9,8 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"project-management/internal/config"
-	"project-management/internal/model"
+	"prjflow/internal/config"
+	"prjflow/internal/model"
 )
 
 func main() {

@@ -3,11 +3,11 @@ package api
 import (
 	"strings"
 
-	"project-management/internal/config"
-	"project-management/internal/model"
-	"project-management/internal/utils"
-	"project-management/pkg/auth"
-	"project-management/pkg/wechat"
+	"prjflow/internal/config"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
+	"prjflow/pkg/auth"
+	"prjflow/pkg/wechat"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

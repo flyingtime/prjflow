@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"project-management/internal/api"
-	"project-management/internal/model"
-	"project-management/internal/utils"
+	"prjflow/internal/api"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
 )
 
 func TestRecordAuditLog(t *testing.T) {

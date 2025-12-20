@@ -1,9 +1,9 @@
 package api
 
 import (
-	"project-management/internal/model"
-	"project-management/internal/utils"
-	"project-management/pkg/wechat"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
+	"prjflow/pkg/wechat"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

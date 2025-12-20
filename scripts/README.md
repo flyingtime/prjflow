@@ -123,7 +123,7 @@
 ./scripts/build.sh v0.5.0 all
 
 # 3. 在 GitHub 上创建 Release
-# 访问: https://github.com/funnywwh/goproject/releases/new
+# 访问: https://github.com/funnywwh/prjflow/releases/new
 # 选择 tag: v0.5.0
 # 上传编译好的文件: releases/v0.5.0/*
 ```

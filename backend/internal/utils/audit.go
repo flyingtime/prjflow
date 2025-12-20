@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"project-management/internal/model"
+	"prjflow/internal/model"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

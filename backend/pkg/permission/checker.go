@@ -2,7 +2,7 @@ package permission
 
 import (
 	"gorm.io/gorm"
-	"project-management/internal/model"
+	"prjflow/internal/model"
 )
 
 // CheckPermission 检查用户角色是否有权限（需要传入db）

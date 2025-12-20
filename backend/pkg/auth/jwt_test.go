@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"project-management/internal/config"
+	"prjflow/internal/config"
 )
 
 func TestGenerateToken(t *testing.T) {

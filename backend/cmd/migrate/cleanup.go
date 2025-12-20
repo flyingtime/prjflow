@@ -14,12 +14,12 @@ func CleanupDatabase(config *MigrateConfig) error {
 	log.Println("开始清理数据库...")
 	log.Println("==========================================")
 
-	// 连接goproject数据库
+	// 连接prjflow数据库
 	var dialector gorm.Dialector
-	if config.GoProject.Type == "sqlite" {
-		dialector = sqlite.Open(config.GoProject.DSN)
+	if config.PrjFlow.Type == "sqlite" {
+		dialector = sqlite.Open(config.PrjFlow.DSN)
 	} else {
-		return fmt.Errorf("不支持的数据库类型: %s", config.GoProject.Type)
+		return fmt.Errorf("不支持的数据库类型: %s", config.PrjFlow.Type)
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{})

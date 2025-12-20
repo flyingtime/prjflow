@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"project-management/internal/model"
+	"prjflow/internal/model"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

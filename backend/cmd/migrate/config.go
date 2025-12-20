@@ -16,10 +16,10 @@ type MigrateConfig struct {
 		Password string `yaml:"password"`
 		DBName   string `yaml:"dbname"`
 	} `yaml:"zentao"`
-	GoProject struct {
+	PrjFlow struct {
 		Type string `yaml:"type"`
 		DSN  string `yaml:"dsn"`
-	} `yaml:"goproject"`
+	} `yaml:"prjflow"`
 }
 
 // LoadConfig 加载配置文件

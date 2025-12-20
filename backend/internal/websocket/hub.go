@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	"project-management/internal/utils"
+	"prjflow/internal/utils"
 
 	"github.com/gorilla/websocket"
 )

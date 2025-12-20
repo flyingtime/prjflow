@@ -10,9 +10,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"project-management/internal/config"
-	"project-management/internal/model"
-	"project-management/internal/utils"
+	"prjflow/internal/config"
+	"prjflow/internal/model"
+	"prjflow/internal/utils"
 )
 
 // SetupTestDB 创建测试数据库

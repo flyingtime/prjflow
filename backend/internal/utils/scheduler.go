@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"project-management/internal/model"
+	"prjflow/internal/model"
 	"gorm.io/gorm"
 )
 
