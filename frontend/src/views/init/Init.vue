@@ -2,8 +2,13 @@
   <div class="init-container">
     <a-card class="init-card" :bordered="false">
       <template #title>
-        <h2>系统初始化</h2>
-        <p class="subtitle">欢迎使用项目管理系统，请完成初始配置</p>
+        <div class="init-title">
+          <img src="/prjflow512x512.png" alt="PrjFlow" class="init-logo" />
+          <div>
+            <h2>系统初始化</h2>
+            <p class="subtitle">欢迎使用项目管理系统，请完成初始配置</p>
+          </div>
+        </div>
       </template>
       
       <!-- 登录创建管理员 -->
@@ -345,13 +350,29 @@ onMounted(async () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #41D1FF 0%, #0066CC 100%);
   padding: 20px;
 }
 
 .init-card {
   width: 100%;
   max-width: 600px;
+}
+
+.init-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.init-logo {
+  height: 48px;
+  width: 48px;
+  object-fit: contain;
+}
+
+.init-title h2 {
+  margin: 0;
 }
 
 .subtitle {

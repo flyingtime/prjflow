@@ -47,12 +47,12 @@ make clean
 
 **Linux静态编译（推荐）**：
 ```bash
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o server cmd/server/main.go
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o prjflow cmd/server/main.go
 ```
 
 **Windows静态编译**：
 ```bash
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o server.exe cmd/server/main.go
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o prjflow.exe cmd/server/main.go
 ```
 
 ## 编译参数说明
@@ -80,18 +80,18 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o server.exe 
    ```
 
 2. **上传到服务器**：
-   - 上传 `server` 二进制文件
+   - 上传 `prjflow` 二进制文件
    - 上传 `config.yaml` 配置文件
    - 上传数据库文件（如果使用SQLite）
 
 3. **设置执行权限**：
    ```bash
-   chmod +x server
+   chmod +x prjflow
    ```
 
 4. **运行服务**：
    ```bash
-   ./server
+   ./prjflow
    ```
 
 ## 数据库选择

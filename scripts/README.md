@@ -98,11 +98,11 @@
 编译后的文件会输出到：`releases/<版本号>/`
 
 文件命名格式：
-- `server-linux-amd64` - Linux
-- `server-linux-amd64-sqlite` - Linux (SQLite)
-- `server-windows-amd64.exe` - Windows
-- `server-darwin-amd64` - macOS (Intel)
-- `server-darwin-arm64` - macOS (Apple Silicon)
+- `prjflow-linux-amd64` - Linux
+- `prjflow-linux-amd64-sqlite` - Linux (SQLite)
+- `prjflow-windows-amd64.exe` - Windows
+- `prjflow-darwin-amd64` - macOS (Intel)
+- `prjflow-darwin-arm64` - macOS (Apple Silicon)
 
 ### 构建信息注入
 
@@ -111,7 +111,7 @@
 - **构建时间**：当前时间
 - **Git提交哈希**：当前提交的短哈希
 
-这些信息可以通过 `./server --version` 查看。
+这些信息可以通过 `./prjflow --version` 查看。
 
 ### 完整发布流程示例
 

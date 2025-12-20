@@ -128,25 +128,25 @@ build_platform() {
 # 根据平台构建
 case $PLATFORM in
     linux)
-        build_platform linux linux amd64 0 "server-linux-amd64" "Linux (静态编译, 仅支持MySQL)"
+        build_platform linux linux amd64 0 "prjflow-linux-amd64" "Linux (静态编译, 仅支持MySQL)"
         ;;
     linux-sqlite)
-        build_platform linux-sqlite linux amd64 1 "server-linux-amd64-sqlite" "Linux (支持SQLite, 需要CGO)"
+        build_platform linux-sqlite linux amd64 1 "prjflow-linux-amd64-sqlite" "Linux (支持SQLite, 需要CGO)"
         ;;
     windows)
-        build_platform windows windows amd64 0 "server-windows-amd64.exe" "Windows"
+        build_platform windows windows amd64 0 "prjflow-windows-amd64.exe" "Windows"
         ;;
     mac)
-        build_platform mac darwin amd64 0 "server-darwin-amd64" "macOS (Intel)"
+        build_platform mac darwin amd64 0 "prjflow-darwin-amd64" "macOS (Intel)"
         ;;
     mac-arm)
-        build_platform mac-arm darwin arm64 0 "server-darwin-arm64" "macOS (Apple Silicon)"
+        build_platform mac-arm darwin arm64 0 "prjflow-darwin-arm64" "macOS (Apple Silicon)"
         ;;
     all)
-        build_platform linux linux amd64 0 "server-linux-amd64" "Linux (静态编译)"
-        build_platform windows windows amd64 0 "server-windows-amd64.exe" "Windows"
-        build_platform mac darwin amd64 0 "server-darwin-amd64" "macOS (Intel)"
-        build_platform mac-arm darwin arm64 0 "server-darwin-arm64" "macOS (Apple Silicon)"
+        build_platform linux linux amd64 0 "prjflow-linux-amd64" "Linux (静态编译)"
+        build_platform windows windows amd64 0 "prjflow-windows-amd64.exe" "Windows"
+        build_platform mac darwin amd64 0 "prjflow-darwin-amd64" "macOS (Intel)"
+        build_platform mac-arm darwin arm64 0 "prjflow-darwin-arm64" "macOS (Apple Silicon)"
         ;;
     *)
         echo -e "${RED}错误: 不支持的平台: $PLATFORM${NC}"
