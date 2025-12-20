@@ -2028,6 +2028,16 @@ watch(() => route.params.id, (newId) => {
     }
   }
 }, { immediate: true })
+
+// 监听路由名称变化，支持写日报路由
+watch(() => route.name, (newName) => {
+  if (newName === 'CreateDailyReport') {
+    activeTab.value = 'daily'
+    nextTick(() => {
+      handleCreate()
+    })
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>

@@ -14,6 +14,17 @@
         </div>
       </a-tab-pane>
       <a-tab-pane key="preview" tab="预览">
+        <div class="preview-header">
+          <a-button 
+            type="primary" 
+            size="small" 
+            @click="exportAsImage"
+            :loading="exporting"
+          >
+            <template #icon><DownloadOutlined /></template>
+            导图
+          </a-button>
+        </div>
         <div 
           ref="previewContainerRef" 
           class="markdown-preview" 
@@ -66,6 +77,9 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
+import html2canvas from 'html2canvas'
+import { DownloadOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 
 interface Props {
   modelValue?: string
@@ -93,6 +107,7 @@ const textareaRef = ref<any>(null)
 const editorContainerRef = ref<HTMLElement | null>(null)
 const previewContainerRef = ref<HTMLElement | null>(null)
 const previewImageRef = ref<HTMLImageElement | null>(null)
+const exporting = ref(false)
 
 // 图片预览相关
 const imagePreviewVisible = ref(false)
@@ -385,6 +400,92 @@ watch(() => props.modelValue, () => {
     // 如果正在预览且有内容，保持预览状态
   }
 })
+
+// 导出为图片
+const exportAsImage = async () => {
+  if (!previewContainerRef.value) {
+    message.error('预览内容不存在')
+    return
+  }
+
+  if (!props.modelValue || props.modelValue.trim() === '') {
+    message.warning('预览内容为空，无法导出')
+    return
+  }
+
+  exporting.value = true
+  try {
+    // 等待DOM渲染完成
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    const container = previewContainerRef.value
+    // 保存原始样式
+    const originalMaxHeight = container.style.maxHeight
+    const originalOverflow = container.style.overflow
+    const originalHeight = container.style.height
+    
+    try {
+      // 临时移除高度限制，确保能够获取完整内容
+      container.style.maxHeight = 'none'
+      container.style.overflow = 'visible'
+      container.style.height = 'auto'
+      
+      // 等待样式应用
+      await new Promise(resolve => setTimeout(resolve, 50))
+      
+      // 获取完整内容的尺寸
+      const fullWidth = container.scrollWidth || container.offsetWidth
+      const fullHeight = container.scrollHeight || container.offsetHeight
+      
+      // 使用html2canvas将预览内容转换为canvas
+      // 使用windowWidth和windowHeight确保捕获完整内容
+      const canvas = await html2canvas(container, {
+        backgroundColor: '#ffffff',
+        scale: 2, // 提高清晰度
+        useCORS: true, // 允许跨域图片
+        logging: false,
+        width: fullWidth,
+        height: fullHeight,
+        windowWidth: fullWidth,
+        windowHeight: fullHeight,
+        scrollX: 0,
+        scrollY: 0,
+        allowTaint: false,
+        foreignObjectRendering: false
+      })
+
+      // 将canvas转换为blob
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          message.error('导出失败')
+          return
+        }
+
+        // 创建下载链接
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `markdown-preview-${new Date().getTime()}.png`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+
+        message.success('导出成功')
+      }, 'image/png')
+    } finally {
+      // 恢复原始样式
+      container.style.maxHeight = originalMaxHeight
+      container.style.overflow = originalOverflow
+      container.style.height = originalHeight
+    }
+  } catch (error) {
+    console.error('导出图片失败:', error)
+    message.error('导出失败：' + (error instanceof Error ? error.message : '未知错误'))
+  } finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -394,6 +495,12 @@ watch(() => props.modelValue, () => {
 
 .editor-container {
   width: 100%;
+}
+
+.preview-header {
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .markdown-preview {
