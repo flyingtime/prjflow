@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"fmt"
+
 	"prjflow/internal/config"
 	"prjflow/internal/model"
 
@@ -124,6 +126,12 @@ func MigrateAuditDB(db *gorm.DB, auditDB *gorm.DB) error {
 
 // initDefaultPermissionsAndRoles 初始化默认权限和角色
 func initDefaultPermissionsAndRoles(db *gorm.DB) error {
+	// 迁移权限代码：将 prjflow 改为 project-management
+	// 这是为了修正之前的错误命名（prjflow 是软件名，不是权限代码）
+	if err := migrateProjectManagementPermissionCode(db); err != nil {
+		return fmt.Errorf("迁移项目管理权限代码失败: %w", err)
+	}
+
 	// 定义默认权限（包括菜单权限）
 	defaultPermissions := []model.Permission{
 		// 工作台（菜单，无权限要求）
@@ -139,7 +147,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 		{Code: "project:manage", Name: "管理项目", Resource: "project", Action: "manage", Description: "管理项目成员和设置", Status: 1},
 
 		// 项目管理菜单（父菜单）
-		{Code: "prjflow", Name: "项目管理", Resource: "project", Action: "read", Description: "项目管理", Status: 1, IsMenu: true, MenuIcon: "ProjectOutlined", MenuTitle: "项目管理", MenuOrder: 1},
+		{Code: "project-management", Name: "项目管理", Resource: "project", Action: "read", Description: "项目管理", Status: 1, IsMenu: true, MenuIcon: "ProjectOutlined", MenuTitle: "项目管理", MenuOrder: 1},
 		// 项目列表（子菜单）
 		{Code: "project:list", Name: "项目列表", Resource: "project", Action: "read", Description: "项目列表", Status: 1, IsMenu: true, MenuPath: "/project", MenuTitle: "项目列表", MenuOrder: 0},
 		// 需求管理（子菜单）
@@ -250,7 +258,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 
 	// 设置父子菜单关系
 	// 项目管理菜单的子菜单
-	if projectManagement, ok := permMap["prjflow"]; ok {
+	if projectManagement, ok := permMap["project-management"]; ok {
 		parentID := projectManagement.ID
 		// 项目列表
 		if projectList, ok := permMap["project:list"]; ok {
@@ -362,7 +370,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 			Permissions: []string{
 				"dashboard",                    // 工作台
 				"daily-report:create",         // 写日报
-				"prjflow",          // 项目管理菜单
+				"project-management",          // 项目管理菜单
 				"project:list",                // 项目列表
 				"project:read",                // 查看项目
 				"requirement:menu",            // 需求管理菜单
@@ -392,7 +400,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 			Permissions: []string{
 				"dashboard",                    // 工作台
 				"daily-report:create",         // 写日报
-				"prjflow",          // 项目管理菜单
+				"project-management",          // 项目管理菜单
 				"project:list",                // 项目列表
 				"project:create",              // 创建项目
 				"project:read",                // 查看项目
@@ -434,7 +442,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 			Permissions: []string{
 				"dashboard",                    // 工作台
 				"daily-report:create",         // 写日报
-				"prjflow",          // 项目管理菜单
+				"project-management",          // 项目管理菜单
 				"project:list",                // 项目列表
 				"project:read",                // 查看项目
 				"requirement:menu",            // 需求管理菜单
@@ -464,7 +472,7 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 			Permissions: []string{
 				"dashboard",                    // 工作台
 				"daily-report:create",         // 写日报
-				"prjflow",          // 项目管理菜单
+				"project-management",          // 项目管理菜单
 				"project:list",                // 项目列表
 				"project:read",                // 查看项目
 				"project:update",              // 更新项目（用于创建版本）
@@ -526,6 +534,70 @@ func initDefaultPermissionsAndRoles(db *gorm.DB) error {
 				return err
 			}
 		}
+	}
+
+	return nil
+}
+
+// migrateProjectManagementPermissionCode 迁移项目管理权限代码
+// 将 code='prjflow' 的权限代码更新为 code='project-management'
+// 原因：prjflow 是软件名/项目名，不应该作为权限代码使用
+func migrateProjectManagementPermissionCode(db *gorm.DB) error {
+	var oldPerm model.Permission
+	// 检查是否存在 code='prjflow' 的权限
+	if err := db.Where("code = ?", "prjflow").First(&oldPerm).Error; err != nil {
+		// 如果不存在，说明已经迁移过或者从未使用过，直接返回
+		if err == gorm.ErrRecordNotFound {
+			return nil
+		}
+		return err
+	}
+
+	// 检查是否已经存在 code='project-management' 的权限
+	var newPerm model.Permission
+	if err := db.Where("code = ?", "project-management").First(&newPerm).Error; err == nil {
+		// 如果已经存在 project-management，说明可能是重复的
+		// 需要将 prjflow 的关联关系迁移到 project-management，然后删除 prjflow
+		
+		// 检查是否有角色关联到 prjflow 权限
+		var rolePermCount int64
+		db.Table("role_permissions").Where("permission_id = ?", oldPerm.ID).Count(&rolePermCount)
+		
+		if rolePermCount > 0 {
+			// 更新 role_permissions 表中的 permission_id，将 prjflow 的关联迁移到 project-management
+			// 注意：需要处理可能的重复关联（如果角色同时关联了 prjflow 和 project-management）
+			// 先删除可能的重复关联（如果存在）
+			db.Exec(`
+				DELETE FROM role_permissions 
+				WHERE permission_id = ? 
+				AND role_id IN (
+					SELECT role_id FROM role_permissions WHERE permission_id = ?
+				)
+			`, oldPerm.ID, newPerm.ID)
+			
+			// 更新关联关系
+			if err := db.Exec(`
+				UPDATE role_permissions 
+				SET permission_id = ? 
+				WHERE permission_id = ?
+			`, newPerm.ID, oldPerm.ID).Error; err != nil {
+				return fmt.Errorf("更新角色权限关联失败: %w", err)
+			}
+		}
+
+		// 删除旧的权限记录
+		if err := db.Delete(&oldPerm).Error; err != nil {
+			return fmt.Errorf("删除旧权限失败: %w", err)
+		}
+		return nil
+	}
+
+	// 如果不存在 project-management，直接更新 code
+	// 使用 Updates 方法更新 code 和 updated_at
+	if err := db.Model(&oldPerm).Updates(map[string]interface{}{
+		"code": "project-management",
+	}).Error; err != nil {
+		return fmt.Errorf("更新权限代码失败: %w", err)
 	}
 
 	return nil
