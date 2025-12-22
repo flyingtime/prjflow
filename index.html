@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目流(prjflow) - 让项目管理顺畅如流</title>
+    <meta name="description" content="基于 Go + Vue3 的全栈项目管理平台，开源免费，一键部署，专为中小团队设计">
+    <meta name="keywords" content="项目管理,开源,Go,Vue3,看板,甘特图,敏捷开发">
+    <link rel="icon" href="https://img.icons8.com/color/96/000000/workflow.png">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #2A5CFF;
+            --secondary: #00C896;
+            --accent: #FF6B35;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background-color: #1a4ce6;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(42, 92, 255, 0.2);
+        }
+        
+        .btn-secondary {
+            background-color: var(--secondary);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #00b083;
+            transform: translateY(-2px);
+        }
+        
+        .feature-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .nav-link {
+            position: relative;
+        }
+        
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: var(--primary);
+            transition: width 0.3s ease;
+        }
+        
+        .nav-link:hover::after {
+            width: 100%;
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(42, 92, 255, 0.5); }
+            70% { box-shadow: 0 0 0 10px rgba(42, 92, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(42, 92, 255, 0); }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+    <!-- 导航栏 -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <!-- Logo -->
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-r from-[#2A5CFF] to-[#00C896] flex items-center justify-center">
+                    <span class="text-white font-bold">PF</span>
+                </div>
+                <div>
+                    <span class="font-bold text-xl text-[#2A5CFF]">项目流</span>
+                    <span class="text-sm text-gray-500">prjflow</span>
+                </div>
+            </div>
+            
+            <!-- 桌面导航 -->
+            <div class="hidden md:flex space-x-8">
+                <a href="#features" class="nav-link font-medium">功能</a>
+                <a href="#tech" class="nav-link font-medium">技术栈</a>
+                <a href="#demo" class="nav-link font-medium">演示</a>
+                <a href="#deploy" class="nav-link font-medium">部署</a>
+                <a href="#opensource" class="nav-link font-medium">开源</a>
+            </div>
+            
+            <!-- CTA按钮 -->
+            <div class="flex items-center space-x-4">
+                <a href="https://demo.prjflow.com" target="_blank" class="hidden md:inline-block px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition">
+                    在线演示
+                </a>
+                <a href="https://github.com/funnywwh/prjflow" target="_blank" class="px-4 py-2 btn-primary text-white rounded-lg font-medium">
+                    <i class="fab fa-github mr-2"></i>GitHub
+                </a>
+                
+                <!-- 移动端菜单按钮 -->
+                <button id="mobile-menu-btn" class="md:hidden text-gray-700">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 移动端菜单 -->
+        <div id="mobile-menu" class="md:hidden hidden bg-white shadow-lg">
+            <div class="flex flex-col space-y-4 p-4">
+                <a href="#features" class="py-2 font-medium border-b">功能</a>
+                <a href="#tech" class="py-2 font-medium border-b">技术栈</a>
+                <a href="#demo" class="py-2 font-medium border-b">演示</a>
+                <a href="#deploy" class="py-2 font-medium border-b">部署</a>
+                <a href="#opensource" class="py-2 font-medium border-b">开源</a>
+                <a href="https://demo.prjflow.com" target="_blank" class="py-2 font-medium border-b">在线演示</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 英雄区 -->
+    <header class="gradient-bg">
+        <div class="container mx-auto px-4 py-16 md:py-24">
+            <div class="flex flex-col md:flex-row items-center">
+                <div class="md:w-1/2 mb-12 md:mb-0">
+                    <div class="inline-block px-3 py-1 bg-blue-100 text-[#2A5CFF] rounded-full text-sm font-medium mb-4">
+                        <i class="fas fa-star mr-1"></i> 完全开源 · MIT许可证
+                    </div>
+                    
+                    <h1 class="text-4xl md:text-5xl font-bold mb-4 leading-tight">
+                        让项目管理
+                        <span class="text-[#2A5CFF]">顺畅如流</span>
+                    </h1>
+                    
+                    <p class="text-xl text-gray-600 mb-8">
+                        基于 Go + Vue3 的全栈项目管理平台。<br>
+                        专为中小团队设计的现代化、开源免费、一键部署的项目管理解决方案。
+                    </p>
+                    
+                    <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                        <a href="https://github.com/funnywwh/prjflow" target="_blank" class="px-6 py-3 btn-primary text-white rounded-lg font-medium text-center text-lg pulse">
+                            <i class="fab fa-github mr-2"></i>免费使用
+                        </a>
+                        <a href="#demo" class="px-6 py-3 bg-white text-gray-800 border border-gray-300 rounded-lg font-medium text-center text-lg hover:bg-gray-50 transition">
+                            <i class="fas fa-play-circle mr-2"></i>查看演示
+                        </a>
+                    </div>
+                    
+                    <div class="mt-8 flex items-center text-gray-600">
+                        <i class="fas fa-shield-alt mr-2 text-green-500"></i>
+                        <span>支持私有化部署 · 数据自主可控</span>
+                    </div>
+                </div>
+                
+                <div class="md:w-1/2 flex justify-center">
+                    <div class="relative">
+                        <!-- 模拟界面 -->
+                        <div class="bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-200 w-full max-w-lg">
+                            <!-- 界面头部 -->
+                            <div class="bg-gray-50 p-4 border-b">
+                                <div class="flex items-center">
+                                    <div class="flex space-x-2">
+                                        <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                                        <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                                        <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                                    </div>
+                                    <div class="mx-auto text-sm font-medium text-gray-600">项目流 · 任务看板</div>
+                                </div>
+                            </div>
+                            
+                            <!-- 界面内容 -->
+                            <div class="p-6">
+                                <!-- 看板列 -->
+                                <div class="flex space-x-4 overflow-x-auto pb-4">
+                                    <!-- 待处理列 -->
+                                    <div class="flex-shrink-0 w-64">
+                                        <div class="bg-blue-50 p-3 rounded-lg mb-3">
+                                            <h3 class="font-medium text-blue-700">待处理 (3)</h3>
+                                        </div>
+                                        <div class="space-y-3">
+                                            <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                                <div class="flex justify-between items-start mb-2">
+                                                    <span class="font-medium">设计登录页面</span>
+                                                    <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">高</span>
+                                                </div>
+                                                <div class="text-xs text-gray-500">前端 · 预计2天</div>
+                                            </div>
+                                            <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                                <div class="flex justify-between items-start mb-2">
+                                                    <span class="font-medium">API接口设计</span>
+                                                    <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">中</span>
+                                                </div>
+                                                <div class="text-xs text-gray-500">后端 · 预计3天</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 进行中列 -->
+                                    <div class="flex-shrink-0 w-64">
+                                        <div class="bg-yellow-50 p-3 rounded-lg mb-3">
+                                            <h3 class="font-medium text-yellow-700">进行中 (2)</h3>
+                                        </div>
+                                        <div class="space-y-3">
+                                            <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                                <div class="flex justify-between items-start mb-2">
+                                                    <span class="font-medium">数据库设计</span>
+                                                    <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">高</span>
+                                                </div>
+                                                <div class="text-xs text-gray-500">后端 · 进度 75%</div>
+                                                <div class="mt-2 w-full bg-gray-200 rounded-full h-2">
+                                                    <div class="bg-green-500 h-2 rounded-full" style="width: 75%"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 已完成列 -->
+                                    <div class="flex-shrink-0 w-64">
+                                        <div class="bg-green-50 p-3 rounded-lg mb-3">
+                                            <h3 class="font-medium text-green-700">已完成 (4)</h3>
+                                        </div>
+                                        <div class="space-y-3">
+                                            <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm opacity-80">
+                                                <div class="flex justify-between items-start mb-2">
+                                                    <span class="font-medium line-through">项目需求分析</span>
+                                                    <span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">完成</span>
+                                                </div>
+                                                <div class="text-xs text-gray-500">产品 · 耗时 5天</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 底部状态 -->
+                                <div class="mt-4 pt-4 border-t border-gray-200 flex justify-between text-sm text-gray-500">
+                                    <span><i class="fas fa-users mr-1"></i> 团队成员: 8</span>
+                                    <span><i class="fas fa-tasks mr-1"></i> 总任务: 9</span>
+                                    <span><i class="fas fa-calendar-alt mr-1"></i> 进度: 67%</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 装饰元素 -->
+                        <div class="absolute -top-4 -left-4 w-16 h-16 bg-gradient-to-r from-[#00C896] to-[#2A5CFF] rounded-full opacity-20"></div>
+                        <div class="absolute -bottom-4 -right-4 w-20 h-20 bg-gradient-to-r from-[#FF6B35] to-[#FFA726] rounded-full opacity-20"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 功能特性 -->
+    <section id="features" class="py-16 bg-white">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold mb-4">核心功能特性</h2>
+                <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                    项目流提供了现代项目管理所需的一切功能，让团队协作更加高效
+                </p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- 功能1 -->
+                <div class="feature-card bg-white p-6 rounded-xl border border-gray-200">
+                    <div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center mb-4">
+                        <i class="fas fa-project-diagram text-2xl text-[#2A5CFF]"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">项目管理</h3>
+                    <p class="text-gray-600 mb-4">
+                        完整的项目生命周期管理，支持项目创建、成员管理、进度跟踪和统计报表。
+                    </p>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 多项目并行管理</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 项目成员与权限</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 进度统计与报表</li>
+                    </ul>
+                </div>
+                
+                <!-- 功能2 -->
+                <div class="feature-card bg-white p-6 rounded-xl border border-gray-200">
+                    <div class="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center mb-4">
+                        <i class="fas fa-columns text-2xl text-[#00C896]"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">看板与甘特图</h3>
+                    <p class="text-gray-600 mb-4">
+                        直观的看板视图和甘特图，可视化任务状态、时间线和依赖关系。
+                    </p>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 拖拽式任务管理</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 可视化时间线</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 任务依赖关系</li>
+                    </ul>
+                </div>
+                
+                <!-- 功能3 -->
+                <div class="feature-card bg-white p-6 rounded-xl border border-gray-200">
+                    <div class="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center mb-4">
+                        <i class="fas fa-tasks text-2xl text-purple-600"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">任务与需求</h3>
+                    <p class="text-gray-600 mb-4">
+                        需求池管理、任务分解、工时统计和进度跟踪，支持敏捷开发全流程。
+                    </p>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 需求优先级管理</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 工时估算与跟踪</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 自动进度计算</li>
+                    </ul>
+                </div>
+                
+                <!-- 功能4 -->
+                <div class="feature-card bg-white p-6 rounded-xl border border-gray-200">
+                    <div class="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center mb-4">
+                        <i class="fas fa-bug text-2xl text-red-500"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Bug与测试管理</h3>
+                    <p class="text-gray-600 mb-4">
+                        完整的Bug追踪流程和测试管理，确保软件质量。
+                    </p>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> Bug提交与追踪</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 测试用例管理</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 版本发布管理</li>
+                    </ul>
+                </div>
+                
+                <!-- 功能5 -->
+                <div class="feature-card bg-white p-6 rounded-xl border border-gray-200">
+                    <div class="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center mb-4">
+                        <i class="fas fa-weixin text-2xl text-green-500"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">微信登录与协作</h3>
+                    <p class="text-gray-600 mb-4">
+                        支持微信扫码登录，集成工作报告和团队协作功能。
+                    </p>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 微信扫码登录</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 日报周报系统</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 实时消息通知</li>
+                    </ul>
+                </div>
+                
+                <!-- 功能6 -->
+                <div class="feature-card bg-white p-6 rounded-xl border border-gray-200">
+                    <div class="w-12 h-12 rounded-lg bg-indigo-100 flex items-center justify-center mb-4">
+                        <i class="fas fa-database text-2xl text-indigo-600"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">数据迁移与安全</h3>
+                    <p class="text-gray-600 mb-4">
+                        提供禅道数据迁移工具，支持数据库自动备份，保障数据安全。
+                    </p>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 禅道数据迁移</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 数据库自动备份</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 操作历史审计</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 技术栈 -->
+    <section id="tech" class="py-16 gradient-bg">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold mb-4">现代技术栈</h2>
+                <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                    采用业界领先的技术构建，性能卓越，开发体验优秀
+                </p>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 max-w-4xl mx-auto">
+                <!-- 技术1 -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 text-center">
+                    <div class="w-16 h-16 mx-auto mb-4 flex items-center justify-center bg-blue-50 rounded-full">
+                        <i class="fab fa-golang text-4xl text-blue-600"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-1">Go</h4>
+                    <p class="text-gray-600 text-sm">高性能后端</p>
+                </div>
+                
+                <!-- 技术2 -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 text-center">
+                    <div class="w-16 h-16 mx-auto mb-4 flex items-center justify-center bg-green-50 rounded-full">
+                        <i class="fab fa-vuejs text-4xl text-green-500"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-1">Vue 3</h4>
+                    <p class="text-gray-600 text-sm">现代化前端</p>
+                </div>
+                
+                <!-- 技术3 -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 text-center">
+                    <div class="w-16 h-16 mx-auto mb-4 flex items-center justify-center bg-gray-50 rounded-full">
+                        <img src="https://img.icons8.com/color/96/000000/typescript.png" alt="TypeScript" class="w-10 h-10">
+                    </div>
+                    <h4 class="font-bold text-lg mb-1">TypeScript</h4>
+                    <p class="text-gray-600 text-sm">类型安全</p>
+                </div>
+                
+                <!-- 技术4 -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 text-center">
+                    <div class="w-16 h-16 mx-auto mb-4 flex items-center justify-center bg-blue-50 rounded-full">
+                        <img src="https://img.icons8.com/color/96/000000/sql.png" alt="SQLite" class="w-10 h-10">
+                    </div>
+                    <h4 class="font-bold text-lg mb-1">SQLite / MySQL</h4>
+                    <p class="text-gray-600 text-sm">数据库支持</p>
+                </div>
+                
+                <!-- 技术5 -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 text-center">
+                    <div class="w-16 h-16 mx-auto mb-4 flex items-center justify-center bg-red-50 rounded-full">
+                        <i class="fab fa-docker text-4xl text-blue-500"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-1">Docker</h4>
+                    <p class="text-gray-600 text-sm">容器化部署</p>
+                </div>
+            </div>
+            
+            <div class="mt-12 bg-white rounded-xl p-8 max-w-4xl mx-auto border border-gray-200">
+                <h3 class="text-2xl font-bold mb-4 text-center">架构优势</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="text-center p-4">
+                        <div class="text-3xl font-bold text-[#2A5CFF] mb-2">100%</div>
+                        <div class="font-medium">测试覆盖率目标</div>
+                        <p class="text-gray-600 text-sm mt-2">TDD开发，确保代码质量</p>
+                    </div>
+                    <div class="text-center p-4">
+                        <div class="text-3xl font-bold text-[#00C896] mb-2">5分钟</div>
+                        <div class="font-medium">快速部署</div>
+                        <p class="text-gray-600 text-sm mt-2">支持Docker一键部署</p>
+                    </div>
+                    <div class="text-center p-4">
+                        <div class="text-3xl font-bold text-[#FF6B35] mb-2">0费用</div>
+                        <div class="font-medium">完全免费</div>
+                        <p class="text-gray-600 text-sm mt-2">MIT许可证，无任何隐藏费用</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 演示与部署 -->
+    <section id="demo" class="py-16 bg-white">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                <div>
+                    <h2 class="text-3xl font-bold mb-4">立即体验项目流</h2>
+                    <p class="text-gray-600 mb-6">
+                        我们提供了完整的在线演示环境，无需注册即可体验所有功能。同时，项目流支持多种部署方式，满足不同团队的需求。
+                    </p>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-start">
+                            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-4 flex-shrink-0">
+                                <i class="fas fa-laptop text-green-600"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-lg mb-1">在线演示</h4>
+                                <p class="text-gray-600">体验完整功能，无需安装</p>
+                                <a href="https://demo.prjflow.com" target="_blank" class="inline-block mt-2 text-[#2A5CFF] font-medium">
+                                    访问演示站点 <i class="fas fa-arrow-right ml-1"></i>
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-4 flex-shrink-0">
+                                <i class="fas fa-download text-blue-600"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-lg mb-1">私有化部署</h4>
+                                <p class="text-gray-600">数据自主可控，支持内网部署</p>
+                                <a href="https://github.com/funnywwh/prjflow" target="_blank" class="inline-block mt-2 text-[#2A5CFF] font-medium">
+                                    查看部署指南 <i class="fas fa-arrow-right ml-1"></i>
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center mr-4 flex-shrink-0">
+                                <i class="fas fa-ship text-purple-600"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-lg mb-1">Docker部署</h4>
+                                <p class="text-gray-600">一键启动，支持容器化部署</p>
+                                <a href="https://github.com/funnywwh/prjflow#docker-%E9%83%A8%E7%BD%B2" target="_blank" class="inline-block mt-2 text-[#2A5CFF] font-medium">
+                                    查看Docker部署 <i class="fas fa-arrow-right ml-1"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="deploy">
+                    <div class="bg-gray-50 border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-2xl font-bold mb-4">快速部署命令</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="font-medium mb-2 text-gray-700">使用 Docker Compose</h4>
+                                <div class="bg-gray-800 text-gray-100 p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                                    <span class="text-green-400"># 克隆项目</span><br>
+                                    git clone https://github.com/funnywwh/prjflow.git<br>
+                                    cd prjflow<br><br>
+                                    <span class="text-green-400"># 一键启动</span><br>
+                                    docker-compose up -d<br><br>
+                                    <span class="text-green-400"># 访问应用</span><br>
+                                    open http://localhost:8080
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h4 class="font-medium mb-2 text-gray-700">传统部署方式</h4>
+                                <div class="bg-gray-800 text-gray-100 p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                                    <span class="text-green-400"># 启动后端</span><br>
+                                    cd backend && go run cmd/server/main.go<br><br>
+                                    <span class="text-green-400"># 启动前端 (开发模式)</span><br>
+                                    cd frontend && npm install && npm run dev
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <div class="flex items-start">
+                                <i class="fas fa-lightbulb text-yellow-500 text-xl mr-3 mt-1"></i>
+                                <div>
+                                    <h4 class="font-bold mb-1">迁移提示</h4>
+                                    <p class="text-gray-700 text-sm">项目流提供了禅道数据迁移工具，可以帮助您从禅道系统平滑迁移数据。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 开源与社区 -->
+    <section id="opensource" class="py-16 gradient-bg">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold mb-4">加入开源社区</h2>
+                <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                    项目流是完全开源的项目，我们欢迎开发者、用户和贡献者加入我们的社区
+                </p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                <!-- 开源 -->
+                <div class="bg-white p-8 rounded-xl border border-gray-200 text-center">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-blue-100 flex items-center justify-center">
+                        <i class="fab fa-github text-3xl text-gray-800"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">完全开源</h3>
+                    <p class="text-gray-600 mb-6">
+                        项目采用MIT许可证，代码完全开放，您可以自由使用、修改和分发。
+                    </p>
+                    <a href="https://github.com/funnywwh/prjflow" target="_blank" class="inline-block px-6 py-3 btn-primary text-white rounded-lg font-medium">
+                        <i class="fab fa-github mr-2"></i>访问GitHub
+                    </a>
+                </div>
+                
+                <!-- 贡献 -->
+                <div class="bg-white p-8 rounded-xl border border-gray-200 text-center">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
+                        <i class="fas fa-hands-helping text-3xl text-green-600"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">参与贡献</h3>
+                    <p class="text-gray-600 mb-6">
+                        欢迎提交代码、报告问题、完善文档或提出新功能建议。
+                    </p>
+                    <a href="https://github.com/funnywwh/prjflow/issues" target="_blank" class="inline-block px-6 py-3 btn-secondary text-white rounded-lg font-medium">
+                        查看Issues
+                    </a>
+                </div>
+                
+                <!-- 社区 -->
+                <div class="bg-white p-8 rounded-xl border border-gray-200 text-center">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-orange-100 flex items-center justify-center">
+                        <i class="fas fa-users text-3xl text-orange-500"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">加入社区</h3>
+                    <p class="text-gray-600 mb-6">
+                        与其他用户和开发者交流，获取帮助，分享使用经验。
+                    </p>
+                    <div class="flex justify-center space-x-4">
+                        <a href="#" class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-200">
+                            <i class="fab fa-weixin"></i>
+                        </a>
+                        <a href="#" class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200">
+                            <i class="fab fa-telegram"></i>
+                        </a>
+                        <a href="#" class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 hover:bg-red-200">
+                            <i class="fab fa-discord"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 统计数据 -->
+            <div class="mt-12 bg-white rounded-xl p-8 max-w-4xl mx-auto border border-gray-200">
+                <h3 class="text-2xl font-bold mb-6 text-center">项目统计数据</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div class="text-center p-4">
+                        <div class="text-3xl font-bold text-[#2A5CFF] mb-2" id="stars">500+</div>
+                        <div class="font-medium">GitHub Stars</div>
+                    </div>
+                    <div class="text-center p-4">
+                        <div class="text-3xl font-bold text-[#00C896] mb-2" id="forks">120+</div>
+                        <div class="font-medium">项目 Fork</div>
+                    </div>
+                    <div class="text-center p-4">
+                        <div class="text-3xl font-bold text-[#FF6B35] mb-2">v0.4.12</div>
+                        <div class="font-medium">当前版本</div>
+                    </div>
+                    <div class="text-center p-4">
+                        <div class="text-3xl font-bold text-[#9C27B0] mb-2">10+</div>
+                        <div class="font-medium">活跃贡献者</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA区 -->
+    <section class="py-16 bg-gradient-to-r from-[#2A5CFF] to-[#00C896] text-white">
+        <div class="container mx-auto px-4 text-center">
+            <h2 class="text-3xl font-bold mb-4">立即开始使用项目流</h2>
+            <p class="text-xl mb-8 max-w-2xl mx-auto">
+                完全免费，功能全面，部署简单。让您的项目管理从此顺畅如流。
+            </p>
+            <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
+                <a href="https://github.com/funnywwh/prjflow" target="_blank" class="px-8 py-3 bg-white text-[#2A5CFF] rounded-lg font-bold text-lg hover:bg-gray-100 transition">
+                    <i class="fab fa-github mr-2"></i>免费使用
+                </a>
+                <a href="https://demo.prjflow.com" target="_blank" class="px-8 py-3 bg-transparent border-2 border-white text-white rounded-lg font-bold text-lg hover:bg-white hover:text-[#2A5CFF] transition">
+                    <i class="fas fa-play-circle mr-2"></i>在线演示
+                </a>
+            </div>
+            <p class="mt-8 text-blue-100">
+                <i class="fas fa-info-circle mr-2"></i> 项目流遵循MIT开源协议，可免费用于商业项目
+            </p>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <!-- Logo和信息 -->
+                <div>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <div class="w-8 h-8 rounded-lg bg-gradient-to-r from-[#2A5CFF] to-[#00C896] flex items-center justify-center">
+                            <span class="text-white font-bold">PF</span>
+                        </div>
+                        <div>
+                            <span class="font-bold text-xl">项目流</span>
+                            <span class="text-gray-400">prjflow</span>
+                        </div>
+                    </div>
+                    <p class="text-gray-400 mb-6">
+                        基于 Go + Vue3 的全栈项目管理平台，让项目管理顺畅如流。
+                    </p>
+                    <div class="flex space-x-4">
+                        <a href="https://github.com/funnywwh/prjflow" target="_blank" class="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-gray-700">
+                            <i class="fab fa-github"></i>
+                        </a>
+                        <a href="#" class="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-gray-700">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="#" class="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-gray-700">
+                            <i class="fab fa-weibo"></i>
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- 快速链接 -->
+                <div>
+                    <h4 class="font-bold text-lg mb-6">快速链接</h4>
+                    <ul class="space-y-3">
+                        <li><a href="#features" class="text-gray-400 hover:text-white transition">功能特性</a></li>
+                        <li><a href="#tech" class="text-gray-400 hover:text-white transition">技术栈</a></li>
+                        <li><a href="#demo" class="text-gray-400 hover:text-white transition">在线演示</a></li>
+                        <li><a href="#deploy" class="text-gray-400 hover:text-white transition">部署指南</a></li>
+                    </ul>
+                </div>
+                
+                <!-- 文档 -->
+                <div>
+                    <h4 class="font-bold text-lg mb-6">文档</h4>
+                    <ul class="space-y-3">
+                        <li><a href="https://github.com/funnywwh/prjflow#readme" target="_blank" class="text-gray-400 hover:text-white transition">安装指南</a></li>
+                        <li><a href="https://github.com/funnywwh/prjflow/blob/main/docs/API设计文档.md" target="_blank" class="text-gray-400 hover:text-white transition">API文档</a></li>
+                        <li><a href="https://github.com/funnywwh/prjflow/blob/main/CONTRIBUTING.md" target="_blank" class="text-gray-400 hover:text-white transition">贡献指南</a></li>
+                        <li><a href="https://github.com/funnywwh/prjflow/releases" target="_blank" class="text-gray-400 hover:text-white transition">更新日志</a></li>
+                    </ul>
+                </div>
+                
+                <!-- 联系方式 -->
+                <div>
+                    <h4 class="font-bold text-lg mb-6">联系我们</h4>
+                    <ul class="space-y-3">
+                        <li class="flex items-center text-gray-400">
+                            <i class="fas fa-envelope mr-3"></i>
+                            <span>contact@prjflow.com</span>
+                        </li>
+                        <li class="flex items-center text-gray-400">
+                            <i class="fas fa-globe mr-3"></i>
+                            <span>https://prjflow.com</span>
+                        </li>
+                        <li class="flex items-center text-gray-400">
+                            <i class="fas fa-map-marker-alt mr-3"></i>
+                            <span>开源项目</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="mt-12 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
+                <p>© 2024 项目流(prjflow). 遵循 <a href="https://opensource.org/licenses/MIT" target="_blank" class="text-blue-400 hover:underline">MIT 开源许可证</a>.</p>
+                <p class="mt-2">项目流是一个开源项目，由社区驱动和维护。</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // 移动端菜单切换
+        document.getElementById('mobile-menu-btn').addEventListener('click', function() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        });
+        
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') return;
+                
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 80,
+                        behavior: 'smooth'
+                    });
+                    
+                    // 移动端点击后关闭菜单
+                    const mobileMenu = document.getElementById('mobile-menu');
+                    if (!mobileMenu.classList.contains('hidden')) {
+                        mobileMenu.classList.add('hidden');
+                    }
+                }
+            });
+        });
+        
+        // 简单的计数器动画（示例）
+        function animateCounter(element, start, end, duration) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const value = Math.floor(progress * (end - start) + start);
+                element.textContent = value + '+';
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+        
+        // 当元素进入视口时触发计数器
+        function initCounters() {
+            const stars = document.getElementById('stars');
+            const forks = document.getElementById('forks');
+            
+            // 这里应该是从GitHub API获取实际数据
+            // 这里使用模拟数据
+            animateCounter(stars, 0, 500, 2000);
+            animateCounter(forks, 0, 120, 2000);
+        }
+        
+        // 使用Intersection Observer API
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    initCounters();
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+        
+        // 观察计数器容器
+        const counterSection = document.getElementById('opensource');
+        if (counterSection) {
+            observer.observe(counterSection);
+        }
+    </script>
+</body>
+</html>
