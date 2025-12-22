@@ -10,7 +10,7 @@ services:
         # VERSION: v0.5.6
         # BUILD_TIME: "2025-01-01 12:00:00"
         # GIT_COMMIT: abc1234
-    image: prjflow:latest
+    image: wwenhui/prjflow:v0.5.6
     container_name: prjflow
     restart: unless-stopped
     ports:
