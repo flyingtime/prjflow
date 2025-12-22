@@ -5,11 +5,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # 构建参数（可选）
-        # VERSION: v0.5.6
-        # BUILD_TIME: "2025-01-01 12:00:00"
-        # GIT_COMMIT: abc1234
     image: wwenhui/prjflow:v0.5.6
     container_name: prjflow
     restart: unless-stopped
@@ -22,7 +17,7 @@ services:
       - DATABASE_TYPE=sqlite
       - DATABASE_DSN=/app/data/data.db
       # JWT 配置（必须修改）
-      - JWT_SECRET=your-secret-key-change-in-production
+      - JWT_SECRET=prjflow.com
       # 上传文件配置
       - UPLOAD_STORAGE_PATH=/app/data/uploads
       # 时区设置
