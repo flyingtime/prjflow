@@ -2,17 +2,18 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Server         ServerConfig         `mapstructure:"server"`
-	Database       DatabaseConfig       `mapstructure:"database"`
-	AuditDatabase  DatabaseConfig       `mapstructure:"audit_database"` // 审计日志数据库（可选，不配置则使用主数据库）
-	JWT            JWTConfig            `mapstructure:"jwt"`
-	WeChat         WeChatConfig         `mapstructure:"wechat"`
-	Upload         UploadConfig         `mapstructure:"upload"`
+	Server        ServerConfig   `mapstructure:"server"`
+	Database      DatabaseConfig `mapstructure:"database"`
+	AuditDatabase DatabaseConfig `mapstructure:"audit_database"` // 审计日志数据库（可选，不配置则使用主数据库）
+	JWT           JWTConfig      `mapstructure:"jwt"`
+	WeChat        WeChatConfig   `mapstructure:"wechat"`
+	Upload        UploadConfig   `mapstructure:"upload"`
 }
 
 type ServerConfig struct {
@@ -54,8 +55,8 @@ type WeChatConfig struct {
 }
 
 type UploadConfig struct {
-	StoragePath string   `mapstructure:"storage_path"` // 文件存储路径（相对路径或绝对路径）
-	MaxFileSize int64    `mapstructure:"max_file_size"` // 最大文件大小（字节），默认 100MB
+	StoragePath  string   `mapstructure:"storage_path"`  // 文件存储路径（相对路径或绝对路径）
+	MaxFileSize  int64    `mapstructure:"max_file_size"` // 最大文件大小（字节），默认 100MB
 	AllowedTypes []string `mapstructure:"allowed_types"` // 允许的文件类型（MIME类型），空数组表示允许所有类型
 }
 
@@ -74,6 +75,14 @@ func LoadConfig(configPath string) error {
 
 	// 读取环境变量
 	viper.AutomaticEnv()
+	// 设置环境变量键名替换器，将下划线替换为点号
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	// 显式绑定环境变量
+	viper.BindEnv("database.type", "DATABASE_TYPE")
+	viper.BindEnv("database.dsn", "DATABASE_DSN")
+	viper.BindEnv("server.port", "SERVER_PORT")
+	viper.BindEnv("jwt.secret", "JWT_SECRET")
+	viper.BindEnv("upload.storage_path", "UPLOAD_STORAGE_PATH")
 
 	if err := viper.ReadInConfig(); err != nil {
 		// 配置加载时日志系统可能还未初始化，使用标准库log
@@ -103,12 +112,11 @@ func setDefaults() {
 	viper.SetDefault("wechat.app_id", "")
 	viper.SetDefault("wechat.app_secret", "")
 	viper.SetDefault("wechat.account_type", "open_platform") // open_platform 或 official_account
-	viper.SetDefault("wechat.scope", "snsapi_userinfo")       // snsapi_base 或 snsapi_userinfo
-	viper.SetDefault("wechat.callback_domain", "")            // 回调域名，如：https://yourdomain.com
+	viper.SetDefault("wechat.scope", "snsapi_userinfo")      // snsapi_base 或 snsapi_userinfo
+	viper.SetDefault("wechat.callback_domain", "")           // 回调域名，如：https://yourdomain.com
 
 	// 文件上传配置
-	viper.SetDefault("upload.storage_path", "uploads")                    // 默认存储路径
-	viper.SetDefault("upload.max_file_size", 100*1024*1024)               // 默认 100MB (104857600 字节)
-	viper.SetDefault("upload.allowed_types", []string{})                  // 空数组表示允许所有类型
+	viper.SetDefault("upload.storage_path", "uploads")      // 默认存储路径
+	viper.SetDefault("upload.max_file_size", 100*1024*1024) // 默认 100MB (104857600 字节)
+	viper.SetDefault("upload.allowed_types", []string{})    // 空数组表示允许所有类型
 }
-
