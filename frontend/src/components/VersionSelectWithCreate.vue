@@ -12,6 +12,7 @@
       :getPopupContainer="getPopupContainer"
       :dropdownStyle="{ zIndex: 2100 }"
       @update:model-value="handleVersionChange"
+      @change="handleVersionChange"
       @focus="loadVersions"
     >
       <a-select-option
@@ -62,6 +63,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:modelValue': [value?: number | number[]]
+  'change': [value?: number | number[]]
   'update:createVersion': [value: boolean]
   'update:versionNumber': [value: string]
 }>()
@@ -103,6 +105,7 @@ const getPopupContainer = (triggerNode: HTMLElement): HTMLElement => {
 // 处理版本变化
 const handleVersionChange = (value: number | number[] | undefined) => {
   emit('update:modelValue', value)
+  emit('change', value)
 }
 
 // 处理创建新版本状态变化

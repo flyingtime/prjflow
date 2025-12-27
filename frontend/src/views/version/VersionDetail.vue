@@ -20,9 +20,10 @@
                   </a-button>
                   <template #overlay>
                     <a-menu @click="(e: any) => handleStatusChange(e.key as string)">
-                      <a-menu-item key="draft">草稿</a-menu-item>
-                      <a-menu-item key="released">已发布</a-menu-item>
-                      <a-menu-item key="archived">已归档</a-menu-item>
+                      <a-menu-item key="wait">未开始</a-menu-item>
+                      <a-menu-item key="normal">已发布</a-menu-item>
+                      <a-menu-item key="fail">发布失败</a-menu-item>
+                      <a-menu-item key="terminate">停止维护</a-menu-item>
                     </a-menu>
                   </template>
                 </a-dropdown>

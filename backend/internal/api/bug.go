@@ -1063,7 +1063,7 @@ func (h *BugHandler) UpdateBugStatus(c *gin.Context) {
 		version := model.Version{
 			VersionNumber: *req.VersionNumber,
 			ReleaseNotes:  "Bug修复版本",
-			Status:        "draft",
+			Status:        "wait",
 			ProjectID:     bug.ProjectID,
 		}
 		if err := h.db.Create(&version).Error; err != nil {
