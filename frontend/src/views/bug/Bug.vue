@@ -566,6 +566,7 @@
             :multiple="true"
             placeholder="选择所属版本（必填，至少一个）"
             :required="true"
+            @validate="handleVersionValidate"
           />
         </a-form-item>
         <a-form-item label="预估工时" name="estimated_hours">
@@ -1071,6 +1072,34 @@ watch(() => formData.attachment_ids, () => {
   // 监听 attachment_ids 的变化
 }, { deep: true })
 
+// 处理版本验证触发
+const handleVersionValidate = () => {
+  // 当创建新版本状态或版本号变化时，清除并重新触发表单验证
+  if (formRef.value) {
+    // 使用 nextTick 确保在 Vue 的响应式更新完成后再触发验证
+    nextTick(() => {
+      // 检查是否应该通过验证：如果勾选了创建新版本且版本号已输入，直接清除错误
+      if (formData.create_version && formData.version_number?.trim()) {
+        // 直接清除验证错误，不需要重新验证
+        formRef.value.clearValidate(['version_ids'])
+      } else {
+        // 否则，清除错误后重新验证
+        formRef.value.clearValidate(['version_ids'])
+        nextTick(() => {
+          formRef.value.validateFields(['version_ids']).catch(() => {
+            // 验证失败时忽略错误，只触发验证
+          })
+        })
+      }
+    })
+  }
+}
+
+// 监听 create_version 和 version_number 的变化，触发表单验证（作为备用）
+watch([() => formData.create_version, () => formData.version_number], () => {
+  handleVersionValidate()
+})
+
 const formRules = {
   title: [{ required: true, message: '请输入Bug标题', trigger: 'blur' }],
   description: [{ required: true, message: '请输入Bug描述', trigger: 'blur' }],
@@ -1091,17 +1120,27 @@ const formRules = {
   ],
   version_ids: [
     {
-      required: true,
-      message: '请至少选择一个所属版本',
-      trigger: 'change',
+      required: false, // 不设置 required，完全依赖自定义验证器
+      trigger: ['change', 'blur'], // 支持多种触发方式
       validator: (_rule: any, value: number[]) => {
-        if (!value || value.length === 0) {
-          // 如果选择了创建新版本，则不需要选择已有版本
-          if (!formData.create_version || !formData.version_number) {
-            return Promise.reject('请至少选择一个所属版本或创建新版本')
-          }
+        // 如果已选择了版本，则通过验证
+        if (value && value.length > 0) {
+          return Promise.resolve()
         }
-        return Promise.resolve()
+        // 如果没有选择版本，检查是否创建新版本
+        // 注意：这里直接访问 formData，因为它是 reactive 的，会获取最新值
+        if (formData.create_version) {
+          // 如果勾选了创建新版本，检查版本号是否已输入
+          const versionNumber = formData.version_number?.trim()
+          if (versionNumber) {
+            // 版本号已输入，允许通过验证
+            return Promise.resolve()
+          }
+          // 版本号未输入，提示输入版本号
+          return Promise.reject('请输入版本号')
+        }
+        // 既没有选择版本，也没有创建新版本
+        return Promise.reject('请至少选择一个所属版本或创建新版本')
       }
     }
   ]
@@ -1756,10 +1795,16 @@ const handleSubmit = async () => {
     
     // 处理版本：如果选择了创建新版本，先创建版本
     let versionIds = [...(formData.version_ids || [])]
-    if (formData.create_version && formData.version_number) {
+    if (formData.create_version) {
+      // 检查版本号是否已输入
+      const versionNumber = formData.version_number?.trim()
+      if (!versionNumber) {
+        message.error('请输入版本号')
+        return
+      }
       try {
         const newVersion = await createVersion({
-          version_number: formData.version_number,
+          version_number: versionNumber,
           project_id: formData.project_id,
           status: 'wait'
         })
@@ -1917,9 +1962,15 @@ const handleStatusSubmit = async () => {
         data.work_date = statusFormData.work_date.format('YYYY-MM-DD')
       }
     }
-    if (statusFormData.create_version && statusFormData.version_number) {
+    if (statusFormData.create_version) {
+      // 检查版本号是否已输入
+      const versionNumber = statusFormData.version_number?.trim()
+      if (!versionNumber) {
+        message.error('请输入版本号')
+        return
+      }
       data.create_version = true
-      data.version_number = statusFormData.version_number
+      data.version_number = versionNumber
     } else if (statusFormData.resolved_version_id) {
       data.resolved_version_id = statusFormData.resolved_version_id
     }

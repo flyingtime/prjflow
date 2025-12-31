@@ -965,9 +965,15 @@ const handleStatusSubmit = async () => {
         data.work_date = statusFormData.work_date.format('YYYY-MM-DD')
       }
     }
-    if (statusFormData.create_version && statusFormData.version_number) {
+    if (statusFormData.create_version) {
+      // 检查版本号是否已输入
+      const versionNumber = statusFormData.version_number?.trim()
+      if (!versionNumber) {
+        message.error('请输入版本号')
+        return
+      }
       data.create_version = true
-      data.version_number = statusFormData.version_number
+      data.version_number = versionNumber
     } else if (statusFormData.resolved_version_id) {
       data.resolved_version_id = statusFormData.resolved_version_id
     }

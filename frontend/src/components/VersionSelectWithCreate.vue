@@ -31,6 +31,8 @@
       :model-value="versionNumber"
       :placeholder="versionNumberPlaceholder"
       @update:model-value="handleVersionNumberChange"
+      @input="(e: any) => handleVersionNumberChange(e.target?.value || e)"
+      @blur="() => handleVersionNumberChange(versionNumber)"
     />
   </a-space>
 </template>
@@ -66,6 +68,7 @@ const emit = defineEmits<{
   'change': [value?: number | number[]]
   'update:createVersion': [value: boolean]
   'update:versionNumber': [value: string]
+  'validate': [] // 触发验证事件
 }>()
 
 const versions = ref<Version[]>([])
@@ -115,11 +118,20 @@ const handleCreateVersionChange = (checked: boolean) => {
   if (!checked) {
     emit('update:versionNumber', '')
   }
+  // 延迟触发验证事件，确保父组件的 formData 已更新
+  setTimeout(() => {
+    emit('validate')
+  }, 0)
 }
 
 // 处理版本号变化
 const handleVersionNumberChange = (value: string) => {
   emit('update:versionNumber', value)
+  // 延迟触发验证事件，确保父组件的 formData 已更新
+  // 使用更长的延迟，确保 Vue 的响应式更新完成
+  setTimeout(() => {
+    emit('validate')
+  }, 50)
 }
 
 // 监听项目ID变化，重新加载版本列表
